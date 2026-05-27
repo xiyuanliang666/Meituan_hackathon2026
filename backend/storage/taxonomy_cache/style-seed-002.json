@@ -1,0 +1,136 @@
+{
+  "style_id": "style-seed-002",
+  "style_name": "奶油色纯色简约",
+  "image_url": "http://p0.meituan.net/pilotimages/162afb52255bd908ba3ec418fd61824a2254875.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "大地色系",
+        "莫兰迪色系",
+        "秋冬色系",
+        "奶油色",
+        "橄榄绿",
+        "浅棕色"
+      ],
+      "style_tags": [
+        "简约",
+        "纯色",
+        "通勤",
+        "日常",
+        "气质",
+        "温柔",
+        "高级感",
+        "自然",
+        "百搭",
+        "知性"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "办公室",
+        "休闲聚会",
+        "约会",
+        "商务",
+        "居家"
+      ],
+      "season_festival_tags": [
+        "秋季",
+        "冬季",
+        "早春"
+      ],
+      "visual_impression": [
+        "温柔",
+        "知性",
+        "优雅",
+        "沉稳",
+        "自然",
+        "舒适",
+        "高级",
+        "治愈"
+      ],
+      "target_user_tags": [
+        "白领",
+        "学生",
+        "职场女性",
+        "追求简约气质的女性",
+        "偏爱自然风格的女性",
+        "轻熟风"
+      ],
+      "skin_tone_suitability": [
+        "暖皮",
+        "中性皮",
+        "白皙肤色",
+        "自然肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手型",
+        "标准手型",
+        "短宽手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "跳色美甲"
+      ],
+      "complexity": "简约",
+      "decoration_type": [
+        "无装饰"
+      ],
+      "topcoat": "亮面封层",
+      "nail_shape": [
+        "方圆形"
+      ],
+      "nail_length": [
+        "中短款"
+      ],
+      "texture_finish": [
+        "光面",
+        "亮面"
+      ],
+      "transparency": [
+        "不透明"
+      ],
+      "pattern_theme": [
+        "纯色"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "低"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "color_combination_type",
+        "values": [
+          "跳色",
+          "纯色混搭"
+        ],
+        "reason": "此维度有助于用户根据颜色搭配方式（如单色、跳色、渐变等）进行筛选，提升搜索和推荐的精准度，满足用户对个性化搭配的需求。"
+      },
+      {
+        "dimension_name": "matching_accessories",
+        "values": [
+          "简约戒指",
+          "金色饰品",
+          "大地色系服饰",
+          "针织衫",
+          "毛衣"
+        ],
+        "reason": "为用户提供穿搭灵感和搭配建议，帮助用户更好地将美甲款式融入日常造型，提升款式在用户生活场景中的代入感和吸引力。"
+      },
+      {
+        "dimension_name": "seasonal_trend",
+        "values": [
+          "秋冬流行色",
+          "大地色系流行"
+        ],
+        "reason": "捕捉当前或未来季节的流行趋势，帮助运营团队进行主题推广和用户快速找到潮流款式，提升时效性和吸引力。"
+      },
+      {
+        "dimension_name": "versatility",
+        "values": [
+          "高"
+        ],
+        "reason": "用户在选择美甲时会考虑其百搭性，此维度可帮助用户快速判断款式是否适合多种场合和服装，从而辅助决策。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "style_id": "style-seed-011",
+  "style_name": "裸色系彩绘甜美",
+  "image_url": "http://p0.meituan.net/pilotimages/bc153edf655dd6961dc9f8e95ad8cd1e2561531.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "浅色系",
+        "透明感"
+      ],
+      "style_tags": [
+        "甜美",
+        "温柔",
+        "清新",
+        "仙气",
+        "日系",
+        "通勤",
+        "约会"
+      ],
+      "scene_tags": [
+        "日常",
+        "通勤",
+        "约会",
+        "婚礼",
+        "派对"
+      ],
+      "season_festival_tags": [
+        "春季",
+        "夏季"
+      ],
+      "visual_impression": [
+        "温柔",
+        "优雅",
+        "甜美",
+        "清新",
+        "仙气",
+        "精致"
+      ],
+      "target_user_tags": [
+        "学生党",
+        "白领",
+        "甜美系女生",
+        "温柔风爱好者"
+      ],
+      "skin_tone_suitability": [
+        "显白",
+        "适合白皮",
+        "适合黄皮"
+      ],
+      "hand_shape_suitability": [
+        "显手长",
+        "适合修长手指",
+        "适合短指甲延长"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "彩绘",
+        "钻饰",
+        "延长甲"
+      ],
+      "complexity": "复杂",
+      "decoration_type": [
+        "花卉",
+        "钻饰",
+        "亮片/闪粉"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "尖形",
+        "杏仁形"
+      ],
+      "nail_length": "长款",
+      "texture_finish": [
+        "光滑",
+        "亮面"
+      ],
+      "transparency": "半透明",
+      "pattern_theme": [
+        "花卉",
+        "植物",
+        "抽象"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "设计风格来源",
+        "values": [
+          "日系"
+        ],
+        "reason": "此款式具有明显的日系美甲风格特征，如透明感、精致小花彩绘和温柔配色，有助于用户根据偏好的地域或文化风格进行筛选，提升推荐精准度。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "流行款",
+          "经典款"
+        ],
+        "reason": "该款式融合了当下流行的延长甲型和透明感，同时花卉彩绘是经久不衰的经典元素，此维度可帮助用户筛选最新潮流或经久不衰的款式。"
+      }
+    ]
+  }
+}

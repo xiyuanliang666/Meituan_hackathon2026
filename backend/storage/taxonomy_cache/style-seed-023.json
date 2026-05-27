@@ -1,0 +1,131 @@
+{
+  "style_id": "style-seed-023",
+  "style_name": "自然色系渐变简约",
+  "image_url": "http://p1.meituan.net/pilotimages/bf8657d94693fb0fe1da3f7729d5667d2020119.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "自然色系",
+        "奶白色系",
+        "透明色系"
+      ],
+      "style_tags": [
+        "简约",
+        "气质",
+        "温柔",
+        "裸色系",
+        "渐变",
+        "法式变体",
+        "通勤",
+        "日常",
+        "优雅",
+        "清新",
+        "百搭"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "办公",
+        "约会",
+        "婚礼",
+        "商务",
+        "休闲",
+        "毕业季",
+        "面试"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春季",
+        "夏季"
+      ],
+      "visual_impression": [
+        "温柔大方",
+        "干净清爽",
+        "显手长",
+        "显白",
+        "气质优雅",
+        "低调奢华",
+        "自然裸感"
+      ],
+      "target_user_tags": [
+        "白领",
+        "学生",
+        "职场女性",
+        "追求自然美感者",
+        "首次尝试美甲者",
+        "喜欢简约风格者",
+        "新娘",
+        "伴娘",
+        "商务人士"
+      ],
+      "skin_tone_suitability": [
+        "黄皮友好",
+        "白皮友好",
+        "暖皮友好"
+      ],
+      "hand_shape_suitability": [
+        "修饰手型",
+        "显手长",
+        "适合手指修长者",
+        "适合指甲床较长者"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "渐变美甲",
+        "纯色美甲",
+        "钻饰美甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "钻饰",
+        "水钻",
+        "色彩渐变"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": "杏仁形",
+      "nail_length": "长款",
+      "texture_finish": [
+        "光泽感",
+        "镜面感"
+      ],
+      "transparency": [
+        "半透明",
+        "不透明"
+      ],
+      "pattern_theme": [
+        "纯色渐变",
+        "简约几何"
+      ],
+      "extension_or_patch": "可能延长甲",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "price_range",
+        "values": [
+          "中等偏高"
+        ],
+        "reason": "该款式包含渐变工艺和钻饰，且可能涉及延长甲，成本和工艺难度相对较高，因此价格会高于基础款。此维度有助于用户根据预算筛选，并指导商家定价。"
+      },
+      {
+        "dimension_name": "matching_accessories",
+        "values": [
+          "简约戒指",
+          "细链手链",
+          "淡雅妆容",
+          "通勤服饰",
+          "轻奢礼服"
+        ],
+        "reason": "为用户提供搭配建议，帮助其更好地融入日常或特定场合的造型，提升整体美感，增加款式吸引力。"
+      },
+      {
+        "dimension_name": "service_duration",
+        "values": [
+          "中等时长"
+        ],
+        "reason": "渐变美甲需要一定操作时间，加上钻饰的精细粘贴，以及可能涉及的延长甲服务，整体服务时长会比纯色美甲更长。此维度对用户预约和商家排班管理具有重要参考价值。"
+      }
+    ]
+  }
+}

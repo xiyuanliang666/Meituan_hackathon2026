@@ -1,0 +1,118 @@
+{
+  "style_id": "style-seed-015",
+  "style_name": "裸色手绘可爱",
+  "image_url": "http://p0.meituan.net/pilotimages/1248ad42d355b98257e5fbcdf90efc552138079.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "糖果色系",
+        "多巴胺色系",
+        "撞色"
+      ],
+      "style_tags": [
+        "可爱风",
+        "甜美风",
+        "少女风",
+        "休闲风",
+        "撞色风",
+        "混搭风",
+        "日常款"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "休闲聚会",
+        "约会",
+        "假期出游",
+        "学生"
+      ],
+      "season_festival_tags": [
+        "春季",
+        "夏季"
+      ],
+      "visual_impression": [
+        "活泼",
+        "俏皮",
+        "减龄",
+        "元气",
+        "趣味",
+        "清新"
+      ],
+      "target_user_tags": [
+        "学生党",
+        "年轻白领",
+        "甜美系",
+        "少女心"
+      ],
+      "skin_tone_suitability": [
+        "适合白皙肤色",
+        "适合自然肤色",
+        "显手白"
+      ],
+      "hand_shape_suitability": [
+        "适合短甲",
+        "适合圆甲",
+        "适合方圆甲",
+        "适合小短手"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "手绘",
+        "纯色"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "彩绘"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "方圆形",
+        "椭圆形"
+      ],
+      "nail_length": "短款",
+      "texture_finish": [
+        "光滑",
+        "亮面"
+      ],
+      "transparency": [
+        "不透明",
+        "半透明"
+      ],
+      "pattern_theme": [
+        "波点",
+        "格纹",
+        "花朵"
+      ],
+      "extension_or_patch": "无",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "styling_advice",
+        "values": [
+          "休闲服饰",
+          "浅色系穿搭",
+          "甜美风穿搭",
+          "日系穿搭"
+        ],
+        "reason": "帮助用户更好地搭配日常穿着，提升购买决策和满意度。"
+      },
+      {
+        "dimension_name": "trend_elements",
+        "values": [
+          "多巴胺美甲",
+          "撞色美甲",
+          "混搭美甲"
+        ],
+        "reason": "抓住用户对流行趋势的关注，提高款式曝光和点击率，体现平台对时尚的敏锐度。"
+      },
+      {
+        "dimension_name": "estimated_service_duration",
+        "values": [
+          "60-90分钟"
+        ],
+        "reason": "为用户提供透明的服务时间信息，方便用户规划行程和预约，减少因时间预期不符造成的投诉。"
+      }
+    ]
+  }
+}

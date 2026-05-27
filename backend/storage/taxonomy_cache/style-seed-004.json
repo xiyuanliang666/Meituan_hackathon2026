@@ -1,0 +1,118 @@
+{
+  "style_id": "style-seed-004",
+  "style_name": "裸色系纯色简约",
+  "image_url": "http://p0.meituan.net/pilotimages/fc8fe60e78341d77a5070fc2f8e520072098070.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "金色系"
+      ],
+      "style_tags": [
+        "简约",
+        "气质",
+        "轻奢",
+        "通勤",
+        "百搭"
+      ],
+      "scene_tags": [
+        "日常",
+        "职场",
+        "约会",
+        "休闲"
+      ],
+      "season_festival_tags": [
+        "四季皆宜"
+      ],
+      "visual_impression": [
+        "温柔",
+        "精致",
+        "大方",
+        "闪耀",
+        "高级感"
+      ],
+      "target_user_tags": [
+        "白领",
+        "追求简约时尚者",
+        "初次美甲者",
+        "低调奢华爱好者"
+      ],
+      "skin_tone_suitability": [
+        "暖皮友好",
+        "中性皮友好",
+        "显白"
+      ],
+      "hand_shape_suitability": [
+        "适合短甲",
+        "适合中长甲",
+        "显手长",
+        "适合多种手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色",
+        "闪粉",
+        "镜面",
+        "描边"
+      ],
+      "complexity": "简约",
+      "decoration_type": [
+        "闪粉",
+        "金属色块",
+        "金线"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "方圆",
+        "椭圆"
+      ],
+      "nail_length": [
+        "短甲",
+        "中长甲"
+      ],
+      "texture_finish": [
+        "光滑",
+        "闪耀",
+        "镜面"
+      ],
+      "transparency": "不透明",
+      "pattern_theme": [
+        "纯色组合",
+        "几何"
+      ],
+      "extension_or_patch": "无",
+      "maintenance_difficulty": "低"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "matching_suggestions",
+        "values": [
+          "适合日常穿搭",
+          "适合通勤装",
+          "适合轻奢配饰",
+          "适合淡妆"
+        ],
+        "reason": "帮助用户了解美甲款式与服装、配饰、妆容的搭配效果，提升整体造型感，辅助决策。"
+      },
+      {
+        "dimension_name": "popular_elements",
+        "values": [
+          "裸色系",
+          "金属色",
+          "细金线"
+        ],
+        "reason": "突出款式中包含的当前流行或经典元素，吸引关注流行趋势的用户。"
+      },
+      {
+        "dimension_name": "design_highlights",
+        "values": [
+          "跳色设计",
+          "局部点缀",
+          "金线描边"
+        ],
+        "reason": "突出款式独特的视觉设计点，帮助用户快速理解其特色，提升吸引力。"
+      }
+    ]
+  }
+}

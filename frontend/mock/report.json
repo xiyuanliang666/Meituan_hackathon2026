@@ -1,0 +1,17 @@
+{
+  "period": "2024-W48",
+  "current_period": {"try_rate": 0.76, "fav_rate": 0.44, "order_rate": 0.18, "boost_rate": 0.48},
+  "last_period": {"try_rate": 0.70, "fav_rate": 0.37, "order_rate": 0.16, "boost_rate": 0.41},
+  "hot_styles": [
+    {"name": "奶油渐变猫眼", "life_cycle": "上升期", "score": 89},
+    {"name": "圣诞红绿镜面", "life_cycle": "峰值期", "score": 72},
+    {"name": "法式简约纯色", "life_cycle": "衰退期", "score": 41}
+  ],
+  "suggestions": [
+    {"text": "奶油渐变猫眼收藏率持续上升，建议投流预算提升20-30%", "action_type": "boost_budget", "action_params": {"style_id": "style-001", "budget_delta": 0.25}, "requires_confirm": true, "adopted": false},
+    {"text": "圣诞红绿镜面热度见顶，建议准备新年款", "action_type": "prepare_replacement", "action_params": {"style_id": "style-002"}, "requires_confirm": false, "adopted": false},
+    {"text": "当前策略无需调整", "action_type": "maintain_strategy", "action_params": {}, "requires_confirm": false, "adopted": false},
+    {"text": "法式简约纯色热度降至41，建议下架", "action_type": "take_down_style", "action_params": {"style_id": "style-003"}, "requires_confirm": false, "adopted": false}
+  ],
+  "merchant_prefs": {"excluded_crafts": ["手绘"], "focus": "repurchase", "price_tier": "mid"}
+}

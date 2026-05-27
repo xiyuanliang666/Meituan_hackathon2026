@@ -1,0 +1,133 @@
+{
+  "style_id": "style-seed-003",
+  "style_name": "黑色纯色可爱",
+  "image_url": "http://p1.meituan.net/pilotimages/7bb5bc0c2c741f9f0aa63787a601d7ad2604877.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "撞色系",
+        "甜酷系",
+        "暗色系",
+        "暖色系"
+      ],
+      "style_tags": [
+        "可爱风",
+        "甜酷风",
+        "格子风",
+        "个性风",
+        "少女风"
+      ],
+      "scene_tags": [
+        "日常",
+        "约会",
+        "休闲",
+        "派对"
+      ],
+      "season_festival_tags": [
+        "春季",
+        "夏季",
+        "情人节"
+      ],
+      "visual_impression": [
+        "活泼",
+        "俏皮",
+        "时尚",
+        "可爱",
+        "甜美",
+        "酷飒"
+      ],
+      "target_user_tags": [
+        "学生党",
+        "年轻白领",
+        "时尚潮人",
+        "甜酷女孩"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色",
+        "偏黄肤色"
+      ],
+      "hand_shape_suitability": [
+        "短甲",
+        "宽甲",
+        "修长手指",
+        "肉肉手"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色",
+        "彩绘",
+        "跳色"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "彩绘图案",
+        "小饰品点缀"
+      ],
+      "topcoat": "亮面封层",
+      "nail_shape": "方圆形",
+      "nail_length": "短款",
+      "texture_finish": [
+        "光面",
+        "透明感"
+      ],
+      "transparency": [
+        "不透明",
+        "半透明"
+      ],
+      "pattern_theme": [
+        "几何图案",
+        "爱心",
+        "星星",
+        "波点"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "低"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "搭配风格",
+        "values": [
+          "休闲风",
+          "甜酷风",
+          "街头风",
+          "学院风"
+        ],
+        "reason": "帮助用户将美甲融入整体造型，提升购买意愿和搭配灵感。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "棋盘格元素",
+          "撞色设计",
+          "甜酷风潮"
+        ],
+        "reason": "突出款式紧跟时尚潮流，吸引追求新潮的用户。"
+      },
+      {
+        "dimension_name": "推荐人群年龄段",
+        "values": [
+          "18-25岁",
+          "25-35岁"
+        ],
+        "reason": "更精准地定位目标用户群体，便于个性化推荐和营销。"
+      },
+      {
+        "dimension_name": "美甲师推荐指数",
+        "values": [
+          "高"
+        ],
+        "reason": "从专业角度评估款式受欢迎程度和制作难度，辅助用户选择，增加信任度。"
+      },
+      {
+        "dimension_name": "视觉焦点",
+        "values": [
+          "图案设计",
+          "色彩搭配"
+        ],
+        "reason": "帮助用户快速理解款式的核心亮点，便于运营文案撰写和推荐理由。"
+      }
+    ]
+  }
+}

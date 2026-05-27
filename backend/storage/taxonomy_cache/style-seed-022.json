@@ -1,0 +1,119 @@
+{
+  "style_id": "style-seed-022",
+  "style_name": "玫瑰金纯色金属风",
+  "image_url": "http://p0.meituan.net/pilotimages/5b985a1c661ae2e964286178e6c0b0f92258113.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "玫瑰金",
+        "暖色系",
+        "金属色"
+      ],
+      "style_tags": [
+        "金属风",
+        "时尚",
+        "潮流",
+        "摩登",
+        "高级感",
+        "未来感"
+      ],
+      "scene_tags": [
+        "派对",
+        "日常通勤",
+        "时尚活动",
+        "夜店",
+        "约会"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "节日",
+        "派对季"
+      ],
+      "visual_impression": [
+        "吸睛",
+        "闪耀",
+        "奢华",
+        "酷炫",
+        "未来感",
+        "个性"
+      ],
+      "target_user_tags": [
+        "时尚潮人",
+        "年轻群体",
+        "个性张扬",
+        "追求潮流"
+      ],
+      "skin_tone_suitability": [
+        "暖黄皮",
+        "白皙肤色",
+        "自然肤色",
+        "健康肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手型",
+        "纤细手指",
+        "标准手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "金属甲",
+        "镜面甲"
+      ],
+      "complexity": "简约",
+      "decoration_type": [
+        "无装饰"
+      ],
+      "topcoat": "高亮光",
+      "nail_shape": [
+        "方圆形",
+        "方形"
+      ],
+      "nail_length": [
+        "中长款"
+      ],
+      "texture_finish": [
+        "镜面",
+        "金属光泽",
+        "高光泽"
+      ],
+      "transparency": [
+        "不透明"
+      ],
+      "pattern_theme": [
+        "纯色"
+      ],
+      "extension_or_patch": "未知",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "光线适应性",
+        "values": [
+          "强光下效果佳",
+          "弱光下有光泽"
+        ],
+        "reason": "金属色和镜面效果在不同光线下会有非常不同的视觉呈现，强光下更闪耀，弱光下也能保持独特光泽，这对于用户选择和场景匹配很重要。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "适合搭配简约服饰",
+          "适合搭配潮流配饰",
+          "适合搭配冷色调服装",
+          "适合搭配暖色调服装"
+        ],
+        "reason": "运营中用户经常会考虑美甲与日常穿搭的协调性，提供搭配建议能帮助用户决策，提升满意度。玫瑰金是暖色调，但金属感又很现代，可以搭配多种风格。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "当季流行",
+          "未来趋势"
+        ],
+        "reason": "美甲行业流行趋势变化快，标注款式是否符合当前流行或预示未来趋势，能帮助运营团队进行推广和库存管理，也能吸引追求时尚的用户。"
+      }
+    ]
+  }
+}

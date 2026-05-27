@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美甲AI智能运营 - 前端演示</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+.container { max-width: 800px; width: 100%; }
+h1 { font-size: 28px; text-align: center; margin-bottom: 8px; color: #1a1a1a; }
+.subtitle { text-align: center; font-size: 14px; color: #888; margin-bottom: 40px; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.entry-card { background: #fff; border-radius: 16px; padding: 32px 24px; text-align: center; cursor: pointer; transition: all .2s; border: 2px solid transparent; text-decoration: none; color: inherit; }
+.entry-card:hover { transform: translateY(-4px); box-shadow: 0 8px 32px rgba(0,0,0,.08); border-color: #FFCD00; }
+.entry-icon { font-size: 48px; margin-bottom: 16px; }
+.entry-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.entry-desc { font-size: 13px; color: #888; line-height: 1.6; }
+.entry-badge { display: inline-block; margin-top: 12px; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+.badge-user { background: #FFF0EB; color: #FF6B35; }
+.badge-admin { background: #FFFBE6; color: #CC9900; }
+.pages-list { margin-top: 16px; text-align: left; padding: 12px 16px; background: #f9f9f9; border-radius: 8px; }
+.pages-list div { font-size: 12px; color: #666; padding: 3px 0; }
+@media(max-width:600px) { .cards { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🦘 美甲AI智能运营</h1>
+  <p class="subtitle">前端演示系统 · 用户端 + 运营端</p>
+  
+  <div class="cards">
+    <a class="entry-card" href="user/index.html">
+      <div class="entry-icon">📱</div>
+      <div class="entry-title">用户端 (C端)</div>
+      <div class="entry-desc">面向消费者的移动端体验<br>AI对话推荐 · AI试戴 · 多选对比</div>
+      <span class="entry-badge badge-user">移动端页面</span>
+      <div class="pages-list">
+        <div>· 首页推荐Feed流</div>
+        <div>· AI对话推荐（仿美团）</div>
+        <div>· 美甲详情 + 试一试按钮</div>
+        <div>· 多选对比（三版方案）</div>
+        <div>· 收藏 / 我的（占位）</div>
+      </div>
+    </a>
+    
+    <a class="entry-card" href="admin/index.html">
+      <div class="entry-icon">💻</div>
+      <div class="entry-title">运营端 (B端)</div>
+      <div class="entry-desc">面向商户的智能运营后台<br>数据看板 · 素材管理 · 爆款推送 · 复盘报告</div>
+      <span class="entry-badge badge-admin">PC端后台</span>
+      <div class="pages-list">
+        <div>· 数据看板 + AI助手播报</div>
+        <div>· 素材管理（款式图+模板）</div>
+        <div>· 爆款推送卡片编辑</div>
+        <div>· 上传款式 / 确认标签</div>
+        <div>· 确认上架</div>
+        <div>· 复盘报告 + 运营建议</div>
+      </div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,108 @@
+from hashlib import sha1
+
+from app.schemas.hand import AnalyzeHandRequest, HandProfileResponse
+from app.services.multimodal_client import (
+    MultimodalModelError,
+    analyze_image_json_with_qwen_vl,
+    is_qwen_vl_enabled,
+)
+
+_hand_profile_store: dict[str, HandProfileResponse] = {}
+
+
+def get_hand_profile(hand_profile_id: str) -> HandProfileResponse | None:
+    return _hand_profile_store.get(hand_profile_id)
+
+
+def analyze_hand(request: AnalyzeHandRequest) -> HandProfileResponse:
+    if is_qwen_vl_enabled():
+        try:
+            result = _analyze_hand_with_model(request)
+        except MultimodalModelError:
+            result = _analyze_hand_mock(request)
+    else:
+        result = _analyze_hand_mock(request)
+    _hand_profile_store[result.hand_profile_id] = result
+    return result
+
+
+def _analyze_hand_with_model(request: AnalyzeHandRequest) -> HandProfileResponse:
+    data = analyze_image_json_with_qwen_vl(
+        image_url=request.hand_image_url,
+        system_prompt=(
+            "你是美甲推荐顾问。只输出合法 JSON，不要输出 Markdown。"
+            "只分析美甲推荐所需的手部视觉特征，不输出身份、健康或敏感判断。"
+            "字段名必须使用英文，所有字段值必须使用中文，禁止输出英文标签。"
+        ),
+        user_prompt=(
+            "请分析用户手图，输出字段："
+            "skin_tone:string, hand_shape:string, recommended_colors:string[], "
+            "recommended_styles:string[], recommended_nail_shapes:string[], analysis_reason:string。"
+            "skin_tone 只能是 冷白/自然肤/暖黄/深肤/unknown；"
+            "hand_shape 只能是 修长/标准/短宽/unknown。"
+            "recommended_colors、recommended_styles、recommended_nail_shapes 和 analysis_reason 必须使用中文。"
+        ),
+    )
+    digest = sha1(request.hand_image_url.encode("utf-8")).hexdigest()
+    return HandProfileResponse(
+        hand_profile_id="hand-" + digest[:8],
+        user_id=request.user_id,
+        skin_tone=_as_enum(data.get("skin_tone"), {"冷白", "自然肤", "暖黄", "深肤", "unknown"}, "unknown"),
+        hand_shape=_as_enum(data.get("hand_shape"), {"修长", "标准", "短宽", "unknown"}, "unknown"),
+        recommended_colors=_as_str_list(data.get("recommended_colors")),
+        recommended_styles=_as_str_list(data.get("recommended_styles")),
+        recommended_nail_shapes=_as_str_list(data.get("recommended_nail_shapes")),
+        analysis_reason=str(data.get("analysis_reason") or "已完成手部特征分析。"),
+        analysis_mode="qwen-vl-plus",
+    )
+
+
+def _analyze_hand_mock(request: AnalyzeHandRequest) -> HandProfileResponse:
+    """Analyze a hand image with deterministic demo output."""
+    digest = sha1(request.hand_image_url.encode("utf-8")).hexdigest()
+    bucket = int(digest[:2], 16) % 3
+
+    if bucket == 0:
+        skin_tone = "暖黄"
+        hand_shape = "短宽"
+        colors = ["奶油白", "豆沙粉", "玫瑰金"]
+        styles = ["显白", "纵向延伸", "简约", "渐变"]
+        nail_shapes = ["方圆甲", "椭圆甲"]
+        reason = "肤色偏暖，低饱和暖色更显白；手指比例偏短，适合纵向渐变和留白设计。"
+    elif bucket == 1:
+        skin_tone = "自然肤"
+        hand_shape = "标准"
+        colors = ["裸粉", "奶茶色", "酒红"]
+        styles = ["通勤", "法式", "细闪"]
+        nail_shapes = ["方圆甲", "圆甲"]
+        reason = "自然肤色适配范围较广，标准手型可以优先选择通勤法式和细闪款。"
+    else:
+        skin_tone = "冷白"
+        hand_shape = "修长"
+        colors = ["蓝色", "银色", "正红"]
+        styles = ["冷感", "镜面", "复杂装饰"]
+        nail_shapes = ["椭圆甲", "尖甲"]
+        reason = "冷白肤色适合冷调和高对比色，修长手型可以承接更强装饰感的款式。"
+
+    return HandProfileResponse(
+        hand_profile_id="hand-" + digest[:8],
+        user_id=request.user_id,
+        skin_tone=skin_tone,
+        hand_shape=hand_shape,
+        recommended_colors=colors,
+        recommended_styles=styles,
+        recommended_nail_shapes=nail_shapes,
+        analysis_reason=reason,
+        analysis_mode="mock",
+    )
+
+
+def _as_str_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _as_enum(value: object, allowed: set[str], default: str) -> str:
+    text = str(value).strip() if value is not None else ""
+    return text if text in allowed else default

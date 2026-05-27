@@ -1,0 +1,123 @@
+{
+  "style_id": "style-seed-001",
+  "style_name": "裸色系纯色简约",
+  "image_url": "http://p0.meituan.net/pilotimages/87797733466cfd525625a5947767e2ff1794125.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "暖色系"
+      ],
+      "style_tags": [
+        "简约",
+        "气质",
+        "自然",
+        "通勤",
+        "百搭",
+        "温柔",
+        "日常"
+      ],
+      "scene_tags": [
+        "日常",
+        "职场",
+        "约会",
+        "休闲",
+        "学生"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春季",
+        "夏季",
+        "秋季"
+      ],
+      "visual_impression": [
+        "清爽",
+        "干净",
+        "大方",
+        "显手白",
+        "低调"
+      ],
+      "target_user_tags": [
+        "白领",
+        "学生",
+        "职场女性",
+        "追求简约者",
+        "初次美甲者",
+        "不喜张扬者"
+      ],
+      "skin_tone_suitability": [
+        "暖黄皮",
+        "冷白皮",
+        "自然肤色"
+      ],
+      "hand_shape_suitability": [
+        "任何手型",
+        "短宽甲",
+        "细长手"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "基础款"
+      ],
+      "complexity": "简约",
+      "decoration_type": [
+        "无装饰"
+      ],
+      "topcoat": "亮面封层",
+      "nail_shape": [
+        "圆形",
+        "椭圆形"
+      ],
+      "nail_length": [
+        "短款",
+        "中长款"
+      ],
+      "texture_finish": [
+        "光滑",
+        "亮面"
+      ],
+      "transparency": "不透明",
+      "pattern_theme": [
+        "纯色"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "低"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格区间",
+        "values": [
+          "入门级",
+          "经济型"
+        ],
+        "reason": "有助于用户根据预算筛选，并为商家定价提供参考，提升转化率。"
+      },
+      {
+        "dimension_name": "搭配服饰风格",
+        "values": [
+          "休闲风",
+          "通勤风",
+          "简约风",
+          "淑女风"
+        ],
+        "reason": "帮助用户根据日常穿搭风格选择美甲，提升搭配满意度和购买意愿。"
+      },
+      {
+        "dimension_name": "颜色底调",
+        "values": [
+          "暖调"
+        ],
+        "reason": "更精准地匹配用户肤色和个人喜好，避免踩雷，提升用户体验和推荐准确性。"
+      },
+      {
+        "dimension_name": "服务时长",
+        "values": [
+          "短时高效"
+        ],
+        "reason": "用户在预约时会考虑时间成本，此维度可帮助用户快速筛选符合时间需求的服务，提高预约效率。"
+      }
+    ]
+  }
+}

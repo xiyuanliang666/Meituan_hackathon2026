@@ -1,0 +1,131 @@
+{
+  "style_id": "style-seed-021",
+  "style_name": "裸色系渐变渐变",
+  "image_url": "http://p0.meituan.net/pilotimages/f4b69d45af5d3b496adbd9d21e768a8e2195181.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "棕色系",
+        "蓝色系",
+        "金色系"
+      ],
+      "style_tags": [
+        "渐变",
+        "法式",
+        "轻奢",
+        "精致",
+        "通勤"
+      ],
+      "scene_tags": [
+        "日常",
+        "通勤",
+        "约会",
+        "商务休闲"
+      ],
+      "season_festival_tags": [
+        "春季",
+        "夏季",
+        "秋季"
+      ],
+      "visual_impression": [
+        "温柔",
+        "优雅",
+        "时尚",
+        "简约",
+        "精致",
+        "高级感"
+      ],
+      "target_user_tags": [
+        "职场女性",
+        "时尚白领",
+        "轻熟风",
+        "精致女孩"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色",
+        "偏黄肤色"
+      ],
+      "hand_shape_suitability": [
+        "短宽手",
+        "修长手",
+        "标准手"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "渐变美甲",
+        "法式美甲",
+        "饰品美甲",
+        "金箔美甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "金箔",
+        "水钻",
+        "异形钻"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "方圆形"
+      ],
+      "nail_length": [
+        "中短款"
+      ],
+      "texture_finish": [
+        "光泽",
+        "亮面"
+      ],
+      "transparency": [
+        "半透明",
+        "透色"
+      ],
+      "pattern_theme": [
+        "几何",
+        "抽象"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "饰品大小",
+        "values": [
+          "大饰品",
+          "小饰品"
+        ],
+        "reason": "饰品大小直接影响款式风格（简约/华丽）、日常便利性及成本。大饰品更吸睛，但可能不便。小饰品更日常。对于推荐和定价有价值。"
+      },
+      {
+        "dimension_name": "法式边类型",
+        "values": [
+          "反法式",
+          "微笑线法式",
+          "平法式",
+          "异形法式"
+        ],
+        "reason": "法式边有多种形态，本款蓝色部分更接近平法式。细分法式边类型能更精准地满足用户对法式款式的偏好。"
+      },
+      {
+        "dimension_name": "光疗胶类型",
+        "values": [
+          "甲油胶",
+          "延长胶",
+          "彩绘胶"
+        ],
+        "reason": "不同的胶类型决定了美甲的持久度、硬度、可塑性以及最终效果。对于消费者来说，了解所用材料有助于判断性价比和耐用性。对于商家，有助于成本核算和技师技能要求。"
+      },
+      {
+        "dimension_name": "搭配场景",
+        "values": [
+          "日常穿搭",
+          "职场穿搭",
+          "休闲穿搭",
+          "正式场合"
+        ],
+        "reason": "用户在选择美甲时会考虑与日常穿搭的匹配度。提供搭配场景能增强用户决策，提升转化。"
+      }
+    ]
+  }
+}

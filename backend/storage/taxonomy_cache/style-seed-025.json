@@ -1,0 +1,123 @@
+{
+  "style_id": "style-seed-025",
+  "style_name": "裸色系纯色法式",
+  "image_url": "http://p1.meituan.net/pilotimages/73ee568aa09547d8bfc0168113ac9ebc2712329.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "红色系"
+      ],
+      "style_tags": [
+        "法式",
+        "甜美",
+        "优雅",
+        "节日",
+        "经典",
+        "简约"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "约会",
+        "派对",
+        "节日聚会",
+        "婚礼"
+      ],
+      "season_festival_tags": [
+        "冬季",
+        "春节",
+        "情人节",
+        "圣诞节",
+        "新年"
+      ],
+      "visual_impression": [
+        "温柔",
+        "气质",
+        "精致",
+        "活泼",
+        "喜庆"
+      ],
+      "target_user_tags": [
+        "学生",
+        "白领",
+        "轻熟女",
+        "甜美系女生",
+        "气质女性"
+      ],
+      "skin_tone_suitability": [
+        "适合所有肤色"
+      ],
+      "hand_shape_suitability": [
+        "适合短宽甲",
+        "适合长甲",
+        "适合方圆甲"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "法式美甲",
+        "手绘",
+        "镶钻"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "钻饰",
+        "手绘图案"
+      ],
+      "topcoat": "亮面封层",
+      "nail_shape": [
+        "方圆甲",
+        "方形甲"
+      ],
+      "nail_length": [
+        "中长款"
+      ],
+      "texture_finish": [
+        "光滑",
+        "亮面"
+      ],
+      "transparency": [
+        "半透明",
+        "不透明"
+      ],
+      "pattern_theme": [
+        "蝴蝶结",
+        "丝带",
+        "几何"
+      ],
+      "extension_or_patch": "无",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "price_tier",
+        "values": [
+          "中高价位",
+          "高价位"
+        ],
+        "reason": "款式包含手绘和钻饰，工艺相对复杂，通常定价会高于基础纯色或基础法式，有助于用户根据预算筛选。"
+      },
+      {
+        "dimension_name": "matching_vibe",
+        "values": [
+          "通勤休闲",
+          "轻奢优雅",
+          "甜美可爱",
+          "节日喜庆"
+        ],
+        "reason": "用户在选择美甲时常考虑与日常穿搭或特定场合的风格匹配度，此维度能更精准地描述款式与整体造型的协调性。"
+      },
+      {
+        "dimension_name": "design_elements",
+        "values": [
+          "法式边",
+          "蝴蝶结",
+          "线条",
+          "水钻"
+        ],
+        "reason": "更细致地拆解款式构成，便于用户通过具体元素进行搜索和偏好匹配，也方便设计师进行元素组合创新。"
+      }
+    ]
+  }
+}

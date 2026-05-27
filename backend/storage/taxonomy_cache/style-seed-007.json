@@ -1,0 +1,137 @@
+{
+  "style_id": "style-seed-007",
+  "style_name": "透明色彩绘豹纹",
+  "image_url": "http://p0.meituan.net/pilotimages/2ac2d01a9bc78320edbe2b545b485b4a2132292.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "透明色系",
+        "裸色系",
+        "银色系",
+        "黑色系"
+      ],
+      "style_tags": [
+        "豹纹",
+        "辣妹风",
+        "欧美风",
+        "个性",
+        "时尚",
+        "潮流",
+        "性感",
+        "奢华"
+      ],
+      "scene_tags": [
+        "派对",
+        "夜店",
+        "聚会",
+        "度假",
+        "约会"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "秋冬"
+      ],
+      "visual_impression": [
+        "闪耀",
+        "野性",
+        "前卫",
+        "吸睛",
+        "高级感",
+        "酷飒"
+      ],
+      "target_user_tags": [
+        "时尚潮人",
+        "个性青年",
+        "辣妹",
+        "追求独特",
+        "喜欢尝试"
+      ],
+      "skin_tone_suitability": [
+        "适合大部分肤色",
+        "白皙肤色",
+        "自然肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手指",
+        "纤细手型",
+        "长甲爱好者"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "彩绘",
+        "渐变",
+        "延长甲",
+        "光疗甲"
+      ],
+      "complexity": "复杂",
+      "decoration_type": [
+        "闪粉",
+        "彩绘图案"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "尖形"
+      ],
+      "nail_length": [
+        "超长"
+      ],
+      "texture_finish": [
+        "光滑",
+        "闪光"
+      ],
+      "transparency": [
+        "透明",
+        "半透明"
+      ],
+      "pattern_theme": [
+        "动物纹",
+        "豹纹"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "适用场合正式度",
+        "values": [
+          "休闲",
+          "半正式"
+        ],
+        "reason": "帮助用户根据活动性质选择美甲款式，提升匹配度，此款式不适合过于正式的场合。"
+      },
+      {
+        "dimension_name": "搭配风格",
+        "values": [
+          "街头风",
+          "辣妹风",
+          "欧美风",
+          "轻奢风"
+        ],
+        "reason": "用户在选择美甲时会考虑与日常穿搭、配饰的协调性，此维度有助于找到整体风格一致的款式。"
+      },
+      {
+        "dimension_name": "视觉冲击力",
+        "values": [
+          "强烈"
+        ],
+        "reason": "衡量款式在视觉上的吸引力和存在感，满足用户对“吸睛”或“低调”的需求，此款式具有很强的视觉冲击力。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "流行款",
+          "前沿款"
+        ],
+        "reason": "帮助用户了解款式在当前市场中的流行程度，满足追求潮流或独特的用户需求，豹纹和长甲是持续流行的元素。"
+      },
+      {
+        "dimension_name": "制作时长预估",
+        "values": [
+          "长 (2小时以上)"
+        ],
+        "reason": "复杂款式（如延长甲、彩绘、渐变结合）制作时间较长，用户在预约时会考虑时间成本，有助于合理安排时间。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "style_id": "style-seed-010",
+  "style_name": "裸色系纯色甜酷风",
+  "image_url": "http://p1.meituan.net/pilotimages/2277d6f9d82264fa6a3c986373e5e44c2292083.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "浅色系",
+        "撞色系",
+        "闪光色系"
+      ],
+      "style_tags": [
+        "甜酷风",
+        "辣妹风",
+        "Y2K",
+        "简约时尚",
+        "个性风",
+        "欧美风"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "约会聚会",
+        "派对活动",
+        "街拍造型"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "夏季",
+        "春季"
+      ],
+      "visual_impression": [
+        "时尚",
+        "个性",
+        "甜美",
+        "酷飒",
+        "精致",
+        "闪耀",
+        "清透"
+      ],
+      "target_user_tags": [
+        "年轻女性",
+        "学生党",
+        "白领",
+        "潮流爱好者",
+        "追求个性"
+      ],
+      "skin_tone_suitability": [
+        "显白",
+        "适合所有肤色",
+        "暖调肤色友好"
+      ],
+      "hand_shape_suitability": [
+        "修饰手型",
+        "手指修长",
+        "甲床较长"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "彩绘",
+        "镶嵌",
+        "亮片",
+        "纯色"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "钻饰",
+        "亮片",
+        "彩绘图案"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "棺材甲",
+        "芭蕾甲"
+      ],
+      "nail_length": "长款",
+      "texture_finish": [
+        "光面",
+        "闪光"
+      ],
+      "transparency": "半透明",
+      "pattern_theme": [
+        "几何",
+        "星形",
+        "闪耀"
+      ],
+      "extension_or_patch": "延长甲/甲片",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "街头休闲",
+          "甜酷穿搭",
+          "简约时尚",
+          "金属配饰"
+        ],
+        "reason": "帮助用户进行场景联想和搭配决策，提升购买意愿。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "当季流行",
+          "Y2K风格",
+          "甜酷风潮"
+        ],
+        "reason": "满足用户对时尚潮流的追求，提升款式吸引力，便于运营推广。"
+      }
+    ]
+  }
+}

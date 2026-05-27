@@ -1,0 +1,16 @@
+{
+  "channel_a": {
+    "label": "自然流量",
+    "try_rate": 0.76,
+    "fav_rate": 0.44,
+    "order_rate": 0.18,
+    "trend": [28, 31, 35, 38, 42, 41, 44]
+  },
+  "channel_b": {
+    "label": "投流流量",
+    "try_rate": 0.88,
+    "fav_rate": 0.58,
+    "order_rate": 0.26,
+    "trend": [40, 44, 48, 52, 55, 56, 58]
+  }
+}

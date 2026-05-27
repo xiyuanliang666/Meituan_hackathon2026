@@ -1,0 +1,113 @@
+{
+  "style_id": "style-seed-014",
+  "style_name": "米白色纯色优雅",
+  "image_url": "http://p1.meituan.net/pilotimages/eecfba4ab276e895b579a79491b2d0211982788.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "浅色系",
+        "裸色系",
+        "米白色系"
+      ],
+      "style_tags": [
+        "优雅",
+        "时尚",
+        "高级感",
+        "气质",
+        "性感",
+        "御姐风"
+      ],
+      "scene_tags": [
+        "约会",
+        "派对",
+        "宴会",
+        "职场",
+        "日常通勤"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春季",
+        "夏季"
+      ],
+      "visual_impression": [
+        "优雅大方",
+        "清新",
+        "气质",
+        "吸睛",
+        "温柔",
+        "精致"
+      ],
+      "target_user_tags": [
+        "时尚女性",
+        "职场丽人",
+        "气质女神",
+        "潮流达人",
+        "追求个性"
+      ],
+      "skin_tone_suitability": [
+        "适合白皙肤色",
+        "适合自然肤色",
+        "显白"
+      ],
+      "hand_shape_suitability": [
+        "显手长",
+        "适合短指甲",
+        "适合粗短手指",
+        "适合纤长手指"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "猫眼美甲",
+        "纯色美甲",
+        "延长甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "无装饰"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": "尖形",
+      "nail_length": "超长款",
+      "texture_finish": [
+        "猫眼光泽",
+        "珠光",
+        "镜面光泽"
+      ],
+      "transparency": "半透明",
+      "pattern_theme": [
+        "纯色",
+        "渐变"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "美甲师技能要求",
+        "values": [
+          "中级美甲师可做",
+          "高级美甲师推荐"
+        ],
+        "reason": "该款式涉及延长甲和猫眼胶的精准操作，对美甲师的专业技能和经验有一定要求，有助于平台为用户匹配合适的美甲师，提升服务质量。"
+      },
+      {
+        "dimension_name": "风格强度",
+        "values": [
+          "突出",
+          "大胆"
+        ],
+        "reason": "该款式因其超长尖形和独特的猫眼光泽，在视觉上具有较强的存在感和冲击力，有助于用户根据个人喜好和日常风格选择，避免过于低调或过于张扬。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "适合搭配礼服",
+          "适合搭配时尚穿搭",
+          "适合搭配精致配饰"
+        ],
+        "reason": "为用户提供更全面的造型指导，帮助用户更好地将美甲融入整体形象，提升购买决策的信心和满意度。"
+      }
+    ]
+  }
+}

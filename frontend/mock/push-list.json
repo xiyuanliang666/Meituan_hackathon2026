@@ -1,0 +1,18 @@
+[
+  {
+    "push_id": "push-001",
+    "style_name": "奶油渐变猫眼",
+    "style_tags": ["猫眼", "渐变", "奶油白", "日常", "秋冬"],
+    "style_image_urls": ["composite-001.png", "composite-002.png", "composite-003.png", "composite-004.png"],
+    "signal_sources": [
+      {"signal": "搜索热度", "value": 89, "delta": "+32%", "weight": "30%"},
+      {"signal": "UGC词频", "value": 214, "delta": "+18%", "weight": "30%"},
+      {"signal": "试戴收藏率", "value": 0.41, "delta": "+41%", "weight": "40%"}
+    ],
+    "life_cycle": "上升期",
+    "life_cycle_trend": [12, 15, 18, 24, 31, 38, 45, 52, 61, 72, 80, 89],
+    "coupon_url": "https://i.meituan.com/coupon/xxx",
+    "coupon_price": 168,
+    "tagline": "秋冬约会必备！奶油渐变猫眼，显白又高级～"
+  }
+]

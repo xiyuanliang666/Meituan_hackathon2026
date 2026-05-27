@@ -1,0 +1,118 @@
+{
+  "style_id": "style-seed-006",
+  "style_name": "裸色渐变温柔",
+  "image_url": "http://p0.meituan.net/pilotimages/6c857edd85a5fa4bcec59698fe9416cb1913981.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "大地色系",
+        "棕色系"
+      ],
+      "style_tags": [
+        "温柔风",
+        "气质款",
+        "淑女风",
+        "轻奢风",
+        "简约不简单"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "约会",
+        "职场",
+        "派对",
+        "婚礼宾客"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春季",
+        "秋季"
+      ],
+      "visual_impression": [
+        "温柔",
+        "优雅",
+        "显白",
+        "显手长",
+        "精致",
+        "闪亮"
+      ],
+      "target_user_tags": [
+        "白领丽人",
+        "时尚潮人",
+        "约会人群",
+        "追求精致感人群"
+      ],
+      "skin_tone_suitability": [
+        "适合暖皮",
+        "适合中性皮",
+        "显白"
+      ],
+      "hand_shape_suitability": [
+        "适合修长手型",
+        "适合短甲床 (通过延长改善)",
+        "适合长指甲"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "渐变",
+        "延长甲",
+        "钻饰",
+        "亮片",
+        "3D饰品"
+      ],
+      "complexity": "复杂",
+      "decoration_type": [
+        "钻饰",
+        "亮片",
+        "3D饰品"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "棺材形",
+        "芭蕾舞形"
+      ],
+      "nail_length": "长款",
+      "texture_finish": [
+        "光滑",
+        "亮面",
+        "立体 (局部)"
+      ],
+      "transparency": [
+        "半透明 (甲床部分)",
+        "渐变 (甲尖部分)"
+      ],
+      "pattern_theme": [
+        "纯色渐变 (带装饰)"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格区间",
+        "values": [
+          "高端",
+          "奢华"
+        ],
+        "reason": "此款式包含延长甲、3D饰品和多重工艺，成本和技术要求较高，通常定价较高。此维度有助于用户根据预算筛选，也帮助商家进行产品定位和定价策略。"
+      },
+      {
+        "dimension_name": "服务时长",
+        "values": [
+          "长 (2小时以上)"
+        ],
+        "reason": "延长甲、渐变、钻饰和3D饰品的制作过程耗时较长，明确服务时长有助于用户合理安排时间，并帮助门店进行工位和美甲师的排班管理。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "流行款",
+          "经典款 (渐变)",
+          "网红款"
+        ],
+        "reason": "渐变是经典工艺，但结合长款甲型和3D心形钻饰使其更具时尚感和流行度。此维度有助于用户了解款式的新旧程度和受欢迎程度，影响购买决策，并为运营提供趋势分析数据。"
+      }
+    ]
+  }
+}

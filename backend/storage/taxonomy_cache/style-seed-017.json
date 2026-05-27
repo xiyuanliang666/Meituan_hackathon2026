@@ -1,0 +1,134 @@
+{
+  "style_id": "style-seed-017",
+  "style_name": "裸色系法式法式",
+  "image_url": "http://p0.meituan.net/pilotimages/ec437f6291295904c2f894edb8c01cb82131722.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "浅色系",
+        "奶白色",
+        "透明"
+      ],
+      "style_tags": [
+        "法式",
+        "轻奢",
+        "优雅",
+        "甜美",
+        "气质",
+        "婚嫁",
+        "公主风"
+      ],
+      "scene_tags": [
+        "约会",
+        "派对",
+        "婚礼",
+        "宴会",
+        "日常通勤"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "情人节"
+      ],
+      "visual_impression": [
+        "精致",
+        "高级感",
+        "温柔",
+        "闪耀",
+        "华丽",
+        "仙气"
+      ],
+      "target_user_tags": [
+        "轻熟女",
+        "新娘",
+        "追求精致感",
+        "喜欢饰品"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色",
+        "暖黄皮"
+      ],
+      "hand_shape_suitability": [
+        "修长手指",
+        "标准手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "光疗甲",
+        "延长甲",
+        "法式美甲",
+        "饰品美甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "水钻",
+        "珍珠",
+        "立体饰品"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "方圆",
+        "方形"
+      ],
+      "nail_length": [
+        "长款"
+      ],
+      "texture_finish": [
+        "光泽",
+        "平滑",
+        "立体"
+      ],
+      "transparency": [
+        "透明",
+        "不透明"
+      ],
+      "pattern_theme": [
+        "法式线条",
+        "饰品组合",
+        "几何"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "饰品材质",
+        "values": [
+          "树脂",
+          "玻璃",
+          "合金"
+        ],
+        "reason": "不同材质影响饰品的光泽度、耐磨性、成本及整体质感，对消费者选择和商家定价有重要参考价值。"
+      },
+      {
+        "dimension_name": "饰品牢固度",
+        "values": [
+          "高",
+          "中",
+          "低"
+        ],
+        "reason": "饰品牢固度是消费者关注的核心痛点之一，直接影响美甲的持久度和日常使用体验。高牢固度通常意味着更复杂的固定工艺。"
+      },
+      {
+        "dimension_name": "风格融合度",
+        "values": [
+          "经典融合流行",
+          "单一风格",
+          "多风格混搭"
+        ],
+        "reason": "有助于识别款式在市场上的独特性和创新性，对推荐给追求不同风格偏好的用户有帮助。"
+      },
+      {
+        "dimension_name": "美甲师技能要求",
+        "values": [
+          "初级",
+          "中级",
+          "高级"
+        ],
+        "reason": "此维度可用于门店内部培训、技师等级评定，以及向消费者展示款式工艺难度，间接影响价格和预约技师选择。"
+      }
+    ]
+  }
+}

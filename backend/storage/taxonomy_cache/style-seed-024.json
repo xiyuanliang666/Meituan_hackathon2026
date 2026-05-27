@@ -1,0 +1,126 @@
+{
+  "style_id": "style-seed-024",
+  "style_name": "灰色系猫眼简约",
+  "image_url": "http://p0.meituan.net/pilotimages/e80e1d25e48d7ef5c505b29ee8e331822641412.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "灰色系",
+        "蓝色系",
+        "粉色系",
+        "亮片色"
+      ],
+      "style_tags": [
+        "简约",
+        "时尚",
+        "精致",
+        "活泼",
+        "个性",
+        "甜美"
+      ],
+      "scene_tags": [
+        "日常",
+        "约会",
+        "休闲",
+        "聚会",
+        "度假",
+        "职场"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春季",
+        "夏季",
+        "秋季",
+        "冬季"
+      ],
+      "visual_impression": [
+        "时尚感",
+        "精致感",
+        "活泼感",
+        "简约感",
+        "高级感",
+        "闪耀"
+      ],
+      "target_user_tags": [
+        "年轻女性",
+        "时尚女性",
+        "职场女性",
+        "学生"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色",
+        "偏黄肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手型",
+        "纤细手型",
+        "正常手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "光疗甲",
+        "凝胶甲",
+        "猫眼胶",
+        "亮片胶"
+      ],
+      "complexity": "简约",
+      "decoration_type": [
+        "亮片",
+        "磁粉"
+      ],
+      "topcoat": "封层 (亮面)",
+      "nail_shape": [
+        "椭圆形",
+        "杏仁形"
+      ],
+      "nail_length": "中长款",
+      "texture_finish": [
+        "光泽",
+        "闪耀",
+        "光滑"
+      ],
+      "transparency": [
+        "不透明",
+        "半透明"
+      ],
+      "pattern_theme": [
+        "几何",
+        "闪耀"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "低"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "feature_highlight",
+        "values": [
+          "猫眼光泽",
+          "亮片点缀",
+          "跳色搭配"
+        ],
+        "reason": "突出款式最吸引人的特点，方便用户快速了解卖点，也利于运营在推广时抓住重点。"
+      },
+      {
+        "dimension_name": "matching_style",
+        "values": [
+          "休闲风",
+          "简约风",
+          "甜酷风",
+          "轻熟风"
+        ],
+        "reason": "用户在选择美甲时，会考虑与日常穿搭、配饰的协调性。这个维度可以帮助用户找到更适合自己整体风格的美甲，提高满意度。"
+      },
+      {
+        "dimension_name": "nail_art_technique",
+        "values": [
+          "磁粉美甲",
+          "亮片美甲",
+          "跳色美甲"
+        ],
+        "reason": "区分不同美甲技法，对于专业用户或想了解美甲工艺的用户有价值，也方便门店技师根据技法进行排班或推荐。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "style_id": "style-seed-016",
+  "style_name": "裸色彩绘波点",
+  "image_url": "http://p0.meituan.net/pilotimages/137aad1f6a36655ae395cf7dc57604642782680.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "彩色系",
+        "糖果色系",
+        "粉色系"
+      ],
+      "style_tags": [
+        "简约",
+        "可爱",
+        "甜美",
+        "波点",
+        "清新",
+        "日系"
+      ],
+      "scene_tags": [
+        "日常",
+        "通勤",
+        "约会",
+        "休闲",
+        "度假"
+      ],
+      "season_festival_tags": [
+        "春夏",
+        "日常款"
+      ],
+      "visual_impression": [
+        "清新",
+        "活泼",
+        "可爱",
+        "减龄",
+        "温柔",
+        "元气"
+      ],
+      "target_user_tags": [
+        "学生党",
+        "年轻女性",
+        "甜美风爱好者",
+        "简约风爱好者"
+      ],
+      "skin_tone_suitability": [
+        "适合所有肤色",
+        "显白"
+      ],
+      "hand_shape_suitability": [
+        "适合短甲",
+        "适合圆甲",
+        "修饰手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "彩绘",
+        "渐变",
+        "纯色打底",
+        "光疗甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "波点彩绘",
+        "渐变"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "圆甲",
+        "方圆甲"
+      ],
+      "nail_length": [
+        "短甲",
+        "中长甲"
+      ],
+      "texture_finish": [
+        "光泽",
+        "透明感"
+      ],
+      "transparency": "半透明",
+      "pattern_theme": [
+        "波点",
+        "几何",
+        "可爱风"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "低"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格区间",
+        "values": [
+          "经济型",
+          "中端"
+        ],
+        "reason": "帮助用户根据预算筛选款式，也便于商家进行定价和套餐设计。"
+      },
+      {
+        "dimension_name": "服务时长",
+        "values": [
+          "中等"
+        ],
+        "reason": "用户在选择美甲时会考虑所需时间，商家也需要根据时长安排技师和工位。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "休闲装",
+          "甜美风",
+          "通勤装",
+          "度假风"
+        ],
+        "reason": "提供搭配建议能帮助用户更好地选择适合自己日常穿搭和场合的款式，提升转化率。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "经典款",
+          "流行款"
+        ],
+        "reason": "用户对流行趋势敏感，有助于推荐系统根据用户偏好和市场热度进行推荐。"
+      }
+    ]
+  }
+}

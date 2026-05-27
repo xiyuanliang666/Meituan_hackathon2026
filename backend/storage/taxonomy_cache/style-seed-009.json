@@ -1,0 +1,119 @@
+{
+  "style_id": "style-seed-009",
+  "style_name": "黑色纯色甜酷",
+  "image_url": "http://p1.meituan.net/pilotimages/69614397f0ecb559b98cb46a5a46f3b32642714.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "黑色系",
+        "裸色系"
+      ],
+      "style_tags": [
+        "甜酷风",
+        "Y2K",
+        "个性",
+        "辣妹风",
+        "欧美风"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "派对聚会",
+        "街拍",
+        "音乐节",
+        "约会"
+      ],
+      "season_festival_tags": [
+        "四季皆宜"
+      ],
+      "visual_impression": [
+        "时尚",
+        "酷飒",
+        "俏皮",
+        "显白"
+      ],
+      "target_user_tags": [
+        "年轻女性",
+        "学生党",
+        "潮流爱好者",
+        "个性穿搭者"
+      ],
+      "skin_tone_suitability": [
+        "适合所有肤色",
+        "显白"
+      ],
+      "hand_shape_suitability": [
+        "适合修长手指",
+        "适合中长指甲"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "贴纸美甲",
+        "钻饰美甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "星星图案",
+        "钻饰"
+      ],
+      "topcoat": "亮面封层",
+      "nail_shape": [
+        "椭圆形",
+        "杏仁形"
+      ],
+      "nail_length": [
+        "中长款",
+        "长款"
+      ],
+      "texture_finish": [
+        "光滑",
+        "亮面"
+      ],
+      "transparency": [
+        "不透明",
+        "透明"
+      ],
+      "pattern_theme": [
+        "星空",
+        "几何"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "Y2K复古",
+          "潮流前沿"
+        ],
+        "reason": "该款式融合了当前流行的Y2K复古元素和甜酷风格，对追求时尚潮流的用户有很强的吸引力，有助于精准推荐给目标客群。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "辣妹穿搭",
+          "街头休闲",
+          "暗黑系",
+          "甜酷风服饰"
+        ],
+        "reason": "明确美甲款式适合搭配的服装风格，能帮助用户更好地进行整体造型搭配，提升购买意愿。"
+      },
+      {
+        "dimension_name": "视觉冲击力",
+        "values": [
+          "强"
+        ],
+        "reason": "黑色与裸色的对比，加上星星和钻饰的点缀，使得这款美甲具有较强的视觉冲击力，容易在社交媒体上获得关注。"
+      },
+      {
+        "dimension_name": "制作耗时",
+        "values": [
+          "中等"
+        ],
+        "reason": "包含纯色、贴纸和钻饰等多种工艺，制作时间会比纯色美甲长，但又不及复杂手绘款，对门店排期和用户预期有参考价值。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+[
+  {"template_id": "tpl-001", "template_url": "hand-natural.png", "label": "自然肤色", "is_selected": true},
+  {"template_id": "tpl-002", "template_url": "hand-fair.png", "label": "白皙肤色", "is_selected": true},
+  {"template_id": "tpl-003", "template_url": "hand-warm.png", "label": "暖肤色", "is_selected": true},
+  {"template_id": "tpl-004", "template_url": "hand-cool.png", "label": "冷白肤色", "is_selected": false},
+  {"template_id": "tpl-005", "template_url": "hand-custom.png", "label": "店铺自有", "is_selected": false}
+]

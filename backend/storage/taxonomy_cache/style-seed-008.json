@@ -1,0 +1,108 @@
+{
+  "style_id": "style-seed-008",
+  "style_name": "黑色纯色欧美风",
+  "image_url": "http://p1.meituan.net/pilotimages/d15c06e8c2137d4f39f3b60476a90cf92026957.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "黑色系",
+        "裸色系",
+        "银色系",
+        "对比色系",
+        "经典色系"
+      ],
+      "style_tags": [
+        "欧美风",
+        "辣妹风",
+        "Y2K",
+        "个性",
+        "酷飒",
+        "法式变体",
+        "时尚",
+        "潮流"
+      ],
+      "scene_tags": [
+        "派对",
+        "夜店",
+        "活动",
+        "街拍",
+        "度假",
+        "约会"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "派对季"
+      ],
+      "visual_impression": [
+        "吸睛",
+        "张扬",
+        "华丽",
+        "性感",
+        "高级感",
+        "酷炫"
+      ],
+      "target_user_tags": [
+        "时尚潮人",
+        "个性女生",
+        "辣妹",
+        "派对女王",
+        "追求潮流"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手指",
+        "短粗手指"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "延长甲",
+        "纯色",
+        "闪粉",
+        "镶钻",
+        "法式"
+      ],
+      "complexity": "复杂",
+      "decoration_type": [
+        "水钻",
+        "闪粉"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": "尖形",
+      "nail_length": "超长款",
+      "texture_finish": [
+        "光泽",
+        "闪光"
+      ],
+      "transparency": "半透明",
+      "pattern_theme": [
+        "几何",
+        "法式"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格区间指示",
+        "values": [
+          "高端"
+        ],
+        "reason": "该款式涉及延长甲、多色、闪粉和镶钻等复杂工艺和材料，成本较高，属于高端价位。此维度可帮助用户根据预算筛选，指导商家定价，提升成交转化率。"
+      },
+      {
+        "dimension_name": "搭配风格推荐",
+        "values": [
+          "欧美辣妹风",
+          "街头潮流风",
+          "暗黑系",
+          "Y2K风格"
+        ],
+        "reason": "此款式风格强烈，适合特定穿搭。提供搭配建议能帮助用户更好地融入整体造型，增加款式吸引力，促进用户决策。"
+      }
+    ]
+  }
+}

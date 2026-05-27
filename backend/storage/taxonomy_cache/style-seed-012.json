@@ -1,0 +1,131 @@
+{
+  "style_id": "style-seed-012",
+  "style_name": "裸色系纯色法式",
+  "image_url": "http://p0.meituan.net/pilotimages/43cc4ced977a3dd271f60ee2f05607772681747.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "黑色系",
+        "金色系"
+      ],
+      "style_tags": [
+        "法式",
+        "花卉",
+        "甜酷",
+        "优雅",
+        "时尚",
+        "撞色"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "约会",
+        "派对",
+        "商务休闲",
+        "度假"
+      ],
+      "season_festival_tags": [
+        "春季",
+        "秋季",
+        "不限季节"
+      ],
+      "visual_impression": [
+        "优雅",
+        "时尚",
+        "气质",
+        "成熟",
+        "精致",
+        "个性"
+      ],
+      "target_user_tags": [
+        "职场女性",
+        "时尚潮人",
+        "追求个性",
+        "喜欢法式",
+        "喜欢花卉",
+        "喜欢长甲"
+      ],
+      "skin_tone_suitability": [
+        "显白",
+        "适合各种肤色"
+      ],
+      "hand_shape_suitability": [
+        "适合修长手指",
+        "适合纤细手型"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "法式美甲",
+        "贴纸美甲",
+        "延长甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "贴纸"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "尖形",
+        "杏仁形"
+      ],
+      "nail_length": "超长款",
+      "texture_finish": [
+        "光滑",
+        "亮面"
+      ],
+      "transparency": [
+        "半透明",
+        "不透明"
+      ],
+      "pattern_theme": [
+        "花卉",
+        "几何"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "场合正式度",
+        "values": [
+          "时尚休闲",
+          "半正式"
+        ],
+        "reason": "帮助用户根据出席场合选择合适的美甲款式，提升匹配度。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "流行款",
+          "经典元素融合"
+        ],
+        "reason": "帮助用户了解款式是否符合当前时尚潮流，吸引追求时尚的用户。"
+      },
+      {
+        "dimension_name": "操作时长预估",
+        "values": [
+          "较长"
+        ],
+        "reason": "方便商家排期和用户规划时间，提高用户体验和转化率。"
+      },
+      {
+        "dimension_name": "价格区间预估",
+        "values": [
+          "中高价位"
+        ],
+        "reason": "帮助用户快速筛选符合预算的款式，减少决策成本。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "适合搭配简约服饰",
+          "适合搭配金属配饰",
+          "适合搭配小黑裙"
+        ],
+        "reason": "为用户提供穿搭灵感，提升款式吸引力和用户购买意愿。"
+      }
+    ]
+  }
+}

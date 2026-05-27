@@ -1,0 +1,134 @@
+{
+  "style_id": "style-seed-020",
+  "style_name": "裸色系彩绘辣妹风",
+  "image_url": "http://p1.meituan.net/pilotimages/d5eedc75b0021f79381962fc145b0bc62301165.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "大地色系",
+        "银色系",
+        "闪亮色系"
+      ],
+      "style_tags": [
+        "辣妹风",
+        "欧美风",
+        "奢华风",
+        "个性风",
+        "潮流风",
+        "性感风",
+        "甜酷风",
+        "派对风"
+      ],
+      "scene_tags": [
+        "派对",
+        "夜店",
+        "约会",
+        "度假",
+        "时尚街拍",
+        "活动造型"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "派对季"
+      ],
+      "visual_impression": [
+        "闪耀",
+        "华丽",
+        "吸睛",
+        "时尚",
+        "精致",
+        "张扬",
+        "高级感"
+      ],
+      "target_user_tags": [
+        "年轻女性",
+        "时尚潮人",
+        "追求个性",
+        "喜欢华丽风格",
+        "夜店爱好者"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色",
+        "暖调肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手指",
+        "纤细手型",
+        "骨节分明"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "光疗甲",
+        "延长甲",
+        "彩绘",
+        "镶钻",
+        "渐变"
+      ],
+      "complexity": "复杂",
+      "decoration_type": [
+        "水钻",
+        "亮片/闪粉",
+        "彩绘图案",
+        "线条"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "尖形",
+        "杏仁形",
+        "锥形"
+      ],
+      "nail_length": [
+        "超长款"
+      ],
+      "texture_finish": [
+        "光泽",
+        "闪亮",
+        "立体"
+      ],
+      "transparency": [
+        "半透明",
+        "不透明"
+      ],
+      "pattern_theme": [
+        "豹纹元素",
+        "几何线条",
+        "闪粉渐变",
+        "奢华镶嵌"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "price_range",
+        "values": [
+          "中高价位",
+          "高价位"
+        ],
+        "reason": "复杂的延长甲款式，搭配大量水钻和彩绘，制作成本和技术要求高，直接影响用户购买决策和门店定价策略。"
+      },
+      {
+        "dimension_name": "time_commitment",
+        "values": [
+          "长时间",
+          "中长时间"
+        ],
+        "reason": "延长甲、多重工艺（彩绘、镶钻、渐变）叠加，制作耗时较长，用户在预约时会考虑时间成本。"
+      },
+      {
+        "dimension_name": "matching_style_elements",
+        "values": [
+          "欧美辣妹穿搭",
+          "性感连衣裙",
+          "金属配饰",
+          "烟熏妆",
+          "高跟鞋"
+        ],
+        "reason": "帮助用户更好地搭配整体造型，提升美甲的整体效果，也可用于跨品类推荐（如美妆、服饰）。"
+      }
+    ]
+  }
+}

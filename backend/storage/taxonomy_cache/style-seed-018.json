@@ -1,0 +1,125 @@
+{
+  "style_id": "style-seed-018",
+  "style_name": "裸色系纯色华丽",
+  "image_url": "http://p0.meituan.net/pilotimages/5591229138c4e7e1d183b59be442d9dc2267735.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "裸色系",
+        "晶石色",
+        "撞色"
+      ],
+      "style_tags": [
+        "华丽风",
+        "气质",
+        "精致",
+        "轻奢",
+        "通勤百搭"
+      ],
+      "scene_tags": [
+        "约会",
+        "宴会",
+        "派对",
+        "日常通勤",
+        "婚礼"
+      ],
+      "season_festival_tags": [
+        "四季皆宜"
+      ],
+      "visual_impression": [
+        "闪耀",
+        "璀璨",
+        "温柔",
+        "高级感",
+        "存在感强",
+        "吸睛"
+      ],
+      "target_user_tags": [
+        "追求精致感",
+        "喜欢blingbling",
+        "职场女性",
+        "时尚潮人"
+      ],
+      "skin_tone_suitability": [
+        "显白",
+        "适合各种肤色"
+      ],
+      "hand_shape_suitability": [
+        "修饰手型",
+        "适合长指甲",
+        "适合纤长手指"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "镶钻美甲",
+        "饰品美甲",
+        "立体美甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "钻饰",
+        "异形钻",
+        "宝石",
+        "立体饰品"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": [
+        "方圆甲"
+      ],
+      "nail_length": [
+        "中长款"
+      ],
+      "texture_finish": [
+        "光滑",
+        "凸起",
+        "闪亮"
+      ],
+      "transparency": [
+        "半透明"
+      ],
+      "pattern_theme": [
+        "几何",
+        "简约点缀"
+      ],
+      "extension_or_patch": "unknown",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格区间",
+        "values": [
+          "中高价位",
+          "高端"
+        ],
+        "reason": "镶嵌大量钻饰和异形宝石通常会增加美甲的成本，对消费者而言是重要的决策因素。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "适合搭配礼服",
+          "适合搭配简约服饰",
+          "适合搭配珠宝首饰"
+        ],
+        "reason": "美甲款式与服装、配饰的搭配能帮助用户更好地想象佩戴效果，提升购买意愿。"
+      },
+      {
+        "dimension_name": "佩戴舒适度",
+        "values": [
+          "有异物感",
+          "日常活动需注意"
+        ],
+        "reason": "大尺寸的立体饰品可能会影响日常活动，如打字、做家务，这是用户关心的实际问题。"
+      },
+      {
+        "dimension_name": "美甲师技能要求",
+        "values": [
+          "高",
+          "专业"
+        ],
+        "reason": "复杂的镶嵌和饰品固定需要美甲师有较高的专业技能和经验，这对于商家端的人员配置和培训有指导意义，也间接影响服务质量和价格。"
+      }
+    ]
+  }
+}

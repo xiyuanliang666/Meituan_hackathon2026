@@ -1,0 +1,124 @@
+{
+  "style_id": "style-seed-005",
+  "style_name": "白色彩绘法式",
+  "image_url": "http://p1.meituan.net/pilotimages/3c0d090e20f0cb56f70fcb56c54dd6582416974.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "黑白配色",
+        "简约色系",
+        "清新色系"
+      ],
+      "style_tags": [
+        "简约",
+        "清新",
+        "可爱",
+        "甜美",
+        "法式",
+        "斑点",
+        "奶牛纹",
+        "气质",
+        "百搭",
+        "通勤风"
+      ],
+      "scene_tags": [
+        "日常",
+        "通勤",
+        "约会",
+        "休闲",
+        "学生党"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春夏"
+      ],
+      "visual_impression": [
+        "清爽",
+        "干净",
+        "活力",
+        "时尚",
+        "减龄",
+        "优雅"
+      ],
+      "target_user_tags": [
+        "年轻女性",
+        "学生",
+        "白领",
+        "简约风爱好者",
+        "可爱风爱好者"
+      ],
+      "skin_tone_suitability": [
+        "适合所有肤色",
+        "显白"
+      ],
+      "hand_shape_suitability": [
+        "适合短甲",
+        "适合宽甲",
+        "显手长"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "纯色美甲",
+        "彩绘美甲",
+        "法式美甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "彩绘"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": "方圆形",
+      "nail_length": "短款",
+      "texture_finish": [
+        "光面",
+        "亮泽"
+      ],
+      "transparency": [
+        "部分透明",
+        "部分不透明"
+      ],
+      "pattern_theme": [
+        "动物纹",
+        "斑点",
+        "经典法式"
+      ],
+      "extension_or_patch": "否",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格区间",
+        "values": [
+          "中端"
+        ],
+        "reason": "帮助用户根据预算筛选，也便于商家定价和套餐设计。"
+      },
+      {
+        "dimension_name": "服务时长预估",
+        "values": [
+          "中等时长"
+        ],
+        "reason": "影响用户预约决策和门店排期，提升用户体验。"
+      },
+      {
+        "dimension_name": "搭配风格",
+        "values": [
+          "休闲风",
+          "通勤风",
+          "甜美风",
+          "韩系"
+        ],
+        "reason": "帮助用户进行整体造型搭配，增加推荐的精准度。"
+      },
+      {
+        "dimension_name": "流行趋势",
+        "values": [
+          "经典与潮流结合",
+          "流行款"
+        ],
+        "reason": "帮助用户了解款式时效性，运营可根据流行趋势进行推广。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "style_id": "style-seed-019",
+  "style_name": "米色系纯色奢华",
+  "image_url": "http://p0.meituan.net/pilotimages/5fad21e6d38656170bf726ff3973a4501918338.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "米色系",
+        "金色系",
+        "裸色系"
+      ],
+      "style_tags": [
+        "奢华风",
+        "华丽风",
+        "气质",
+        "精致",
+        "闪耀",
+        "名媛风"
+      ],
+      "scene_tags": [
+        "宴会",
+        "派对",
+        "婚礼",
+        "约会",
+        "节日庆典",
+        "年会"
+      ],
+      "season_festival_tags": [
+        "秋冬",
+        "圣诞",
+        "新年",
+        "节庆"
+      ],
+      "visual_impression": [
+        "闪亮",
+        "璀璨",
+        "高级感",
+        "存在感强",
+        "吸睛"
+      ],
+      "target_user_tags": [
+        "追求时尚",
+        "喜欢华丽风格",
+        "参加重要场合",
+        "成熟女性",
+        "时尚白领"
+      ],
+      "skin_tone_suitability": [
+        "显白",
+        "适合暖调肤色",
+        "适合自然肤色"
+      ],
+      "hand_shape_suitability": [
+        "修饰手型",
+        "显手长",
+        "适合纤长手指",
+        "适合指甲床较长"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "延长甲",
+        "钻饰",
+        "亮片",
+        "渐变",
+        "纯色打底"
+      ],
+      "complexity": "复杂",
+      "decoration_type": [
+        "钻饰",
+        "亮片",
+        "珍珠",
+        "金属饰品"
+      ],
+      "topcoat": "光泽封层",
+      "nail_shape": [
+        "尖形",
+        "水滴形"
+      ],
+      "nail_length": "超长",
+      "texture_finish": [
+        "光泽",
+        "闪粉",
+        "立体"
+      ],
+      "transparency": "半透明",
+      "pattern_theme": [
+        "奢华风",
+        "几何元素",
+        "抽象"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "高"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "价格定位",
+        "values": [
+          "高价位",
+          "奢华款"
+        ],
+        "reason": "钻饰多、工艺复杂、延长甲通常定价较高，有助于用户筛选和商家定价，提升推荐精准度。"
+      },
+      {
+        "dimension_name": "佩戴场景频率",
+        "values": [
+          "特殊场合",
+          "非日常"
+        ],
+        "reason": "过于华丽和长的款式不适合日常通勤，明确佩戴场景有助于用户决策和避免误解。"
+      },
+      {
+        "dimension_name": "搭配建议",
+        "values": [
+          "适合搭配金色饰品",
+          "适合晚礼服",
+          "适合华丽服饰"
+        ],
+        "reason": "帮助用户更好地搭配整体造型，提升购买意愿和满意度。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "style_id": "style-seed-013",
+  "style_name": "白色渐变渐变",
+  "image_url": "http://p0.meituan.net/pilotimages/682c173ae3a95d0b838655e8337b30d72213857.png",
+  "analysis": {
+    "marketing_dimension": {
+      "color_system": [
+        "白色系",
+        "裸色系",
+        "银色系"
+      ],
+      "style_tags": [
+        "渐变",
+        "法式",
+        "仙气",
+        "温柔",
+        "气质",
+        "优雅",
+        "轻奢",
+        "精致",
+        "浪漫"
+      ],
+      "scene_tags": [
+        "日常通勤",
+        "约会",
+        "婚礼",
+        "派对",
+        "度假"
+      ],
+      "season_festival_tags": [
+        "四季皆宜",
+        "春季",
+        "夏季",
+        "秋季",
+        "冬季",
+        "婚礼",
+        "情人节"
+      ],
+      "visual_impression": [
+        "清爽",
+        "干净",
+        "纯洁",
+        "优雅",
+        "精致",
+        "浪漫",
+        "仙气",
+        "温柔",
+        "晶莹剔透"
+      ],
+      "target_user_tags": [
+        "白领丽人",
+        "新娘",
+        "追求精致感的女性",
+        "喜欢长指甲的女性"
+      ],
+      "skin_tone_suitability": [
+        "白皙肤色",
+        "自然肤色",
+        "偏黄肤色"
+      ],
+      "hand_shape_suitability": [
+        "修长手指",
+        "纤细手指"
+      ]
+    },
+    "craft_dimension": {
+      "craft_type": [
+        "渐变美甲",
+        "饰品美甲",
+        "闪粉美甲",
+        "延长甲"
+      ],
+      "complexity": "中等",
+      "decoration_type": [
+        "水钻",
+        "异形钻",
+        "闪粉线"
+      ],
+      "topcoat": "亮面",
+      "nail_shape": "长方",
+      "nail_length": "长款",
+      "texture_finish": [
+        "光滑",
+        "亮面",
+        "立体"
+      ],
+      "transparency": [
+        "半透明",
+        "不透明"
+      ],
+      "pattern_theme": [
+        "渐变",
+        "线条",
+        "几何"
+      ],
+      "extension_or_patch": "延长甲",
+      "maintenance_difficulty": "中"
+    },
+    "extra_candidate_dimensions": [
+      {
+        "dimension_name": "适合穿搭风格",
+        "values": [
+          "仙女风",
+          "轻奢风",
+          "简约风",
+          "通勤风",
+          "婚纱礼服"
+        ],
+        "reason": "帮助用户根据日常穿搭风格选择美甲，提升整体造型的和谐度，促进搭配类商品的交叉销售。"
+      },
+      {
+        "dimension_name": "流行元素",
+        "values": [
+          "白色渐变",
+          "水钻",
+          "闪粉线条",
+          "长甲"
+        ],
+        "reason": "突出美甲的时尚亮点，吸引追求潮流的用户，并可用于趋势分析和内容营销。"
+      },
+      {
+        "dimension_name": "服务时长预估",
+        "values": [
+          "较长时间"
+        ],
+        "reason": "告知用户制作这款美甲所需的大致时间，方便用户安排行程，提升用户体验，减少因时间预期不符造成的投诉。"
+      }
+    ]
+  }
+}
