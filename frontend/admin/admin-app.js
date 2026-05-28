@@ -80,10 +80,10 @@ async function regenBubble() {
 
 // ===== 素材管理 =====
 let stylesData = [
-  { name: '奶油渐变猫眼', tags: ['猫眼','渐变','奶油白','玫瑰金'], lc: 'up', lcText: '上升期', date: '2024-11-28', bg: '#FAEEDA', bc: '#EF9F27', ic: '#BA7517', seasonal: false, image_url: '' },
-  { name: '圣诞红绿镜面', tags: ['镜面','红色','绿色','圣诞'], lc: 'peak', lcText: '峰值期', date: '2024-11-25', bg: '#E1F5EE', bc: '#5DCAA5', ic: '#0F6E56', seasonal: true, image_url: '' },
-  { name: '法式简约纯色', tags: ['法式','简约','裸色'], lc: 'down', lcText: '衰退期', date: '2024-11-20', bg: '#EEEDFE', bc: '#AFA9EC', ic: '#534AB7', seasonal: false, image_url: '' },
-  { name: '暗红晕染手绘', tags: ['晕染','手绘','暗红'], lc: 'none', lcText: '未关联', date: '2024-11-18', bg: '#FCE4D6', bc: '#F0997B', ic: '#993C1D', seasonal: false, image_url: '' }
+  { name: '奶油渐变猫眼', tags: ['猫眼','渐变','奶油白','玫瑰金'], lc: 'up', lcText: '上升期', date: '2024-11-28', bg: '#FAEEDA', bc: '#EF9F27', ic: '#BA7517', seasonal: false, image_url: 'http://p1.meituan.net/pilotimages/69614397f0ecb559b98cb46a5a46f3b32642714.png' },
+  { name: '圣诞红绿镜面', tags: ['镜面','红色','绿色','圣诞'], lc: 'peak', lcText: '峰值期', date: '2024-11-25', bg: '#E1F5EE', bc: '#5DCAA5', ic: '#0F6E56', seasonal: true, image_url: 'http://p0.meituan.net/pilotimages/bc153edf655dd6961dc9f8e95ad8cd1e2561531.png' },
+  { name: '法式简约纯色', tags: ['法式','简约','裸色'], lc: 'down', lcText: '衰退期', date: '2024-11-20', bg: '#EEEDFE', bc: '#AFA9EC', ic: '#534AB7', seasonal: false, image_url: 'http://p0.meituan.net/pilotimages/1248ad42d355b98257e5fbcdf90efc552138079.png' },
+  { name: '暗红晕染手绘', tags: ['晕染','手绘','暗红'], lc: 'none', lcText: '未关联', date: '2024-11-18', bg: '#FCE4D6', bc: '#F0997B', ic: '#993C1D', seasonal: false, image_url: 'http://p0.meituan.net/pilotimages/137aad1f6a36655ae395cf7dc57604642782680.png' }
 ];
 
 async function loadStylesData() {
