@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美甲AI试戴系统 — 后端实现与接口文档</title>
+<style>
+  :root {
+    --bg: #faf8f9;
+    --card-bg: #ffffff;
+    --text: #2c2428;
+    --text-secondary: #5e5260;
+    --border: #e6d8df;
+    --accent: #c44a7a;
+    --accent-light: #fdf2f6;
+    --code-bg: #f6f3f5;
+    --sidebar-w: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* ── sidebar ── */
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: #fff;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 28px 20px 40px;
+    z-index: 10;
+  }
+  .sidebar h3 {
+    font-size: 0.95em;
+    color: #8b7a84;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+  .sidebar ol {
+    list-style: none;
+    padding: 0; margin: 0;
+  }
+  .sidebar li { margin-bottom: 2px; }
+  .sidebar a {
+    display: block;
+    padding: 7px 12px;
+    border-radius: 6px;
+    color: #4a3e46;
+    text-decoration: none;
+    font-size: 0.88em;
+    transition: background 0.12s, color 0.12s;
+  }
+  .sidebar a:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+  .sidebar a.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── main ── */
+  .main {
+    margin-left: var(--sidebar-w);
+    max-width: 960px;
+    padding: 40px 36px 80px;
+  }
+
+  h1 { font-size: 2.2em; margin-bottom: 8px; color: #1a1318; letter-spacing: -0.02em; }
+  h2 { font-size: 1.5em; margin: 48px 0 20px; padding-bottom: 10px; border-bottom: 2px solid var(--border); color: #1a1318; }
+  h3 { font-size: 1.15em; margin: 28px 0 12px; color: #3a2e36; }
+  h4 { font-size: 1em; margin: 18px 0 8px; color: #4a3e46; }
+
+  .subtitle { color: var(--text-secondary); font-size: 1.05em; margin-bottom: 32px; }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.82em;
+    font-weight: 600; margin-left: 6px;
+  }
+  .badge-get  { background: #e8f4ec; color: #2d6a4f; }
+  .badge-post { background: #e9eef7; color: #345995; }
+  .badge-put  { background: #fdf3e0; color: #b37820; }
+  .badge-patch{ background: #f3e8f2; color: #7b3d6e; }
+
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .card h3 { margin-top: 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 0.92em; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; color: #4a2e3c; white-space: nowrap; }
+  tr:hover td { background: #fdfafb; }
+
+  code {
+    background: var(--code-bg); padding: 1px 6px; border-radius: 4px;
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace; font-size: 0.88em;
+  }
+  pre {
+    background: #f6f3f5; border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; overflow-x: auto; font-size: 0.85em; line-height: 1.6;
+    margin: 12px 0 20px;
+  }
+  pre code { background: none; padding: 0; border-radius: 0; }
+
+  .prompt-block {
+    background: #fdfcfd; border-left: 4px solid var(--accent); padding: 14px 18px;
+    margin: 10px 0 16px; border-radius: 0 8px 8px 0; font-size: 0.86em;
+  }
+  .prompt-block h4 { margin: 0 0 6px; color: var(--accent); }
+  .prompt-block pre { margin: 6px 0 0; background: #faf8f9; border: 1px solid #ede4e8; }
+
+  .call-flow {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 16px 0;
+  }
+  .call-flow .step {
+    background: var(--accent-light); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; font-size: 0.88em; font-weight: 500;
+  }
+  .call-flow .arrow { color: var(--accent); font-size: 1.2em; font-weight: 700; }
+
+  ul, ol { margin: 8px 0 16px 22px; }
+  li { margin-bottom: 4px; }
+
+  .note {
+    background: #fef9e7; border: 1px solid #f0da94; border-radius: 8px; padding: 12px 18px;
+    margin: 12px 0; font-size: 0.9em; color: #6d5a1a;
+  }
+  .note strong { color: #8b6f1a; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+  .stat-item { background: var(--accent-light); border-radius: 8px; padding: 12px 16px; text-align: center; }
+  .stat-item .num { font-size: 1.5em; font-weight: 700; color: var(--accent); }
+  .stat-item .label { font-size: 0.82em; color: var(--text-secondary); margin-top: 2px; }
+
+  /* mobile: stack sidebar on top */
+  @media (max-width: 800px) {
+    .sidebar {
+      position: static; width: 100%; border-right: none; border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+    }
+    .sidebar ol { display: flex; flex-wrap: wrap; gap: 4px; }
+    .sidebar li { margin: 0; }
+    .sidebar a { padding: 5px 10px; font-size: 0.82em; }
+    .main { margin-left: 0; padding: 20px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ====== SIDEBAR ====== -->
+<nav class="sidebar">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#overview">1. 系统总览</a></li>
+    <li><a href="#tech-stack">2. 技术栈</a></li>
+    <li><a href="#api-list">3. 接口文档</a></li>
+    <li><a href="#llm-vlm">4. LLM/VLM 调用与提示词</a></li>
+    <li><a href="#architecture">5. 核心架构与实现细节</a></li>
+    <li><a href="#data-flow">6. 用户侧调用链路</a></li>
+    <li><a href="#eval">7. 评测体系</a></li>
+    <li><a href="#storage">8. 数据存储策略</a></li>
+  </ol>
+</nav>
+
+<!-- ====== MAIN ====== -->
+<div class="main">
+
+<h1>美甲AI试戴系统</h1>
+<p class="subtitle">后端实现与算法文档 &middot; 版本 0.2.0 &middot; 2026-05-28</p>
+
+<!-- ====== 1. OVERVIEW ====== -->
+<h2 id="overview">1. 系统总览</h2>
+
+<div class="stat-grid">
+  <div class="stat-item"><div class="num">40</div><div class="label">API 端点</div></div>
+  <div class="stat-item"><div class="num">3</div><div class="label">模型/服务</div></div>
+  <div class="stat-item"><div class="num">7</div><div class="label">LLM/VLM 调用环节</div></div>
+  <div class="stat-item"><div class="num">11</div><div class="label">SQLite 业务表</div></div>
+  <div class="stat-item"><div class="num">12</div><div class="label">标签维度</div></div>
+  <div class="stat-item"><div class="num">25</div><div class="label">竞赛种子款式</div></div>
+</div>
+
+<div class="card">
+<h3>系统定位</h3>
+<p>本项目是一个<strong>美甲AI试戴与智能推荐系统</strong>的 Demo 后端，覆盖用户侧（手部分析、AI试戴、款式推荐、智能对话、手部标准化、评测反馈）和运营侧（分类体系管理、款式打标、推送审核、数据报表）两大业务线。</p>
+<p>AI 能力由三套模型驱动：<strong>Gemini 2.5 Flash</strong>（文本生成与 JSON 结构化输出）、<strong>Qwen VL Plus</strong>（手部图像分析）、<strong>gpt-image-1</strong>（AI 试戴图片生成）。所有模型均通过 OpenAI-compatible 接口统一调用，便于切换和扩展。</p>
+</div>
+
+<div class="card">
+<h3>项目结构</h3>
+<pre><code>backend/
+├── app/
+│   ├── main.py              # FastAPI 应用入口，路由注册
+│   ├── config.py            # 配置管理（环境变量 + .env）
+│   ├── api/                 # 路由层（10 个模块）
+│   │   ├── ai.py            # 手部分析 + 款式推荐
+│   │   ├── chat.py          # 智能对话
+│   │   ├── styles.py        # 图片上传、打标、试戴/合成
+│   │   ├── hand_standardize.py  # 手部标准化
+│   │   ├── evaluation.py    # 评测提交与统计
+│   │   ├── taxonomy.py      # 标签分类体系管理
+│   │   ├── operations.py    # 运营推送、报表、技能
+│   │   ├── events.py        # 用户行为事件
+│   │   ├── db.py            # 数据库管理
+│   │   └── dataset.py       # 评测数据集 + 批量打标
+│   ├── services/            # 业务逻辑层
+│   │   ├── chat_service.py       # 对话：RAG检索 + LLM生成
+│   │   ├── recommender.py        # 推荐：多因子打分 + LLM理由
+│   │   ├── hand_analyzer.py      # 手部分析：VL模型
+│   │   ├── hand_standardizer.py  # 手部标准化：VL质检
+│   │   ├── image_generation.py   # AI试戴：images/edits API
+│   │   ├── multimodal_client.py  # 多模态客户端（统一适配）
+│   │   ├── tag_extractor.py      # 款式标签提取 + 批量打标
+│   │   ├── taxonomy_store.py     # 分类体系持久化 + 动态提示词构建
+│   │   ├── business_db.py        # 核心数据库操作
+│   │   ├── operations.py         # 运营业务逻辑
+│   │   ├── evaluation_service.py # 评测服务
+│   │   ├── dataset_loader.py     # 评测数据集加载（XLSX解析）
+│   │   └── image_storage.py      # 图片本地存储
+│   ├── schemas/             # Pydantic 数据模型
+│   ├── prompts/             # Prompt 管理
+│   │   └── nail_tryon_prompts.py  # 统一的试戴 Prompt
+│   └── data/                # 种子数据
+│       └── nail_taxonomy_v2_seed.py  # v2 标签体系（与 docs/nail_style_taxonomy_v2.md 同步）
+├── scripts/                 # CLI 工具脚本
+│   ├── batch_tag_extract.py # 批量打标 CLI 入口
+│   └── test_try_on_samples.py
+└── storage/                 # 运行时数据（图片、SQLite）</code></pre>
+</div>
+
+<!-- ====== 2. TECH STACK ====== -->
+<h2 id="tech-stack">2. 技术栈</h2>
+
+<table>
+  <tr><th>层级</th><th>技术选型</th><th>说明</th></tr>
+  <tr><td>Web 框架</td><td>FastAPI 0.x</td><td>异步 Python Web 框架，自动生成 OpenAPI 文档</td></tr>
+  <tr><td>数据校验</td><td>Pydantic v2 + pydantic-settings</td><td>请求/响应模型校验，环境变量管理</td></tr>
+  <tr><td>数据库</td><td>SQLite（本地文件）</td><td>Demo 阶段使用，数据库文件位于 <code>storage/nail_ai_demo.db</code></td></tr>
+  <tr><td>HTTP 客户端</td><td>httpx</td><td>调用外部模型 API（Gemini、Qwen、OpenAI）</td></tr>
+  <tr><td>图片处理</td><td>Pillow (PIL)</td><td>图片尺寸读取、白边裁剪</td></tr>
+  <tr><td>文本生成模型</td><td>Gemini 2.5 Flash</td><td>通过 Google OpenAI-compatible 端点调用</td></tr>
+  <tr><td>视觉理解模型</td><td>Qwen VL Plus</td><td>通过阿里云 DashScope OpenAI-compatible 端点调用</td></tr>
+  <tr><td>图片生成模型</td><td>gpt-image-1</td><td>通过 OpenAI images/edits API 调用</td></tr>
+  <tr><td>静态文件</td><td>FastAPI StaticFiles</td><td>生成图片和上传图片的本地托管</td></tr>
+  <tr><td>跨域</td><td>CORSMiddleware</td><td>允许所有来源（Demo 阶段）</td></tr>
+</table>
+
+<div class="card">
+<h3>模型配置一览</h3>
+<table>
+  <tr><th>配置项</th><th>默认值</th><th>用途</th></tr>
+  <tr><td><code>GEMINI_API_KEY</code></td><td>—（必填）</td><td>Gemini API 密钥</td></tr>
+  <tr><td><code>GEMINI_BASE_URL</code></td><td><code>https://generativelanguage.googleapis.com/v1beta/openai</code></td><td>Gemini OpenAI 兼容端点</td></tr>
+  <tr><td><code>GEMINI_MODEL_NAME</code></td><td><code>gemini-2.5-flash</code></td><td>Gemini 模型名</td></tr>
+  <tr><td><code>QWEN_API_KEY</code></td><td>—（必填）</td><td>Qwen API 密钥（DashScope）</td></tr>
+  <tr><td><code>QWEN_BASE_URL</code></td><td><code>https://dashscope.aliyuncs.com/compatible-mode/v1</code></td><td>Qwen 兼容端点</td></tr>
+  <tr><td><code>QWEN_VL_MODEL_NAME</code></td><td><code>qwen-vl-plus</code></td><td>Qwen VL 模型名</td></tr>
+  <tr><td><code>OPENAI_API_KEY</code></td><td>—（必填）</td><td>OpenAI API 密钥</td></tr>
+  <tr><td><code>OPENAI_BASE_URL</code></td><td><code>https://api.openai.com/v1</code></td><td>OpenAI API 端点</td></tr>
+  <tr><td><code>IMAGE_MODEL_NAME</code></td><td><code>gpt-image-1</code></td><td>图片生成模型名</td></tr>
+  <tr><td><code>IMAGE_GENERATION_ENABLED</code></td><td><code>false</code></td><td>是否启用真实图片生成</td></tr>
+  <tr><td><code>MODEL_TIMEOUT_SECONDS</code></td><td><code>30</code></td><td>模型调用超时（秒）</td></tr>
+</table>
+</div>
+
+<!-- ====== 3. API LIST ====== -->
+<h2 id="api-list">3. 接口文档</h2>
+
+<h3>3.1 用户侧 — 手部分析与标准化</h3>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/analyze-hand</h3>
+<p>上传手部图片，调用 VL 模型分析肤色、手型、推荐色系/风格/甲形，返回手部档案。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>hand_image_url</td><td>string</td><td>是</td><td>手部图片 URL</td></tr>
+  <tr><td>user_id</td><td>string?</td><td>否</td><td>用户标识</td></tr>
+</table>
+<p><strong>响应：</strong><code>HandProfileResponse</code> — 包含 hand_profile_id、skin_tone、hand_shape、recommended_colors/styles/nail_shapes、analysis_reason、analysis_mode</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/hand-profile/{hand_profile_id}</h3>
+<p>根据 hand_profile_id 获取已存储的手部档案。返回 404 如果不存在。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/standardize-hand</h3>
+<p>上传手部图片进行标准化质量检查（5项标准），检测是否已有美甲。通过检查后存储为标准手图，后续试戴可复用。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>hand_image_url</td><td>string</td><td>是</td><td>手部图片 URL</td></tr>
+  <tr><td>user_id</td><td>string?</td><td>否</td><td>关联用户，存入 user→hand 映射</td></tr>
+</table>
+<p><strong>响应：</strong><code>StandardizeHandResponse</code> — 包含 quality_pass（5项逐项结果）、nail_art_detected、standardized_hand_id、processing_note</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/user-hand-status?user_id=</h3>
+<p>查询用户当前选中的标准化手图（向后兼容）。</p>
+<p><strong>响应：</strong><code>{has_hand, standardized_hand_id, standardized_image_url}</code></p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/user-hands?user_id=</h3>
+<p>获取用户全部标准化手图列表，包含每张图的选中状态。前端展示所有已存手图，用户可切换选中、删除或上传更多。</p>
+<p><strong>响应：</strong><code>{user_id, hands: [{hand_id, image_url, selected}]}</code></p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-put">PUT</span> /api/user-hands/sync</h3>
+<p>前端离开页面时调用，批量同步用户的完整手图集合及当前选中状态。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>user_id</td><td>string</td><td>是</td><td>用户标识</td></tr>
+  <tr><td>hands</td><td>UserHandItem[]</td><td>是</td><td>完整手图列表，每个包含 hand_id、image_url、selected；有且仅有一张 selected=true</td></tr>
+</table>
+<p><strong>响应：</strong><code>UserHandsResponse</code> — 返回同步后的完整手图列表</p>
+</div>
+
+<h3>3.2 用户侧 — 款式推荐与对话</h3>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/recommendations</h3>
+<p>基于用户手部特征和查询文本，多因子打分 + LLM 生成推荐理由，返回推荐款式列表。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>query</td><td>string?</td><td>否</td><td>用户搜索/需求描述</td></tr>
+  <tr><td>hand_profile_id</td><td>string?</td><td>否</td><td>手部档案 ID（优先级高）</td></tr>
+  <tr><td>skin_tone</td><td>string?</td><td>否</td><td>直接传肤色（fallback）</td></tr>
+  <tr><td>hand_shape</td><td>string?</td><td>否</td><td>直接传手型（fallback）</td></tr>
+  <tr><td>limit</td><td>int</td><td>否</td><td>返回数量（1-20，默认由服务端决定）</td></tr>
+</table>
+<p><strong>响应：</strong><code>RecommendationResponse</code> — 包含 recommendations 数组（每项含 style_id、style_name、image_url、reason、matched_tags、score）</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/chat</h3>
+<p>智能对话接口，支持多轮对话。结合手部特征和 RAG 检索结果，由 LLM 生成结构化回答。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>query</td><td>string</td><td>是</td><td>用户问题</td></tr>
+  <tr><td>user_id</td><td>string?</td><td>否</td><td>用户标识</td></tr>
+  <tr><td>hand_profile_id</td><td>string?</td><td>否</td><td>手部档案 ID</td></tr>
+  <tr><td>conversation_id</td><td>string?</td><td>否</td><td>会话 ID（不传则新建）</td></tr>
+</table>
+<p><strong>响应：</strong><code>ChatResponse</code> — 包含 conversation_id、answer（scene_analysis + recommendations + tips + follow_up）、suggested_questions、generation_mode</p>
+</div>
+
+<h3>3.3 用户侧 — AI 试戴与图片</h3>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/upload-image</h3>
+<p>上传图片文件（multipart/form-data），保存到本地 storage 并返回可访问 URL。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>file</td><td>UploadFile</td><td>是</td><td>图片文件</td></tr>
+</table>
+<p><strong>响应：</strong><code>UploadImageResponse</code> — 包含 url、filename、size</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/try-on</h3>
+<p>AI 试戴：将用户手图与款式图合成，生成试戴效果图。调用 gpt-image-1 images/edits API。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>hand_image_url</td><td>string</td><td>是</td><td>用户手部图片 URL</td></tr>
+  <tr><td>style_image_url</td><td>string</td><td>是</td><td>美甲款式图片 URL</td></tr>
+</table>
+<p><strong>响应：</strong><code>TryOnResponse</code> — 包含 result_image_url、generation_mode、warnings</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/generate-composite</h3>
+<p>商家合成图：将裸手模板与款式图合成（与 try-on 使用同一 Prompt）。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>style_image_url</td><td>string</td><td>是</td><td>款式图 URL</td></tr>
+  <tr><td>template_image_url</td><td>string</td><td>是</td><td>裸手模板 URL</td></tr>
+</table>
+<p><strong>响应：</strong><code>CompositeResponse</code> — 包含 composite_image_url、generation_mode</p>
+</div>
+
+<h3>3.4 用户侧 — 评测与事件</h3>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/evaluations</h3>
+<p>提交评测打分。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>target_type</td><td>string</td><td>是</td><td>try_on | chat | hand_analysis</td></tr>
+  <tr><td>target_id</td><td>string</td><td>是</td><td>目标 ID</td></tr>
+  <tr><td>scores</td><td>dict[str,int]</td><td>是</td><td>维度→1-5 分</td></tr>
+  <tr><td>comment</td><td>string</td><td>否</td><td>评语</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/evaluations/stats?target_type=</h3>
+<p>获取某类目标的评测统计（各维度平均分、提交数）。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/evaluations?target_type=&target_id=</h3>
+<p>获取评测记录列表，可按 target_type 和 target_id 过滤。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/events</h3>
+<p>记录用户行为事件（曝光、试戴、收藏、点赞、踩、下单）。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/events?limit=</h3>
+<p>获取用户事件列表。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/events/stats?limit=</h3>
+<p>获取款式级别的事件统计（含试戴率、收藏率、下单率）。</p>
+</div>
+
+<h3>3.5 款式打标</h3>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/extract-tags</h3>
+<p>对单张款式图进行 VL 标签提取（12 维度 v2 标签体系打标）。值域从数据库动态加载，支持 Gemini → Qwen-VL → mock 三级 fallback。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>image_url</td><td>string</td><td>是</td><td>美甲款式图片 URL</td></tr>
+</table>
+<p><strong>响应：</strong><code>StyleTagsResponse</code> — 包含 style_id、12 个标签维度字段、candidate_tags、analysis_mode</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/styles/{style_id}/tags</h3>
+<p>获取已存储的款式标签。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-put">PUT</span> /api/styles/{style_id}/tags</h3>
+<p>人工修正款式标签（审核后覆盖）。</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/evaluation-dataset/batch-extract-tags?limit=</h3>
+<p><strong>批量打标入口：</strong>对竞赛评测数据集（XLSX）中的全部种子款式进行批量 v2 标签提取。可选 <code>limit</code> 参数控制处理数量。内部遍历每款的 enhanced_style_image_url，调用 VL 模型打标后持久化到 DB。</p>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td>limit</td><td>int?</td><td>否</td><td>限制处理数量，不传则全量</td></tr>
+</table>
+<p><strong>响应：</strong><code>BatchExtractResponse</code> — 包含 total_styles、updated_styles、failed_styles、analysis_modes（各模型打标数量分布）</p>
+</div>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/db/tag-seed-styles?limit=</h3>
+<p>对数据库中已有的种子款式进行批量 VL 打标（从 styles 表读取，与 batch-extract-tags 不同的是从 DB 而非 XLSX 获取款式列表）。</p>
+</div>
+
+<div class="note">
+<strong>批量打标 CLI：</strong>也可通过命令行触发：
+<pre><code>cd backend
+python scripts/batch_tag_extract.py            # 全量处理
+python scripts/batch_tag_extract.py --limit 5   # 只处理前 5 张</code></pre>
+</div>
+
+<h3>3.6 数据库与数据集管理</h3>
+
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/db/init</h3><p>初始化数据库（建表 + 种子数据）。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/db/summary</h3><p>获取各表行数摘要。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/db/styles?limit=</h3><p>获取款式列表。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/db/events?limit=</h3><p>获取事件列表。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-post">POST</span> /api/db/tag-seed-styles?limit=</h3><p>对种子款式批量 VL 打标。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/evaluation-pairs</h3><p>获取评测手-款配对。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /api/evaluation-dataset</h3><p>获取完整评测数据集。</p>
+</div>
+<div class="card">
+<h3><span class="badge badge-get">GET</span> /health</h3><p>健康检查。</p>
+</div>
+
+<!-- ====== 4. LLM/VLM ====== -->
+<h2 id="llm-vlm">4. LLM/VLM 调用情况与提示词</h2>
+
+<div class="card">
+<h3>调用总览</h3>
+<table>
+  <tr><th>环节</th><th>模型</th><th>调用方式</th><th>temperature</th><th>触发接口</th></tr>
+  <tr><td>Chat 对话生成</td><td>Gemini 2.5 Flash</td><td>纯文本 → JSON（chat/completions）</td><td>0.4</td><td>POST /api/chat</td></tr>
+  <tr><td>推荐理由生成</td><td>Gemini 2.5 Flash</td><td>纯文本 → JSON（chat/completions）</td><td>0.4</td><td>POST /api/recommendations</td></tr>
+  <tr><td>手部标准化质检</td><td>Gemini 2.5 Flash (VL)</td><td>图片+文本 → JSON（chat/completions）</td><td>0.1</td><td>POST /api/standardize-hand</td></tr>
+  <tr><td>手部标准化质检 (fallback)</td><td>Qwen VL Plus</td><td>图片+文本 → JSON（chat/completions）</td><td>0.1</td><td>POST /api/standardize-hand</td></tr>
+  <tr><td>手部分析</td><td>Qwen VL Plus</td><td>图片+文本 → JSON（chat/completions）</td><td>0.1</td><td>POST /api/analyze-hand</td></tr>
+  <tr><td>款式标签提取（单图）</td><td>Gemini 2.5 Flash (VL)</td><td>图片+文本 → JSON（chat/completions）</td><td>0.1</td><td>POST /api/extract-tags</td></tr>
+	  <tr><td>款式标签提取 (fallback)</td><td>Qwen VL Plus</td><td>图片+文本 → JSON（chat/completions）</td><td>0.1</td><td>POST /api/extract-tags</td></tr>
+	  <tr><td>批量款式标签提取</td><td>Gemini → Qwen VL → mock</td><td>图片+文本 → JSON（逐张串行，自动 fallback）</td><td>0.1</td><td>POST /api/evaluation-dataset/batch-extract-tags<br>POST /api/db/tag-seed-styles<br>CLI: scripts/batch_tag_extract.py</td></tr>
+  <tr><td>AI 试戴图片生成</td><td>gpt-image-1</td><td>多图 + Prompt → 图片（images/edits）</td><td>—</td><td>POST /api/try-on、POST /api/generate-composite</td></tr>
+</table>
+</div>
+
+<h3>4.1 Chat 对话 Prompt</h3>
+<div class="prompt-block">
+<h4>System Prompt</h4>
+<pre><code>你是美团丽人美甲频道的AI推荐顾问。你根据用户的问题和手部特征，从候选款式中挑选合适的款式，
+生成结构化、自然、有帮助的回答。如果用户的问题是对上一轮的追问（如「还有吗」「换一批」「其他风格呢」），
+应参考历史对话中被推荐过的款式，避免重复推荐。只输出合法JSON，不要输出Markdown。</code></pre>
+</div>
+<div class="prompt-block">
+<h4>User Prompt（动态构建）</h4>
+<p style="color:var(--text-secondary);font-size:0.88em;margin-bottom:8px;">
+<strong>「动态构建」含义：</strong>此 Prompt 并非固定模板，而是在每次请求时由服务端实时填充。填充内容来自三个来源——① RAG 检索出的候选款式列表（从 200 款中按匹配分排序取 Top 8）；② 用户手部特征（从 hand_profile_id 查出的肤色、手型、推荐色系/风格/甲形）；③ 历史对话记录（最近 10 条）。LLM 拿到这些上下文后，从中挑选 3-4 款生成结构化回答。
+</p>
+<pre><code>历史对话：
+- 用户：{上一轮问题}
+- 助手：{上一轮分析}（推荐了{款式1、款式2、款式3}）
+
+用户问题：{当前query}
+手部特征：肤色{skin_tone}，手型{hand_shape}，推荐色系{colors}，推荐风格{styles}，推荐甲形{nail_shapes}
+候选款式列表（只能从下面选）：
+- style-001 | 奶油猫眼 | 标签: 猫眼, 奶油白, 显白, 甜美
+
+请输出JSON：
+{"scene_analysis":"结合用户问题和手部特征的简短分析，1-2句",
+ "recommendations":[{"style_id":"必须从候选列表中选","style_name":"","image_url":"","reason":"结合手部特征的推荐理由"}],
+ "tips":"额外搭配建议",
+ "follow_up":"一个引导性问题，帮助用户继续探索",
+ "suggested_questions":["推荐1-3个用户可能感兴趣的下一个问题"]}
+要求：recommendations选3-4款，reason须提及用户的手部特征或问题场景，follow_up要自然不生硬。
+如果历史对话中已推荐过某些款式，本轮应优先推荐不同的款式。</code></pre>
+</div>
+
+<h3>4.2 推荐理由 Prompt</h3>
+<p style="color:var(--text-secondary);font-size:0.88em;margin-bottom:8px;">
+<strong>使用场景：</strong>当用户调用 <code>POST /api/recommendations</code> 时，服务端先通过多因子打分筛选出 Top N 款式，然后将这些款式和用户手部特征一起发给 Gemini 2.5 Flash，由 LLM 为每款式式批量生成一句 15 字以内的个性化推荐理由（如「裸色衬自然肤，纯色法式显高级」），替代原来千篇一律的模板理由。若 LLM 调用失败，则回退到模板理由。
+</p>
+<div class="prompt-block">
+<h4>System Prompt</h4>
+<pre><code>你是美甲推荐顾问。只输出合法JSON，不要输出Markdown。</code></pre>
+</div>
+<div class="prompt-block">
+<h4>User Prompt（动态构建）</h4>
+<p style="color:var(--text-secondary);font-size:0.88em;margin-bottom:8px;">
+运行时填充用户手部特征和打分筛选出的候选款式列表，LLM 批量生成个性化推荐理由。
+</p>
+<pre><code>你是美甲推荐顾问。根据用户的手部特征，为以下N款美甲款式各生成一句简短的推荐理由。
+
+用户手部特征：
+- 肤色：{skin_tone}
+- 手型：{hand_shape}
+- 推荐色系：{colors}
+- 推荐风格：{styles}
+- 推荐甲形：{nail_shapes}
+
+候选款式：
+- {style_id} | {style_name} | 标签: {tags}
+
+请输出JSON：
+{"reasons":[{"style_id":"...","reason":"一句话推荐理由，15字以内，自然口语化"}]}
+
+要求：每条理由15字以内，必须结合用户肤色或手型特征，各款理由要有差异化，不要千篇一律。只输出合法JSON。</code></pre>
+</div>
+
+<h3>4.3 手部标准化质检 Prompt</h3>
+<div class="prompt-block">
+<h4>System Prompt</h4>
+<pre><code>你是一个手部图像质量检测器。只输出合法JSON，不要输出Markdown。</code></pre>
+</div>
+<div class="prompt-block">
+<h4>User Prompt</h4>
+<pre><code>请检查这张手部图片是否满足以下所有条件：
+1. 手指朝上，手背平放拍摄
+2. 完整露出手部（五指都能看到）
+3. 五指微微张开，不并拢
+4. 光线明亮均匀
+5. 背景干净，无明显杂物
+
+另外，检查手指甲上是否有美甲（指甲油、甲片、彩绘、装饰等）。
+
+输出JSON格式：
+{"quality_pass":true/false,
+ "fingers_up":true/false,"full_hand_visible":true/false,"fingers_spread":true/false,
+ "bright_lighting":true/false,"clean_background":true/false,
+ "issues":["不满足的条件描述"],
+ "nail_art_detected":true/false}</code></pre>
+</div>
+
+<h3>4.4 手部分析 Prompt</h3>
+<div class="prompt-block">
+<h4>System Prompt</h4>
+<pre><code>你是美甲推荐顾问。只输出合法 JSON，不要输出 Markdown。
+只分析美甲推荐所需的手部视觉特征，不输出身份、健康或敏感判断。
+字段名必须使用英文，所有字段值必须使用中文，禁止输出英文标签。</code></pre>
+</div>
+<div class="prompt-block">
+<h4>User Prompt</h4>
+<pre><code>请分析用户手图，输出字段：
+skin_tone:string, hand_shape:string, recommended_colors:string[],
+recommended_styles:string[], recommended_nail_shapes:string[], analysis_reason:string。
+skin_tone 只能是 冷白/自然肤/暖黄/深肤/unknown；
+hand_shape 只能是 修长/标准/短宽/unknown。
+recommended_colors、recommended_styles、recommended_nail_shapes 和 analysis_reason 必须使用中文。</code></pre>
+</div>
+
+<h3>4.5 AI 试戴 Prompt（统一版）</h3>
+<div class="prompt-block">
+<h4>Task Prompt（英文，用于 images/edits API）</h4>
+<pre><code>You are a professional AI nail try-on image editor.
+
+TASK:
+The first image is the user's real hand photo.
+The second image is the target nail design reference.
+
+Your task is to completely replace the existing nails in image 1 with the nail design from image 2.
+
+IMPORTANT:
+The original nails in image 1 are NOT part of the target design.
+They must be treated as temporary placeholder nails only.
+
+STEP 1 — REMOVE ORIGINAL NAIL DESIGN
+First, completely ignore and remove the original manicure from image 1.
+Restore each fingernail to a clean natural bare nail state:
+- remove original color, nail shape influence, nail length influence
+- remove original gradients, decorations, gloss style
+- remove existing acrylic/gel appearance
+
+The original manicure in image 1 must NOT affect the final result in any way.
+
+STEP 2 — APPLY TARGET DESIGN
+Then accurately reconstruct the manicure from image 2 onto the hand in image 1.
+Strictly copy from image 2:
+- nail shape, nail length, nail thickness, curvature
+- color, patterns, decorations, gloss/matte finish
+- transparency, texture, placement of every detail
+
+IMPORTANT CONSTRAINTS:
+- Do NOT blend the old nails with the new nails
+- Do NOT preserve any original nail color or shape
+- Do NOT adapt the target design to the old manicure
+- Do NOT create a hybrid manicure
+
+HAND PRESERVATION RULE:
+Except for the nail area, absolutely nothing else may change.
+Preserve exactly: hand pose, finger shape, skin texture, skin tone,
+wrinkles, lighting, shadows, reflections, jewelry, camera angle,
+depth of field, background, image composition.
+
+Only modify the nail regions.
+The final image must look photorealistic and naturally integrated.</code></pre>
+</div>
+
+<h3>4.6 款式标签提取 Prompt</h3>
+<div class="prompt-block">
+<h4>System Prompt</h4>
+<pre><code>你是美甲款式图结构化打标助手。只输出合法 JSON，不要输出 Markdown。
+必须对全部 12 个字段完成打标；数组字段只能从值域中选一个或多个；
+枚举字段只能选一个值；无法判断时数组填 []，枚举填 unknown。
+禁止自造值域外标签；若确有合适但值域没有的新词，写入 candidate_tags，格式为「字段名: 建议值」。
+字段名使用英文，字段值使用中文。</code></pre>
+</div>
+<div class="prompt-block">
+<h4>User Prompt（动态构建值域）</h4>
+<pre><code>请分析这张美甲款式图，输出 JSON，包含以下字段：
+- color_system（色系，数组，可多选）: 裸色系, 粉色系, 红色系, 蓝色系, ...
+- style_tags（风格标签，数组，可多选）: 法式, 简约, 甜美, ...
+- scene_tags（场景标签，数组，可多选）: 约会, 日常通勤, ...
+- season_tags（季节标签，数组，可多选）: 春, 夏, 秋, 冬, 四季通用
+- skin_tone_suitability（肤色适合度，数组，可多选）: 冷白皮, 自然肤色, ...
+- nail_technique（美甲技法，枚举，单选）: 猫眼, 渐变, 镜面, ...
+- nail_decoration（装饰，枚举，单选）: 无装饰, 碎钻/小钻, ...
+- nail_finish（表面效果，枚举，单选）: 亮面, 磨砂, ...
+- nail_shape（甲形，枚举，单选）: 杏仁形, 方圆形, ...
+- nail_length（甲长，枚举，单选）: 短甲, 中甲, 长甲
+- finger_shape（指形，枚举，单选）: 修长, 标准, 短宽
+- nail_bed_shape（甲床形状，枚举，单选）: 标准甲床, 宽甲床, 窄甲床
+- candidate_tags（数组，无溢出时填 []）
+打标原则：season_tags 若选「四季通用」则不再叠加其他季节；
+nail_decoration 若选「无装饰」则不再叠加其他装饰；
+skin_tone_suitability 若选「全肤色通用」则不再叠加其他肤色。</code></pre>
+</div>
+
+<!-- ====== 5. ARCHITECTURE ====== -->
+<h2 id="architecture">5. 核心架构与实现细节</h2>
+
+<h3>5.1 多模态客户端统一适配</h3>
+<div class="card">
+<p>所有 LLM/VLM 调用均通过 <code>multimodal_client.py</code> 中的统一适配层，核心函数：</p>
+<ul>
+  <li><strong>文本生成：</strong><code>generate_text_json_with_gemini()</code> → 内部调用 <code>_generate_text_json_openai_compatible()</code>，通过 OpenAI-compatible chat/completions 端点 + <code>response_format: json_object</code> 强制 JSON 输出</li>
+  <li><strong>图片分析：</strong><code>analyze_image_json_with_gemini()</code> / <code>analyze_image_json_with_qwen_vl()</code> → 内部调用 <code>_analyze_image_json_openai_compatible()</code>，消息格式为 <code>[text, image_url]</code> 多模态数组</li>
+  <li><strong>容错机制：</strong>首次调用带 <code>response_format: json_object</code>，若失败则去掉该参数重试；JSON 解析前自动剥离 markdown 代码围栏（<code>```json ... ```</code>）</li>
+  <li><strong>Fallback 链：</strong>手部标准化 Gemini → Qwen → 默认通过；手部分析 Qwen → Mock；Chat Gemini → Mock；推荐理由 Gemini → 模板理由</li>
+</ul>
+</div>
+
+<h3>5.2 Chat 多轮对话与 RAG 检索</h3>
+<div class="card">
+<p><strong>对话流程：</strong></p>
+<ol>
+  <li><strong>关键词提取：</strong>将用户 query 与已审批标签值域做交集，提取命中标签作为检索关键词</li>
+  <li><strong>款式检索：</strong>遍历 200 款候选，按 <code>matched_tags × 12 + query_hits × 6 + hot_score × 0.3</code> 打分排序，取 Top 8</li>
+  <li><strong>历史管理：</strong>对话历史存储于内存 dict，每轮追加 user+assistant 消息（含推荐款式名），最多保留 10 条，超量自动截断</li>
+  <li><strong>LLM 生成：</strong>将历史、手部特征、候选列表注入 Prompt，要求 LLM 输出结构化 JSON，且避免重复推荐历史中已出现的款式</li>
+  <li><strong>响应构建：</strong>解析 LLM 返回的 JSON → ChatResponse（含 scene_analysis、recommendations、tips、follow_up、suggested_questions）</li>
+</ol>
+</div>
+
+<h3>5.3 推荐多因子打分</h3>
+<div class="card">
+<p><strong>打分公式：</strong></p>
+<pre><code>score = matched_tags × 12 + query_hits × 6 + business_score
+
+business_score = hot_score × 0.35 + signal_score × 0.45 + life_cycle_bonus
+
+signal_score = Σ(signal.value × signal.weight)  对每个 signal
+  - 试戴收藏率 value 放大 100 倍
+  - weight 来自 DB 配置
+
+life_cycle_bonus: 上升期 +8, 峰值期 +5, 观察期 +2, 衰退期 -3</code></pre>
+<p><strong>约束构建：</strong>从 skin_tone/hand_shape 映射到对应标签值，与 query 中命中的标签合并；若无约束则退化为热门标签 Top 6。</p>
+</div>
+
+<h3>5.4 手部标准化质检</h3>
+<div class="card">
+<ul>
+  <li><strong>5 项标准：</strong>手指朝上平放、完整露出手部、五指微张、光线明亮、背景干净</li>
+  <li><strong>美甲检测：</strong>同时检测是否已有美甲，若有则记录描述但不做去除处理（直接入库）</li>
+  <li><strong>存储映射：</strong>hand_id = "hand-" + SHA1(image_url)[:10]，同时建立 user_id → hand_id 映射</li>
+  <li><strong>不通过处理：</strong>返回 quality_pass=false + 逐项结果 + issues 描述 + 引导文字</li>
+</ul>
+</div>
+
+<h3>5.5 AI 试戴图片生成</h3>
+<div class="card">
+<ul>
+  <li><strong>统一 Prompt：</strong>用户试戴（try-on）和商家合成（composite）共用同一套英文 Prompt，只是输入图片不同</li>
+  <li><strong>图片尺寸：</strong>根据原图宽高比自动选择输出尺寸（1024×1024 / 1024×1536 / 1536×1024），不支持时回退 1024×1024</li>
+  <li><strong>白边裁剪：</strong>生成结果自动裁剪顶部/底部纯白 letterbox 边距（阈值 248，最多裁剪 12% 高度）</li>
+  <li><strong>兜底方案：</strong>当 IMAGE_GENERATION_ENABLED=false 或调用失败时，生成 SVG 预览图（左右并列显示手图+款式图）保证 Demo 可展示</li>
+</ul>
+</div>
+
+<h3>5.6 内存存储模式</h3>
+<div class="card">
+<p>Demo 阶段，以下数据使用<strong>内存 dict 存储</strong>（服务重启后丢失）：</p>
+<table>
+  <tr><th>存储</th><th>Key</th><th>Value</th><th>文件</th></tr>
+  <tr><td>手部档案</td><td>hand_profile_id</td><td>HandProfileResponse</td><td>hand_analyzer.py</td></tr>
+  <tr><td>标准化手图</td><td>hand_id</td><td>image_url</td><td>hand_standardizer.py</td></tr>
+  <tr><td>用户→手图映射</td><td>user_id</td><td>hand_id</td><td>hand_standardizer.py</td></tr>
+  <tr><td>对话历史</td><td>conversation_id</td><td>list[dict]</td><td>chat_service.py</td></tr>
+  <tr><td>评测记录</td><td>—</td><td>list[EvalRecord]</td><td>evaluation_service.py</td></tr>
+</table>
+<p>而款式、标签、事件等核心业务数据使用 <strong>SQLite 持久化</strong>。</p>
+</div>
+
+<h3>5.7 标签分类体系（Taxonomy V2）</h3>
+<div class="card">
+<p><strong>12 个标签维度：</strong></p>
+<table>
+  <tr><th>字段名</th><th>中文名</th><th>类型</th><th>维度</th></tr>
+  <tr><td>color_system</td><td>色系</td><td>array（多选）</td><td>视觉属性</td></tr>
+  <tr><td>style_tags</td><td>风格标签</td><td>array（多选）</td><td>风格属性</td></tr>
+  <tr><td>scene_tags</td><td>场景标签</td><td>array（多选）</td><td>场景属性</td></tr>
+  <tr><td>season_tags</td><td>季节标签</td><td>array（多选）</td><td>时效属性</td></tr>
+  <tr><td>skin_tone_suitability</td><td>肤色适合度</td><td>array（多选）</td><td>适配属性</td></tr>
+  <tr><td>nail_technique</td><td>美甲技法</td><td>enum（单选）</td><td>技法属性</td></tr>
+  <tr><td>nail_decoration</td><td>装饰</td><td>enum（单选）</td><td>装饰属性</td></tr>
+  <tr><td>nail_finish</td><td>表面效果</td><td>enum（单选）</td><td>质感属性</td></tr>
+  <tr><td>nail_shape</td><td>甲形</td><td>enum（单选）</td><td>形状属性</td></tr>
+  <tr><td>nail_length</td><td>甲长</td><td>enum（单选）</td><td>长度属性</td></tr>
+  <tr><td>finger_shape</td><td>指形</td><td>enum（单选）</td><td>手部属性</td></tr>
+  <tr><td>nail_bed_shape</td><td>甲床形状</td><td>enum（单选）</td><td>手部属性</td></tr>
+</table>
+<p>标签值支持用户提交→审核流程（<code>taxonomy_submissions</code> 表），审核通过后进入正式值域。</p>
+</div>
+
+<!-- ====== 6. DATA FLOW ====== -->
+<h2 id="data-flow">6. 用户侧完整调用链路</h2>
+
+<div class="card">
+<h3>典型用户流程</h3>
+<div class="call-flow">
+  <div class="step">1. 上传手图<br><small>POST /api/upload-image</small></div>
+  <div class="arrow">→</div>
+  <div class="step">2. 标准化质检<br><small>POST /api/standardize-hand</small></div>
+  <div class="arrow">→</div>
+  <div class="step">3. 手部分析<br><small>POST /api/analyze-hand</small></div>
+  <div class="arrow">→</div>
+  <div class="step">4. 款式推荐<br><small>POST /api/recommendations</small></div>
+  <div class="arrow">→</div>
+  <div class="step">5. AI 试戴<br><small>POST /api/try-on</small></div>
+  <div class="arrow">→</div>
+  <div class="step">6. 提交评测<br><small>POST /api/evaluations</small></div>
+</div>
+</div>
+
+<div class="card">
+<h3>LLM/VLM 调用时机</h3>
+<table>
+  <tr><th>步骤</th><th>调用的模型</th><th>输入</th><th>输出</th></tr>
+  <tr><td>标准化质检</td><td>Gemini VL / Qwen VL</td><td>手部图片 + 5项检查标准</td><td>quality_pass + 逐项结果 + 美甲检测</td></tr>
+  <tr><td>手部分析</td><td>Qwen VL</td><td>手部图片 + 分析指令</td><td>肤色、手型、推荐色系/风格/甲形</td></tr>
+  <tr><td>款式推荐</td><td>Gemini 2.5 Flash</td><td>手部特征 + 候选款式列表</td><td>每条款式15字以内的个性化推荐理由</td></tr>
+  <tr><td>AI 试戴</td><td>gpt-image-1</td><td>手图 + 款式图 + Prompt</td><td>试戴效果图</td></tr>
+  <tr><td>Chat 对话</td><td>Gemini 2.5 Flash</td><td>历史 + 手部特征 + 候选款式</td><td>场景分析 + 推荐 + 建议 + 追问</td></tr>
+</table>
+</div>
+
+<!-- ====== 7. EVAL ====== -->
+<h2 id="eval">7. 评测体系</h2>
+
+<div class="card">
+<h3>三维度评测</h3>
+<table>
+  <tr><th>目标类型</th><th>评测维度</th><th>说明</th></tr>
+  <tr><td><strong>try_on</strong></td><td>style_fidelity（款式还原度）<br>hand_fidelity（手部保真度）<br>size_compatibility（尺寸适配）</td><td>评估AI试戴图片质量</td></tr>
+  <tr><td><strong>chat</strong></td><td>retrieval_accuracy（检索准确度）<br>structure_completeness（结构完整度）<br>reason_accuracy（推荐理由准确度）</td><td>评估对话推荐质量</td></tr>
+  <tr><td><strong>hand_analysis</strong></td><td>skin_tone_accuracy（肤色准确度）<br>hand_shape_accuracy（手型准确度）<br>recommendation_reasonableness（推荐合理性）<br>reason_quality（理由质量）</td><td>评估手部分析质量</td></tr>
+</table>
+<p>每维度 1-5 分，支持 comment 文本评价。统计接口返回各维度平均分和提交数。</p>
+</div>
+
+<!-- ====== 8. STORAGE ====== -->
+<!-- ====== 8. TAG STATS ====== -->
+<h2 id="tag-stats">8. 打标统计</h2>
+
+<div class="card">
+<h3>竞赛数据集打标概况</h3>
+<p>数据来源：<code>运营侧/命题三美甲评测数据（对外版）.xlsx</code>，共 <strong>25 款种子款式</strong>。通过 <code>POST /api/evaluation-dataset/batch-extract-tags</code> 或 CLI 脚本触发批量打标。</p>
+
+<div class="stat-grid">
+  <div class="stat-item"><div class="num">25</div><div class="label">种子款式总数</div></div>
+  <div class="stat-item"><div class="num">12</div><div class="label">标签维度</div></div>
+  <div class="stat-item"><div class="num">7 array</div><div class="label">多选字段</div></div>
+  <div class="stat-item"><div class="num">5 enum</div><div class="label">单选字段</div></div>
+</div>
+</div>
+
+<div class="card">
+<h3>打标流程</h3>
+<div class="call-flow">
+  <div class="step">1. 加载 XLSX<br><small>dataset_loader.py</small></div>
+  <div class="arrow">→</div>
+  <div class="step">2. 遍历款式<br><small>enhanced_style_image_url</small></div>
+  <div class="arrow">→</div>
+  <div class="step">3. DB 动态加载值域<br><small>taxonomy_store.py</small></div>
+  <div class="arrow">→</div>
+  <div class="step">4. VL 模型打标<br><small>Gemini → Qwen → mock</small></div>
+  <div class="arrow">→</div>
+  <div class="step">5. DB 值域校验<br><small>validate_style_tags()</small></div>
+  <div class="arrow">→</div>
+  <div class="step">6. 持久化到 SQLite<br><small>styles + style_tags 表</small></div>
+</div>
+</div>
+
+<div class="card">
+<h3>标签维度值域统计</h3>
+<table>
+  <tr><th>#</th><th>字段名</th><th>中文名</th><th>类型</th><th>值域数量</th><th>示例值</th></tr>
+  <tr><td>1</td><td><code>color_system</code></td><td>颜色体系</td><td>array</td><td>19</td><td>裸色系、粉色系、红色系、莫兰迪色系…</td></tr>
+  <tr><td>2</td><td><code>style_tags</code></td><td>风格标签</td><td>array</td><td>17</td><td>简约、精致、法式、甜酷、复古…</td></tr>
+  <tr><td>3</td><td><code>scene_tags</code></td><td>适用场景</td><td>array</td><td>7</td><td>日常通勤、约会、派对/夜店…</td></tr>
+  <tr><td>4</td><td><code>season_tags</code></td><td>季节/节日</td><td>array</td><td>9</td><td>春、夏、圣诞、婚礼季…</td></tr>
+  <tr><td>5</td><td><code>skin_tone_suitability</code></td><td>肤色适配</td><td>array</td><td>5</td><td>冷白皮、暖黄皮、全肤色通用…</td></tr>
+  <tr><td>6</td><td><code>nail_technique</code></td><td>工艺手法</td><td>array</td><td>8</td><td>纯色、猫眼、渐变、镜面…</td></tr>
+  <tr><td>7</td><td><code>nail_decoration</code></td><td>装饰类型</td><td>array</td><td>8</td><td>无装饰、碎钻/小钻、珍珠…</td></tr>
+  <tr><td>8</td><td><code>nail_finish</code></td><td>表面效果</td><td>enum</td><td>6</td><td>亮面、磨砂、镜面光、猫眼光…</td></tr>
+  <tr><td>9</td><td><code>nail_shape</code></td><td>甲型</td><td>enum</td><td>8</td><td>方圆形、杏仁形、芭蕾形…</td></tr>
+  <tr><td>10</td><td><code>nail_length</code></td><td>甲长</td><td>enum</td><td>5</td><td>短甲、中甲、长甲、超长甲</td></tr>
+  <tr><td>11</td><td><code>finger_shape</code></td><td>手指形态</td><td>enum</td><td>4</td><td>修长、标准、短粗</td></tr>
+  <tr><td>12</td><td><code>nail_bed_shape</code></td><td>甲床形态</td><td>enum</td><td>4</td><td>窄甲床、标准甲床、宽甲床</td></tr>
+</table>
+<p style="margin-top:10px;color:var(--text-secondary);font-size:0.88em;">合计值域选项：<strong>100 个</strong>（不含 unknown）。另有 <code>candidate_tags</code> 溢出捕获字段用于收集值域外新词候选。</p>
+</div>
+
+<div class="card">
+<h3>打标结果持久化</h3>
+<p>每款式式的打标结果存储在两张表中：</p>
+<table>
+  <tr><th>存储位置</th><th>内容</th><th>用途</th></tr>
+  <tr><td><code>styles.tags_json</code></td><td>完整 JSON（12 字段 + candidate_tags）</td><td>原始记录、人工审核</td></tr>
+  <tr><td><code>style_tags</code> 表</td><td>扁平化 tag_type + tag_value 行</td><td>RAG 检索、标签筛选、统计分析</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>打标入口对比</h3>
+<table>
+  <tr><th>入口</th><th>数据来源</th><th>适用场景</th></tr>
+  <tr><td><code>POST /api/extract-tags</code></td><td>单张图片 URL</td><td>单图实时打标</td></tr>
+  <tr><td><code>POST /api/evaluation-dataset/batch-extract-tags</code></td><td>XLSX 数据集文件</td><td>竞赛数据批量导入</td></tr>
+  <tr><td><code>POST /api/db/tag-seed-styles</code></td><td>数据库 styles 表</td><td>对已入库款式重新打标</td></tr>
+  <tr><td><code>python scripts/batch_tag_extract.py</code></td><td>XLSX 数据集文件</td><td>命令行离线批量打标</td></tr>
+</table>
+</div>
+
+
+<h2 id="storage">9. 数据存储策略</h2>
+
+<div class="card">
+<h3>SQLite 数据库表结构</h3>
+<table>
+  <tr><th>表名</th><th>用途</th><th>关键字段</th></tr>
+  <tr><td>hand_templates</td><td>裸手模板</td><td>hand_template_id, hand_image_url, source</td></tr>
+  <tr><td>styles</td><td>美甲款式</td><td>style_id, style_name, enhanced_style_image_url, tags_json, hot_score, life_cycle</td></tr>
+  <tr><td>evaluation_pairs</td><td>评测配对</td><td>pair_id, hand_template_id, style_id, hand_image_url, style_image_url</td></tr>
+  <tr><td>style_tags</td><td>款式标签</td><td>style_id, tag_type, tag_value, source</td></tr>
+  <tr><td>style_signals</td><td>款式信号</td><td>style_id, signal, value, delta, weight</td></tr>
+  <tr><td>ugc_keywords</td><td>UGC关键词</td><td>keyword, heat_score, delta, related_tags_json</td></tr>
+  <tr><td>user_events</td><td>用户行为事件</td><td>event_id, user_id, style_id, event_type, source</td></tr>
+  <tr><td>push_audits</td><td>推送审核</td><td>push_id, style_id, merchant_id, status</td></tr>
+  <tr><td>taxonomy_fields</td><td>标签字段定义</td><td>field_key, label_cn, value_type, dimension, sort_order</td></tr>
+  <tr><td>taxonomy_options</td><td>标签选项值</td><td>option_id, field_key, value, is_approved, source</td></tr>
+  <tr><td>taxonomy_submissions</td><td>标签提交记录</td><td>submission_id, field_key, proposed_value, is_approved</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>文件存储</h3>
+<ul>
+  <li>上传图片 → <code>storage/uploads/</code></li>
+  <li>AI 生成试戴图 → <code>storage/generated/try-on/</code></li>
+  <li>AI 生成合成图 → <code>storage/generated/composite/</code></li>
+  <li>兜底 SVG 预览 → 同上目录，<code>.svg</code> 后缀</li>
+  <li>数据库文件 → <code>storage/nail_ai_demo.db</code></li>
+  <li>所有静态文件通过 FastAPI <code>/static/</code> 路径对外暴露</li>
+</ul>
+</div>
+
+<hr>
+<p style="color: var(--text-secondary); font-size: 0.85em; text-align: center;">
+  美甲AI试戴系统 后端文档 &middot; 版本 0.1.0 &middot; 生成于 2026-05-28
+</p>
+
+</div>
+</body>
+</html>

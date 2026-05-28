@@ -3,6 +3,7 @@ from typing import Any
 
 from app.schemas.style import StyleTagsResponse
 from app.services.business_db import list_styles, upsert_style_tags
+from app.services.dataset_loader import load_evaluation_dataset
 from app.services.multimodal_client import (
     MultimodalModelError,
     analyze_image_json_with_gemini,
@@ -177,6 +178,39 @@ def tag_seed_styles(limit: int = 25) -> dict:
                 tags=tags_response_to_dict(tags),
                 analysis_mode=tags.analysis_mode,
                 style_name=_style_name_from_tags(style["style_id"], tags),
+            )
+            modes[tags.analysis_mode] = modes.get(tags.analysis_mode, 0) + 1
+            updated += 1
+        except Exception:
+            failed += 1
+
+    return {
+        "total_styles": len(styles),
+        "updated_styles": updated,
+        "failed_styles": failed,
+        "analysis_modes": modes,
+    }
+
+
+def batch_extract_dataset_tags(limit: int | None = None) -> dict:
+    """Batch extract v2 taxonomy tags for all styles in the competition evaluation dataset."""
+    dataset = load_evaluation_dataset()
+    styles = dataset.styles
+    if limit and limit > 0:
+        styles = styles[:limit]
+
+    modes: dict[str, int] = {}
+    updated = 0
+    failed = 0
+
+    for style in styles:
+        try:
+            tags = extract_style_tags(style.enhanced_style_image_url)
+            persist_style_tags(
+                style_id=style.style_id,
+                tags=tags_response_to_dict(tags),
+                analysis_mode=tags.analysis_mode,
+                style_name=_style_name_from_tags(style.style_id, tags),
             )
             modes[tags.analysis_mode] = modes.get(tags.analysis_mode, 0) + 1
             updated += 1

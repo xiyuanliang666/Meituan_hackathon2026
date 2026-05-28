@@ -17,3 +17,10 @@ class EvaluationDataset(BaseModel):
     hand_templates: list[str]
     styles: list[EvaluationStyle]
     pairs: list[EvaluationPair]
+
+
+class BatchExtractResponse(BaseModel):
+    total_styles: int
+    updated_styles: int
+    failed_styles: int
+    analysis_modes: dict[str, int]
