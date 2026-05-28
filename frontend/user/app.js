@@ -143,8 +143,11 @@ function renderDetailPage() {
   document.getElementById('thumb-row').innerHTML = nailStyles.slice(0,6).map(s => {
     const isSelected = selectedThumbs.has(s.id);
     const isActive = s.id === currentDetailId && !multiSelectMode;
-    return `<div class="thumb ${isSelected?'selected':''} ${isActive?'active':''}" style="background:${s.bg}" onclick="onThumbClick(${s.id})">
-      ${s.emoji}
+    const thumbContent = s.image_url
+      ? `<img src="${s.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:9px" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span style="display:none;font-size:22px">${s.emoji}</span>`
+      : s.emoji;
+    return `<div class="thumb ${isSelected?'selected':''} ${isActive?'active':''}" style="background:${s.bg};overflow:hidden" onclick="onThumbClick(${s.id})">
+      ${thumbContent}
       ${multiSelectMode ? (isSelected ? '<div class="thumb-check"><i class="ti ti-check"></i></div>' : '<div class="thumb-uncheck"></div>') : ''}
     </div>`;
   }).join('');
