@@ -55,15 +55,24 @@ cd "$BACKEND_DIR"
 .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
-# 等待后端就绪
-sleep 2
-if curl -s http://localhost:8000/health >/dev/null 2>&1; then
-    echo "✅ 后端启动成功"
-    # 初始化数据库
-    echo "📊 初始化数据库..."
-    curl -s -X POST http://localhost:8000/api/db/init >/dev/null 2>&1 || true
-else
-    echo "⚠️  后端可能还在启动中，请稍后检查 http://localhost:8000/health"
+# 等待后端就绪（最多等 10 秒）
+echo -n "  等待后端就绪"
+for i in $(seq 1 10); do
+    if curl -s http://localhost:8000/health >/dev/null 2>&1; then
+        echo ""
+        echo "✅ 后端启动成功"
+        # 初始化数据库
+        echo "📊 初始化数据库..."
+        curl -s -X POST http://localhost:8000/api/db/init >/dev/null 2>&1 || true
+        echo "✅ 数据库初始化完成"
+        break
+    fi
+    echo -n "."
+    sleep 1
+done
+if ! curl -s http://localhost:8000/health >/dev/null 2>&1; then
+    echo ""
+    echo "⚠️  后端可能还在启动中，请手动执行: curl -X POST http://localhost:8000/api/db/init"
 fi
 
 # 启动前端

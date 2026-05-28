@@ -152,7 +152,6 @@ function goUploadPage() {
   hideUploadModal();
   
   if (adminBackendAvailable) {
-    // 真实上传
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
@@ -162,17 +161,22 @@ function goUploadPage() {
       try {
         const result = await apiUpload('/upload-image', file);
         console.log('[上传] 款式图上传成功:', result);
-        // 进入标签确认步骤
         goUploadStep(2);
         switchPage('upload');
         
-        // 自动提取标签
+        // 自动提取标签并动态渲染
         if (result.url || result.image_url) {
+          const imageUrl = result.url || result.image_url;
+          // 更新上传预览区域
+          const previewImg = document.querySelector('.upload-img');
+          if (previewImg) previewImg.innerHTML = `<img src="${staticUrl(imageUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='<i class=\\'ti ti-photo\\' style=\\'font-size:32px;color:#BA7517\\'></i>'">`;
+          
           try {
-            const tagsResult = await apiPost('/extract-tags', { image_url: result.url || result.image_url });
-            console.log('[标签提取] 成功:', tagsResult);
+            const tags = await apiPost('/extract-tags', { image_url: imageUrl });
+            console.log('[标签提取] 成功:', tags);
+            renderExtractedTags(tags);
           } catch (tagErr) {
-            console.warn('[标签提取] 失败:', tagErr.message);
+            console.warn('[标签提取] 失败，使用默认标签:', tagErr.message);
           }
         }
       } catch (err) {
@@ -184,6 +188,48 @@ function goUploadPage() {
     goUploadStep(2);
     switchPage('upload');
   }
+}
+
+// 将后端返回的标签动态渲染到确认标签页
+function renderExtractedTags(tags) {
+  const craftGroup = document.getElementById('craft-tags');
+  const marketGroup = document.getElementById('market-tags');
+  if (!craftGroup || !marketGroup) return;
+  
+  // 工艺维度标签
+  const craftTags = [];
+  if (tags.nail_technique) craftTags.push(...(Array.isArray(tags.nail_technique) ? tags.nail_technique : [tags.nail_technique]));
+  if (tags.nail_decoration) craftTags.push(...(Array.isArray(tags.nail_decoration) ? tags.nail_decoration : [tags.nail_decoration]));
+  if (tags.nail_finish) craftTags.push(tags.nail_finish);
+  if (tags.nail_shape) craftTags.push(tags.nail_shape);
+  if (tags.nail_length) craftTags.push(tags.nail_length);
+  
+  // 营销维度标签
+  const marketTags = [];
+  if (tags.color_system) marketTags.push(...(Array.isArray(tags.color_system) ? tags.color_system : [tags.color_system]));
+  if (tags.style_tags) marketTags.push(...tags.style_tags);
+  if (tags.scene_tags) marketTags.push(...tags.scene_tags);
+  if (tags.season_tags) marketTags.push(...tags.season_tags);
+  
+  // 渲染工艺维度
+  const craftFiltered = craftTags.filter(t => t && t !== 'unknown');
+  craftGroup.innerHTML = craftFiltered.map(t => 
+    `<span class="tag tag-craft">${t} <i class="tag-del" onclick="this.parentElement.remove()">×</i></span>`
+  ).join('') + '<button class="tag-add-btn" onclick="addTagPrompt(\'craft-tags\',\'tag-craft\')">+</button>';
+  
+  // 渲染营销维度
+  const marketFiltered = marketTags.filter(t => t && t !== 'unknown');
+  const colorClasses = { color: 'tag-color', style: 'tag-style', scene: 'tag-scene', season: 'tag-season' };
+  marketGroup.innerHTML = marketFiltered.map((t, i) => {
+    const cls = i < (tags.color_system || []).length ? 'tag-color' : 
+                i < (tags.color_system || []).length + (tags.style_tags || []).length ? 'tag-style' : 'tag-season';
+    return `<span class="tag ${cls}">${t} <i class="tag-del" onclick="this.parentElement.remove()">×</i></span>`;
+  }).join('') + '<button class="tag-add-btn" onclick="addTagPrompt(\'market-tags\',\'tag-color\')">+</button>';
+  
+  // 更新标签计数
+  const total = craftFiltered.length + marketFiltered.length;
+  const resultEl = document.querySelector('.upload-result');
+  if (resultEl) resultEl.innerHTML = `<i class="ti ti-check"></i> 共识别到 <strong>${total}</strong> 个标签`;
 }
 
 function addTagPrompt(groupId, tagClass) { const name = prompt('输入标签名称：'); if(!name||!name.trim())return; const group=document.getElementById(groupId); const btn=group.querySelector('.tag-add-btn'); const tag=document.createElement('span'); tag.className='tag '+tagClass; tag.innerHTML=`${name.trim()} <i class="tag-del" onclick="this.parentElement.remove()">×</i>`; group.insertBefore(tag,btn); }
@@ -226,8 +272,59 @@ let taglineIdx = 0;
 const coupons = {'1':{name:'全贴甲片简约款',price:'¥168',desc:'可做渐变·猫眼·晕染'},'2':{name:'半贴甲片基础款',price:'¥128',desc:'半贴为主'},'3':{name:'猫眼渐变升级款',price:'¥218',desc:'专攻猫眼渐变'}};
 
 function selectPushImg(el, idx) { document.querySelectorAll('.push-thumbs .push-thumb').forEach(t=>t.classList.remove('active')); el.classList.add('active'); document.getElementById('push-main-img').innerHTML=`<i class="ti ti-photo" style="font-size:38px;color:#BA7517"></i><span>合成效果图 ${idx}</span>`; }
-function regenPushImg(btn) { btn.innerHTML='<i class="ti ti-refresh"></i> 生成中...'; setTimeout(()=>{btn.innerHTML='<i class="ti ti-refresh"></i> 重新生成';},1200); }
-function regenTagline() { const l=document.getElementById('tagline-regen-label'); l.textContent='生成中...'; setTimeout(()=>{taglineIdx=(taglineIdx+1)%taglines.length; document.getElementById('push-tagline').textContent=taglines[taglineIdx]; l.textContent='重新生成推荐语';},900); }
+
+async function regenPushImg(btn) {
+  btn.innerHTML='<i class="ti ti-refresh"></i> 生成中...';
+  if (adminBackendAvailable && pushCardsData.length > 0) {
+    try {
+      const card = pushCardsData[0];
+      const styleUrl = card.style_image_urls && card.style_image_urls[0];
+      if (styleUrl) {
+        const result = await apiPost('/generate-composite', {
+          style_image_url: styleUrl,
+          template_image_url: styleUrl, // 使用同款作为模板（实际应选裸手模板）
+        });
+        if (result && result.composite_image_url) {
+          document.getElementById('push-main-img').innerHTML = `<img src="${staticUrl(result.composite_image_url)}" style="width:100%;height:100%;object-fit:contain;border-radius:10px">`;
+        }
+      }
+    } catch (e) {
+      console.warn('[合成图] 重新生成失败:', e.message);
+    }
+  }
+  btn.innerHTML='<i class="ti ti-refresh"></i> 重新生成';
+}
+async function regenTagline() {
+  const l = document.getElementById('tagline-regen-label');
+  l.textContent = '生成中...';
+  
+  if (adminBackendAvailable && pushCardsData.length > 0) {
+    try {
+      const card = pushCardsData[0];
+      const result = await apiPost('/report', {
+        merchant_id: 'demo_shop',
+        period: 'this_week',
+        hot_styles: [{ name: card.style_name, life_cycle: card.life_cycle, score: card.hot_score }],
+      });
+      if (result && result.report_summary) {
+        // 从报告摘要中提取第一句作为推荐语
+        const firstLine = result.report_summary.split('\n').find(s => s.trim()) || taglines[0];
+        document.getElementById('push-tagline').textContent = firstLine.slice(0, 50);
+        l.textContent = '重新生成推荐语';
+        return;
+      }
+    } catch (e) {
+      console.warn('[推荐语] LLM 生成失败:', e.message);
+    }
+  }
+  
+  // fallback: 本地轮换
+  setTimeout(() => {
+    taglineIdx = (taglineIdx + 1) % taglines.length;
+    document.getElementById('push-tagline').textContent = taglines[taglineIdx];
+    l.textContent = '重新生成推荐语';
+  }, 900);
+}
 function updateCoupon() { const v=document.getElementById('coupon-select').value; const c=coupons[v]; document.getElementById('coupon-name').textContent=c.name; document.getElementById('coupon-price').textContent=c.price; }
 
 function updatePriceSlider(val) { document.getElementById('price-slider-val').textContent = val; }
