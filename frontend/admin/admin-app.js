@@ -9,6 +9,36 @@ function switchPage(page) {
     const tab = document.querySelector(`.nav-tab[data-page="${page}"]`);
     if (tab) tab.classList.add('active');
   }
+  // 页面加载时从后端拉取数据
+  if (page === 'dashboard') loadDashboardData();
+  if (page === 'push') loadPushData();
+  if (page === 'report') loadReportData('week');
+}
+
+// ===== 后端状态 =====
+let adminBackendAvailable = false;
+
+async function initAdminBackend() {
+  adminBackendAvailable = await checkBackendHealth();
+  if (adminBackendAvailable) {
+    console.log('[运营端] 后端连接成功，已启用 API 模式');
+  } else {
+    console.log('[运营端] 后端不可用，使用本地 mock 数据');
+  }
+}
+
+// ===== 数据看板（联调 /api/events/stats） =====
+async function loadDashboardData() {
+  if (!adminBackendAvailable) return;
+  try {
+    const stats = await apiGet('/events/stats');
+    if (stats) {
+      // 更新 AI 助手播报中的数据
+      console.log('[数据看板] 加载数据成功:', stats);
+    }
+  } catch (e) {
+    console.warn('[数据看板] 加载失败:', e.message);
+  }
 }
 
 // ===== AI助手播报 =====
@@ -23,26 +53,72 @@ function switchPeriod(btn, period) {
   renderBubble(period === 'today' ? bubbleToday : bubbleWeek);
 }
 function renderBubble(lines) { document.getElementById('assistant-bubble').innerHTML = lines.map(l => `<div class="bubble-line">${l}</div>`).join(''); }
-function regenBubble() {
+
+async function regenBubble() {
   const label = document.getElementById('regen-label');
   label.textContent = '生成中...';
+  
+  if (adminBackendAvailable) {
+    try {
+      const result = await apiPost('/report', {
+        period: currentPeriod === 'today' ? 'today' : 'this_week',
+        merchant_id: 'demo_shop',
+      });
+      if (result && result.report_summary) {
+        const lines = result.report_summary.split('\n').filter(l => l.trim()).map(l => `· ${l}`);
+        renderBubble(lines);
+        label.textContent = '重新生成播报';
+        return;
+      }
+    } catch (e) {
+      console.warn('[播报] API 调用失败:', e.message);
+    }
+  }
+  
   setTimeout(() => { renderBubble(currentPeriod === 'today' ? bubbleToday : bubbleWeek); label.textContent = '重新生成播报'; }, 1200);
 }
 
 // ===== 素材管理 =====
-const stylesData = [
-  { name: '奶油渐变猫眼', tags: ['猫眼','渐变','奶油白','玫瑰金'], lc: 'up', lcText: '上升期', date: '2024-11-28', bg: '#FAEEDA', bc: '#EF9F27', ic: '#BA7517', seasonal: false },
-  { name: '圣诞红绿镜面', tags: ['镜面','红色','绿色','圣诞'], lc: 'peak', lcText: '峰值期', date: '2024-11-25', bg: '#E1F5EE', bc: '#5DCAA5', ic: '#0F6E56', seasonal: true },
-  { name: '法式简约纯色', tags: ['法式','简约','裸色'], lc: 'down', lcText: '衰退期', date: '2024-11-20', bg: '#EEEDFE', bc: '#AFA9EC', ic: '#534AB7', seasonal: false },
-  { name: '暗红晕染手绘', tags: ['晕染','手绘','暗红'], lc: 'none', lcText: '未关联', date: '2024-11-18', bg: '#FCE4D6', bc: '#F0997B', ic: '#993C1D', seasonal: false }
+let stylesData = [
+  { name: '奶油渐变猫眼', tags: ['猫眼','渐变','奶油白','玫瑰金'], lc: 'up', lcText: '上升期', date: '2024-11-28', bg: '#FAEEDA', bc: '#EF9F27', ic: '#BA7517', seasonal: false, image_url: '' },
+  { name: '圣诞红绿镜面', tags: ['镜面','红色','绿色','圣诞'], lc: 'peak', lcText: '峰值期', date: '2024-11-25', bg: '#E1F5EE', bc: '#5DCAA5', ic: '#0F6E56', seasonal: true, image_url: '' },
+  { name: '法式简约纯色', tags: ['法式','简约','裸色'], lc: 'down', lcText: '衰退期', date: '2024-11-20', bg: '#EEEDFE', bc: '#AFA9EC', ic: '#534AB7', seasonal: false, image_url: '' },
+  { name: '暗红晕染手绘', tags: ['晕染','手绘','暗红'], lc: 'none', lcText: '未关联', date: '2024-11-18', bg: '#FCE4D6', bc: '#F0997B', ic: '#993C1D', seasonal: false, image_url: '' }
 ];
+
+async function loadStylesData() {
+  if (!adminBackendAvailable) return;
+  try {
+    const data = await apiGet('/db/styles');
+    if (data && data.styles && data.styles.length > 0) {
+      stylesData = data.styles.map(s => ({
+        name: s.name || s.style_name,
+        tags: s.tags || [],
+        lc: 'none',
+        lcText: '未关联',
+        date: s.created_at || '2024-11-28',
+        bg: '#FAEEDA',
+        bc: '#EF9F27',
+        ic: '#BA7517',
+        seasonal: false,
+        image_url: s.image_url || '',
+        style_id: s.style_id || s.id,
+      }));
+      renderStyleList();
+    }
+  } catch (e) {
+    console.warn('[素材] 加载款式失败:', e.message);
+  }
+}
 
 function renderStyleList() {
   const list = document.getElementById('style-list');
   if (!list) return;
   list.innerHTML = stylesData.map((s, i) => `
     <div class="style-item" id="style-${i}">
-      <div class="style-thumb" style="background:${s.bg};border-color:${s.bc}"><i class="ti ti-photo" style="color:${s.ic}"></i></div>
+      <div class="style-thumb" style="background:${s.bg};border-color:${s.bc}">
+        ${s.image_url ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><i class="ti ti-photo" style="color:${s.ic};display:none"></i>` : `<i class="ti ti-photo" style="color:${s.ic}"></i>`}
+      </div>
       <div class="style-info">
         <div class="style-name-text">${s.name} ${s.seasonal ? '<span class="seasonal-badge">节日限定</span>' : '<span class="evergreen-badge">常青款</span>'}</div>
         <div class="style-tags-row">${s.tags.slice(0,3).map(t=>`<span class="stag stag-craft">${t}</span>`).join('')}</div>
@@ -71,14 +147,51 @@ document.addEventListener('click', function() { const dd = document.getElementBy
 // ===== 上传弹窗 =====
 function showUploadModal() { document.getElementById('upload-modal').classList.add('show'); }
 function hideUploadModal() { document.getElementById('upload-modal').classList.remove('show'); }
-function goUploadPage() { hideUploadModal(); goUploadStep(2); switchPage('upload'); }
+
+function goUploadPage() {
+  hideUploadModal();
+  
+  if (adminBackendAvailable) {
+    // 真实上传
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const result = await apiUpload('/upload-image', file);
+        console.log('[上传] 款式图上传成功:', result);
+        // 进入标签确认步骤
+        goUploadStep(2);
+        switchPage('upload');
+        
+        // 自动提取标签
+        if (result.url || result.image_url) {
+          try {
+            const tagsResult = await apiPost('/extract-tags', { image_url: result.url || result.image_url });
+            console.log('[标签提取] 成功:', tagsResult);
+          } catch (tagErr) {
+            console.warn('[标签提取] 失败:', tagErr.message);
+          }
+        }
+      } catch (err) {
+        alert('上传失败：' + err.message);
+      }
+    };
+    fileInput.click();
+  } else {
+    goUploadStep(2);
+    switchPage('upload');
+  }
+}
+
 function addTagPrompt(groupId, tagClass) { const name = prompt('输入标签名称：'); if(!name||!name.trim())return; const group=document.getElementById(groupId); const btn=group.querySelector('.tag-add-btn'); const tag=document.createElement('span'); tag.className='tag '+tagClass; tag.innerHTML=`${name.trim()} <i class="tag-del" onclick="this.parentElement.remove()">×</i>`; group.insertBefore(tag,btn); }
 
-// ===== 上传步骤3-4（#13）=====
+// ===== 上传步骤 =====
 function goUploadStep(step) {
   document.querySelectorAll('.upload-step-panel').forEach(p => p.style.display = 'none');
   document.getElementById('upload-step-'+step).style.display = 'block';
-  // 更新步骤条
   [2,3,4].forEach(s => {
     const el = document.getElementById('step-'+s);
     if (!el) return;
@@ -86,14 +199,28 @@ function goUploadStep(step) {
     if (s < step) el.querySelector('.step-num').innerHTML = '<i class="ti ti-check"></i>';
     else el.querySelector('.step-num').textContent = s;
   });
-  // 步骤3渲染模板选择
   if (step === 3) {
     const grid = document.getElementById('upload-tpl-grid');
     if (grid) grid.innerHTML = templates.map((t,i) => `<div class="tpl-item ${t.selected?'selected':''}" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><i class="ti ti-hand-finger"></i><span>${t.label}</span></div>`).join('');
   }
 }
 
-// ===== 爆款推送 =====
+// ===== 爆款推送（联调 /api/push-cards） =====
+let pushCardsData = [];
+
+async function loadPushData() {
+  if (!adminBackendAvailable) return;
+  try {
+    const data = await apiGet('/push-cards');
+    if (Array.isArray(data) && data.length > 0) {
+      pushCardsData = data;
+      console.log('[推送] 加载爆款推送数据成功:', pushCardsData.length, '条');
+    }
+  } catch (e) {
+    console.warn('[推送] 加载失败:', e.message);
+  }
+}
+
 const taglines = ['秋冬约会必备！奶油渐变猫眼，光线下超有氛围感，显白又高级，赶紧安排～','这个秋冬就靠它了！奶油白渐变猫眼，温柔又高级～','简约不简单！奶油渐变猫眼，日常百搭还显白～'];
 let taglineIdx = 0;
 const coupons = {'1':{name:'全贴甲片简约款',price:'¥168',desc:'可做渐变·猫眼·晕染'},'2':{name:'半贴甲片基础款',price:'¥128',desc:'半贴为主'},'3':{name:'猫眼渐变升级款',price:'¥218',desc:'专攻猫眼渐变'}};
@@ -103,7 +230,6 @@ function regenPushImg(btn) { btn.innerHTML='<i class="ti ti-refresh"></i> 生成
 function regenTagline() { const l=document.getElementById('tagline-regen-label'); l.textContent='生成中...'; setTimeout(()=>{taglineIdx=(taglineIdx+1)%taglines.length; document.getElementById('push-tagline').textContent=taglines[taglineIdx]; l.textContent='重新生成推荐语';},900); }
 function updateCoupon() { const v=document.getElementById('coupon-select').value; const c=coupons[v]; document.getElementById('coupon-name').textContent=c.name; document.getElementById('coupon-price').textContent=c.price; }
 
-// 定价微调（#3）
 function updatePriceSlider(val) { document.getElementById('price-slider-val').textContent = val; }
 
 function goConfirm() { 
@@ -111,13 +237,26 @@ function goConfirm() {
   document.getElementById('confirm-price').textContent = price;
   switchPage('confirm'); 
 }
-function confirmPublish() {
+
+async function confirmPublish() {
+  if (adminBackendAvailable && pushCardsData.length > 0) {
+    try {
+      await apiPost(`/push-cards/${pushCardsData[0].push_id}/audit`, {
+        action: 'accepted',
+        merchant_id: 'demo_shop',
+      });
+      console.log('[上架] 审核通过');
+    } catch (e) {
+      console.warn('[上架] API 调用失败:', e.message);
+    }
+  }
+  
   document.querySelector('#panel-confirm .confirm-grid').style.display = 'none';
   document.querySelector('#panel-confirm .page-top').style.display = 'none';
   document.getElementById('success-page').style.display = 'flex';
 }
 
-// ===== 复盘报告 =====
+// ===== 复盘报告（联调 /api/report） =====
 const reportData = {
   week: {
     label: '2024年第48周 · 11月25日—12月1日',
@@ -163,6 +302,22 @@ const reportData = {
   }
 };
 
+async function loadReportData(period) {
+  if (!adminBackendAvailable) return;
+  const periodMap = { week: 'this_week', month: 'this_month', day: 'today' };
+  try {
+    const result = await apiPost('/report', {
+      period: periodMap[period] || 'this_week',
+      merchant_id: 'demo_shop',
+    });
+    if (result) {
+      console.log('[报告] 加载成功:', result);
+    }
+  } catch (e) {
+    console.warn('[报告] 加载失败:', e.message);
+  }
+}
+
 function switchReportPeriod(btn, period) {
   document.querySelectorAll('.report-top-bar .period-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -178,9 +333,11 @@ function switchReportPeriod(btn, period) {
       <div class="metric-delta delta-${m.dir}"><i class="ti ti-trending-${m.dir === 'down' ? 'down' : 'up'}"></i>${m.delta}</div>
     </div>
   `).join('');
+  
+  loadReportData(period);
 }
 
-// Skills执行层定义
+// Skills执行层（联调 /api/skills/execute）
 const sugSkills = [
   { action:'boost_budget', label:'加大投流预算', requiresConfirm:true, confirmMsg:'确认将「奶油渐变猫眼」投流预算从 ¥500/天 提升至 ¥650/天？\n\n调整幅度：+30%\n预计额外消耗：¥1,050/周' },
   { action:'prepare_replacement', label:'准备替换款', requiresConfirm:false, execMsg:'已标记「圣诞红绿镜面」为待替换，素材管理页已高亮上传入口' },
@@ -192,7 +349,6 @@ function adoptSug(idx) {
   const skill = sugSkills[idx];
   if (!skill) return;
   if (skill.requiresConfirm) {
-    // 二次确认框（涉及资金）
     if (confirm(skill.confirmMsg)) {
       executeSkill(idx, skill);
     }
@@ -201,14 +357,27 @@ function adoptSug(idx) {
   }
 }
 
-function executeSkill(idx, skill) {
+async function executeSkill(idx, skill) {
   const item = document.getElementById('sug-'+idx);
   const actions = document.getElementById('sug-actions-'+idx);
   actions.innerHTML = `<div class="adopted-label"><i class="ti ti-circle-check" style="color:#375623"></i> 已采纳 · ${skill.label}</div><button class="btn-undo" onclick="undoSug(${idx})">撤销</button>`;
   item.classList.add('adopted');
-  // 显示执行结果通知
+  
+  // 调用后端 Skills 执行 API
+  if (adminBackendAvailable) {
+    try {
+      await apiPost('/skills/execute', {
+        action_type: skill.action,
+        action_params: {},
+      });
+      console.log('[Skills] 执行成功:', skill.action);
+    } catch (e) {
+      console.warn('[Skills] 执行失败:', e.message);
+    }
+  }
+  
   showToast(skill.execMsg || '操作已执行');
-  // Skills联动：跳转相关页面
+  
   if (skill.action === 'prepare_replacement') {
     setTimeout(() => { if(confirm('是否跳转到素材管理页上传新款式？')) switchPage('assets'); }, 500);
   } else if (skill.action === 'take_down_style') {
@@ -235,11 +404,11 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-// ===== 偏好配置（#9）=====
+// ===== 偏好配置 =====
 function showPrefModal() { document.getElementById('pref-modal').classList.add('show'); }
 function hidePrefModal() { document.getElementById('pref-modal').classList.remove('show'); }
 
-// ===== 投流管理（#5）=====
+// ===== 投流管理 =====
 function genBoostPost() { alert('AI正在生成投流帖子...\n\n生成内容预览：\n\n标题：秋冬必做！奶油渐变猫眼超显白\n正文：光线下自带氛围感的猫眼甲，奶油白渐变到玫瑰金...\n话题：#秋冬美甲 #猫眼甲 #显白美甲\n关键词：猫眼渐变、显白、秋冬'); }
 
 function toggleBoostDetail(el) {
@@ -247,9 +416,37 @@ function toggleBoostDetail(el) {
   if (detail) detail.classList.toggle('show');
 }
 
-// 上传自有图片
-function uploadOwnImage() { alert('打开图片选择器…\n\n（Demo模拟：商户可上传自己拍摄的款式图替换AI合成图）'); }
+function uploadOwnImage() {
+  if (adminBackendAvailable) {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const result = await apiUpload('/upload-image', file);
+        showToast('图片上传成功！');
+        console.log('[上传] 自有图片上传成功:', result);
+      } catch (err) {
+        alert('上传失败：' + err.message);
+      }
+    };
+    fileInput.click();
+  } else {
+    alert('打开图片选择器…\n\n（Demo模拟：商户可上传自己拍摄的款式图替换AI合成图）');
+  }
+}
 
 // ===== 初始化 =====
-function init() { renderStyleList(); renderTemplates(); switchPage('home'); }
+function init() {
+  renderStyleList();
+  renderTemplates();
+  switchPage('home');
+  initAdminBackend().then(() => {
+    if (adminBackendAvailable) {
+      loadStylesData();
+    }
+  });
+}
 init();

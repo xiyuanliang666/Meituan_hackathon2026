@@ -33,6 +33,12 @@ app.include_router(hand_standardize.router, prefix="/api", tags=["hand-standardi
 app.include_router(tryon_history.router, prefix="/api", tags=["tryon-history"])
 app.mount("/static", StaticFiles(directory=get_settings().storage_dir), name="static")
 
+# 挂载前端静态文件（联调模式：前端可通过 http://localhost:8000/app/ 访问）
+import os
+_frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "frontend")
+if os.path.isdir(_frontend_dir):
+    app.mount("/app", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
