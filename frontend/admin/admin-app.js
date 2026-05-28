@@ -406,6 +406,7 @@ async function loadReportData(period) {
     const result = await apiPost('/report', {
       period: periodMap[period] || 'this_week',
       merchant_id: 'demo_shop',
+      merchant_prefs: getMerchantPrefs(),
     });
     if (result) {
       console.log('[报告] 加载成功:', result);
@@ -501,12 +502,70 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-// ===== 偏好配置 =====
-function showPrefModal() { document.getElementById('pref-modal').classList.add('show'); }
+// ===== 偏好配置（持久化到 localStorage） =====
+function showPrefModal() {
+  // 从 localStorage 恢复偏好到 UI
+  const prefs = getMerchantPrefs();
+  const craftCheckboxes = document.querySelectorAll('#pref-crafts input[type=checkbox]');
+  craftCheckboxes.forEach(cb => { cb.checked = prefs.excluded_crafts.includes(cb.value); });
+  const focusSelect = document.getElementById('pref-focus');
+  if (focusSelect) focusSelect.value = prefs.focus;
+  const priceSelect = document.getElementById('pref-price');
+  if (priceSelect) priceSelect.value = prefs.price_tier;
+  document.getElementById('pref-modal').classList.add('show');
+}
 function hidePrefModal() { document.getElementById('pref-modal').classList.remove('show'); }
 
+function savePrefAndClose() {
+  const craftCheckboxes = document.querySelectorAll('#pref-crafts input[type=checkbox]');
+  const excludedCrafts = [...craftCheckboxes].filter(cb => cb.checked).map(cb => cb.value);
+  const focus = document.getElementById('pref-focus').value;
+  const priceTier = document.getElementById('pref-price').value;
+  const prefs = { excluded_crafts: excludedCrafts, focus: focus, price_tier: priceTier };
+  localStorage.setItem('merchant_prefs', JSON.stringify(prefs));
+  // 更新报告页偏好标签展示
+  const prefTagsEl = document.querySelector('.pref-tags');
+  if (prefTagsEl) {
+    const focusLabel = { repurchase: '偏重复购客', new_customer: '偏重新客', balanced: '均衡' }[focus] || focus;
+    const priceLabel = { low: '低客单价', mid: '中高客单价', high: '高客单价' }[priceTier] || priceTier;
+    const craftLabel = excludedCrafts.length > 0 ? '不做' + excludedCrafts.join('/') : '无工艺限制';
+    prefTagsEl.innerHTML = `<span>${focusLabel}</span><span>${craftLabel}</span><span>${priceLabel}</span>`;
+  }
+  showToast('偏好已保存');
+  hidePrefModal();
+}
+
+function getMerchantPrefs() {
+  try {
+    const saved = localStorage.getItem('merchant_prefs');
+    if (saved) return JSON.parse(saved);
+  } catch (e) {}
+  return { excluded_crafts: ['手绘'], focus: 'repurchase', price_tier: 'mid' };
+}
+
 // ===== 投流管理 =====
-function genBoostPost() { alert('AI正在生成投流帖子...\n\n生成内容预览：\n\n标题：秋冬必做！奶油渐变猫眼超显白\n正文：光线下自带氛围感的猫眼甲，奶油白渐变到玫瑰金...\n话题：#秋冬美甲 #猫眼甲 #显白美甲\n关键词：猫眼渐变、显白、秋冬'); }
+async function genBoostPost() {
+  if (!adminBackendAvailable) {
+    alert('AI正在生成投流帖子...\n\n生成内容预览：\n\n标题：秋冬必做！奶油渐变猫眼超显白\n正文：光线下自带氛围感的猫眼甲，奶油白渐变到玫瑰金...\n话题：#秋冬美甲 #猫眼甲 #显白美甲\n关键词：猫眼渐变、显白、秋冬');
+    return;
+  }
+  showToast('AI 生成中...');
+  try {
+    const result = await apiPost('/report', {
+      merchant_id: 'demo_shop',
+      period: 'this_week',
+      hot_styles: [{ name: '奶油渐变猫眼', life_cycle: '上升期', score: 89 }],
+    });
+    const summary = result.report_summary || '';
+    const lines = summary.split('\n').filter(l => l.trim());
+    const title = lines[0] || '秋冬必做！奶油渐变猫眼超显白';
+    const body = lines.slice(1, 3).join('\n') || '光线下自带氛围感的猫眼甲，奶油白渐变到玫瑰金...';
+    alert(`AI 生成投流帖子：\n\n标题：${title.slice(0,30)}\n\n正文：${body.slice(0,100)}\n\n话题：#秋冬美甲 #猫眼甲 #显白美甲\n关键词：猫眼渐变、显白、秋冬`);
+  } catch (e) {
+    console.warn('[投流] 生成失败:', e.message);
+    alert('生成失败，请重试');
+  }
+}
 
 function toggleBoostDetail(el) {
   const detail = el.nextElementSibling;

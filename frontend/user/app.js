@@ -80,6 +80,8 @@ function navigateTo(page) {
   currentPage = page;
   if (page === 'chat' && chatMessages.length === 0) initChat();
   if (page === 'recommend') renderRecommend();
+  if (page === 'tryon-history') loadTryonHistory();
+  if (page === 'hands') loadUserHands();
 }
 function goBackFromDetail() { navigateTo(detailFrom); }
 
@@ -558,6 +560,99 @@ function tryAllRecommend() {
 renderFeed();
 navigateTo('home');
 initBackend();
+
+// ===== 试戴历史（联调 GET /api/tryon-history） =====
+async function loadTryonHistory() {
+  const body = document.getElementById('tryon-history-body');
+  if (!body) return;
+
+  if (!backendAvailable) {
+    body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999"><div style="font-size:48px;margin-bottom:12px">⏱</div><div style="font-size:15px;font-weight:500;margin-bottom:6px">暂无试戴记录</div><div style="font-size:12px">试戴美甲后记录会显示在这里</div></div>';
+    return;
+  }
+
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:#8b5cf6"><div class="typing-indicator" style="justify-content:center"><span></span><span></span><span></span></div>加载中...</div>';
+
+  try {
+    const data = await apiGet('/tryon-history', { user_id: 'demo_user', limit: 20 });
+    if (!data.records || data.records.length === 0) {
+      body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999"><div style="font-size:48px;margin-bottom:12px">⏱</div><div style="font-size:15px;font-weight:500;margin-bottom:6px">暂无试戴记录</div><div style="font-size:12px">试戴美甲后记录会显示在这里</div></div>';
+      return;
+    }
+    body.innerHTML = data.records.map(r => `
+      <div style="display:flex;gap:10px;padding:12px;background:#fff;border-radius:12px;border:.5px solid #f0f0f0;margin-bottom:10px;align-items:center">
+        <img src="${staticUrl(r.result_image_url)}" style="width:64px;height:64px;border-radius:10px;object-fit:cover" onerror="this.src='';this.style.background='#f5f0ff';this.style.display='flex'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;margin-bottom:4px">${r.style_id || '试戴效果'}</div>
+          <div style="font-size:11px;color:#999">${r.created_at || ''}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <div style="width:28px;height:28px;border-radius:50%;background:#f5f0ff;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="deleteTryonRecord('${r.record_id}')"><i class="ti ti-trash" style="font-size:13px;color:#8b5cf6"></i></div>
+        </div>
+      </div>
+    `).join('') + `<div style="text-align:center;padding:8px;font-size:11px;color:#ccc">共 ${data.total} 条记录</div>`;
+  } catch (e) {
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#999">加载失败，请重试</div>';
+    console.warn('[试戴历史] 加载失败:', e.message);
+  }
+}
+
+async function deleteTryonRecord(recordId) {
+  if (!confirm('确定删除这条试戴记录？')) return;
+  try {
+    await apiRequest(`/tryon-history/${recordId}`, { method: 'DELETE' });
+    loadTryonHistory();
+  } catch (e) {
+    console.warn('[试戴历史] 删除失败:', e.message);
+  }
+}
+
+// ===== 手图管理（联调 GET /api/user-hands） =====
+async function loadUserHands() {
+  const body = document.getElementById('hands-body');
+  if (!body) return;
+
+  if (!backendAvailable) {
+    body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999"><div style="font-size:48px;margin-bottom:12px">🤚</div><div style="font-size:15px;font-weight:500;margin-bottom:6px">暂无手图</div><div style="font-size:12px">上传手图后可在这里管理</div></div>';
+    return;
+  }
+
+  try {
+    const data = await apiGet('/user-hands', { user_id: 'demo_user' });
+    if (!data.hands || data.hands.length === 0) {
+      body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999"><div style="font-size:48px;margin-bottom:12px">🤚</div><div style="font-size:15px;font-weight:500;margin-bottom:6px">暂无手图</div><div style="font-size:12px">上传手图后可在这里管理</div></div>';
+      return;
+    }
+    body.innerHTML = data.hands.map(h => `
+      <div style="display:flex;gap:12px;padding:14px;background:${h.selected ? '#faf7ff' : '#fff'};border-radius:12px;border:${h.selected ? '2px solid #8b5cf6' : '.5px solid #f0f0f0'};margin-bottom:10px;align-items:center;cursor:pointer" onclick="selectHand('${h.hand_id}')">
+        <img src="${staticUrl(h.image_url)}" style="width:56px;height:56px;border-radius:10px;object-fit:cover" onerror="this.style.background='#f5ede0';this.alt='🤚'">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500">${h.selected ? '✅ 当前使用' : '点击切换'}</div>
+          <div style="font-size:11px;color:#999">${h.hand_id}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#999">加载失败</div>';
+    console.warn('[手图管理] 加载失败:', e.message);
+  }
+}
+
+async function selectHand(handId) {
+  if (!backendAvailable) return;
+  try {
+    const data = await apiGet('/user-hands', { user_id: 'demo_user' });
+    if (data.hands) {
+      const updatedHands = data.hands.map(h => ({ hand_id: h.hand_id, image_url: h.image_url, selected: h.hand_id === handId }));
+      await apiRequest('/user-hands/sync', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: 'demo_user', hands: updatedHands }) });
+      const selected = data.hands.find(h => h.hand_id === handId);
+      if (selected) uploadedHandImageUrl = selected.image_url;
+      loadUserHands();
+    }
+  } catch (e) {
+    console.warn('[手图管理] 切换失败:', e.message);
+  }
+}
 
 // ===== 事件上报（联调 POST /api/events） =====
 async function reportEvent(eventType, styleId, source = 'organic') {

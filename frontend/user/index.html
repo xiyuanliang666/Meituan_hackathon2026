@@ -120,11 +120,24 @@
     <div class="empty-state"><div class="empty-icon">💅</div><div class="empty-title">还没有收藏</div><div class="empty-sub">浏览美甲款式，点击❤️收藏喜欢的</div><button class="cta-btn" style="width:auto;padding:10px 32px" onclick="navigateTo('home')">去逛逛</button></div>
   </div>
 
-  <!-- ===== 我的页（空态） ===== -->
+  <!-- ===== 试戴记录页 ===== -->
+  <div class="page" id="page-tryon-history">
+    <header class="nav-bar"><span class="nav-title">试戴记录</span><i class="ti ti-x nav-icon" onclick="navigateTo('mine')"></i></header>
+    <div class="tryon-history-body" id="tryon-history-body" style="flex:1;overflow-y:auto;padding:14px"></div>
+  </div>
+
+  <!-- ===== 手图管理页 ===== -->
+  <div class="page" id="page-hands">
+    <header class="nav-bar"><span class="nav-title">手图管理</span><i class="ti ti-x nav-icon" onclick="navigateTo('mine')"></i></header>
+    <div class="hands-body" id="hands-body" style="flex:1;overflow-y:auto;padding:14px"></div>
+    <div class="cta-wrap"><button class="cta-btn" onclick="navigateTo('upload')"><i class="ti ti-plus"></i><span class="cta-main">上传新手图</span></button></div>
+  </div>
+
+  <!-- ===== 我的页 ===== -->
   <div class="page" id="page-mine">
     <header class="nav-bar"><span class="nav-title">我的</span><i class="ti ti-x nav-icon" onclick="navigateTo('home')"></i></header>
     <div class="mine-profile"><div class="mine-avatar">U</div><div class="mine-name">未登录</div></div>
-    <div class="mine-menu"><div class="mine-item"><span>📋 我的订单</span><span>›</span></div><div class="mine-item"><span>⏱ 试戴记录</span><span>›</span></div><div class="mine-item"><span>🤚 手图管理</span><span>›</span></div><div class="mine-item"><span>⚙️ 设置</span><span>›</span></div></div>
+    <div class="mine-menu"><div class="mine-item"><span>📋 我的订单</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tryon-history')"><span>⏱ 试戴记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('hands')"><span>🤚 手图管理</span><span>›</span></div><div class="mine-item"><span>⚙️ 设置</span><span>›</span></div></div>
   </div>
 
 </div>

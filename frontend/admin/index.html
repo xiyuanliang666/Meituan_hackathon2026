@@ -237,10 +237,10 @@
 <div class="modal-overlay" id="pref-modal">
   <div class="modal-content" style="text-align:left;max-width:420px">
     <h3 style="margin-bottom:16px"><i class="ti ti-settings" style="color:#CC9900"></i> 修改运营偏好</h3>
-    <div class="pref-form-group"><label>不做的工艺（多选）</label><div class="pref-checkboxes"><label><input type="checkbox" checked> 手绘</label><label><input type="checkbox"> 满铺钻</label><label><input type="checkbox"> 异形钻</label><label><input type="checkbox"> 延长甲</label></div></div>
-    <div class="pref-form-group"><label>运营重心</label><select class="coupon-select"><option selected>偏重复购客</option><option>偏重新客</option><option>均衡</option></select></div>
-    <div class="pref-form-group"><label>客单价档位</label><select class="coupon-select"><option>低客单（<100）</option><option selected>中高客单（100-250）</option><option>高客单（>250）</option></select></div>
-    <div style="display:flex;gap:10px;margin-top:20px"><button class="btn-primary-sm" onclick="hidePrefModal()"><i class="ti ti-check"></i> 保存</button><button class="btn-ghost" onclick="hidePrefModal()">取消</button></div>
+    <div class="pref-form-group"><label>不做的工艺（多选）</label><div class="pref-checkboxes" id="pref-crafts"><label><input type="checkbox" checked value="手绘"> 手绘</label><label><input type="checkbox" value="满铺钻"> 满铺钻</label><label><input type="checkbox" value="异形钻"> 异形钻</label><label><input type="checkbox" value="延长甲"> 延长甲</label></div></div>
+    <div class="pref-form-group"><label>运营重心</label><select class="coupon-select" id="pref-focus"><option value="repurchase" selected>偏重复购客</option><option value="new_customer">偏重新客</option><option value="balanced">均衡</option></select></div>
+    <div class="pref-form-group"><label>客单价档位</label><select class="coupon-select" id="pref-price"><option value="low">低客单（<100）</option><option value="mid" selected>中高客单（100-250）</option><option value="high">高客单（>250）</option></select></div>
+    <div style="display:flex;gap:10px;margin-top:20px"><button class="btn-primary-sm" onclick="savePrefAndClose()"><i class="ti ti-check"></i> 保存</button><button class="btn-ghost" onclick="hidePrefModal()">取消</button></div>
   </div>
 </div>
 
