@@ -4,60 +4,169 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>美甲AI智能运营 - 前端演示</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
-.container { max-width: 800px; width: 100%; }
-h1 { font-size: 28px; text-align: center; margin-bottom: 8px; color: #1a1a1a; }
-.subtitle { text-align: center; font-size: 14px; color: #888; margin-bottom: 40px; }
-.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.entry-card { background: #fff; border-radius: 16px; padding: 32px 24px; text-align: center; cursor: pointer; transition: all .2s; border: 2px solid transparent; text-decoration: none; color: inherit; }
-.entry-card:hover { transform: translateY(-4px); box-shadow: 0 8px 32px rgba(0,0,0,.08); border-color: #FFCD00; }
-.entry-icon { font-size: 48px; margin-bottom: 16px; }
-.entry-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-.entry-desc { font-size: 13px; color: #888; line-height: 1.6; }
-.entry-badge { display: inline-block; margin-top: 12px; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; }
-.badge-user { background: #FFF0EB; color: #FF6B35; }
-.badge-admin { background: #FFFBE6; color: #CC9900; }
-.pages-list { margin-top: 16px; text-align: left; padding: 12px 16px; background: #f9f9f9; border-radius: 8px; }
-.pages-list div { font-size: 12px; color: #666; padding: 3px 0; }
-@media(max-width:600px) { .cards { grid-template-columns: 1fr; } }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  background: linear-gradient(180deg, #fdfbf7 0%, #f5f0e8 50%, #ede5da 100%);
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 40px 20px;
+}
+.container { max-width: 860px; width: 100%; }
+
+/* 标题 */
+.hero { text-align: center; margin-bottom: 48px; }
+.hero-logo { font-size: 52px; margin-bottom: 8px; filter: drop-shadow(0 4px 12px rgba(204,153,0,.2)); }
+.hero h1 {
+  font-size: 32px; font-weight: 700; letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #FF6B35, #CC9900, #FFCD00);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero .subtitle {
+  font-size: 15px; color: #999; margin-top: 8px; letter-spacing: 1px;
+}
+.hero .tech-tags {
+  display: flex; justify-content: center; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+}
+.hero .tech-tag {
+  font-size: 11px; padding: 4px 12px; border-radius: 20px;
+  background: rgba(255,255,255,.7); border: .5px solid #e0d8d0; color: #888;
+  backdrop-filter: blur(4px);
+}
+
+/* 卡片 */
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.entry-card {
+  position: relative; border-radius: 20px; padding: 2px; text-decoration: none; color: inherit;
+  cursor: pointer; transition: transform .25s ease, box-shadow .25s ease;
+}
+.entry-card:hover { transform: translateY(-6px); box-shadow: 0 16px 48px rgba(0,0,0,.1); }
+
+/* 渐变边框 */
+.entry-card.card-user { background: linear-gradient(135deg, #a78bfa, #ec4899, #8b5cf6); }
+.entry-card.card-admin { background: linear-gradient(135deg, #FFCD00, #FF8C00, #FFCD00); }
+
+.card-inner {
+  background: #fff; border-radius: 18px; padding: 28px 24px; height: 100%;
+  display: flex; flex-direction: column;
+}
+
+/* 卡片头部 */
+.card-header-area { text-align: center; margin-bottom: 20px; }
+.entry-icon { font-size: 56px; margin-bottom: 12px; display: block; }
+.entry-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #1a1a1a; }
+.entry-desc { font-size: 13px; color: #888; line-height: 1.7; }
+.entry-badge {
+  display: inline-block; margin-top: 10px; padding: 5px 16px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; letter-spacing: .5px;
+}
+.badge-user { background: linear-gradient(135deg, #f5f0ff, #fce4ec); color: #7c3aed; }
+.badge-admin { background: linear-gradient(135deg, #FFFBE6, #FFF0EB); color: #CC9900; }
+
+/* 分割线 */
+.card-divider { height: 1px; background: linear-gradient(90deg, transparent, #e8e0d8, transparent); margin: 16px 0; }
+
+/* 功能列表 */
+.feature-list { flex: 1; }
+.feature-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
+  font-size: 13px; color: #444; transition: background .15s;
+}
+.feature-item:hover { background: #faf8f5; }
+.feature-item i {
+  width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.card-user .feature-item i { background: #f5f0ff; color: #7c3aed; }
+.card-admin .feature-item i { background: #FFFBE6; color: #CC9900; }
+.feature-item span { font-weight: 500; }
+.feature-item small { color: #aaa; margin-left: 4px; font-weight: 400; }
+
+/* 底部箭头 */
+.card-go {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 16px; padding: 10px; border-radius: 12px; font-size: 13px; font-weight: 600;
+  transition: all .2s;
+}
+.card-user .card-go { background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; }
+.card-admin .card-go { background: linear-gradient(135deg, #FFCD00, #F0C200); color: #1a1a1a; }
+.card-go:hover { opacity: .9; transform: scale(1.02); }
+.card-go i { font-size: 16px; transition: transform .2s; }
+.entry-card:hover .card-go i { transform: translateX(4px); }
+
+/* 底部 */
+.footer { text-align: center; margin-top: 40px; font-size: 12px; color: #ccc; }
+.footer a { color: #CC9900; text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+
+@media(max-width:600px) {
+  .cards { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 26px; }
+  .hero-logo { font-size: 40px; }
+}
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>🦘 美甲AI智能运营</h1>
-  <p class="subtitle">前端演示系统 · 用户端 + 运营端</p>
+  <div class="hero">
+    <div class="hero-logo">🦘</div>
+    <h1>美甲AI智能运营</h1>
+    <p class="subtitle">前端演示系统 · 用户端 + 运营端</p>
+    <div class="tech-tags">
+      <span class="tech-tag">FastAPI</span>
+      <span class="tech-tag">Gemini 2.5 Flash</span>
+      <span class="tech-tag">Qwen VL</span>
+      <span class="tech-tag">gpt-image-1</span>
+      <span class="tech-tag">SQLite</span>
+    </div>
+  </div>
   
   <div class="cards">
-    <a class="entry-card" href="user/index.html">
-      <div class="entry-icon">📱</div>
-      <div class="entry-title">用户端 (C端)</div>
-      <div class="entry-desc">面向消费者的移动端体验<br>AI对话推荐 · AI试戴 · 多选对比</div>
-      <span class="entry-badge badge-user">移动端页面</span>
-      <div class="pages-list">
-        <div>· 首页推荐Feed流</div>
-        <div>· AI对话推荐（仿美团）</div>
-        <div>· 美甲详情 + 试一试按钮</div>
-        <div>· 多选对比（三版方案）</div>
-        <div>· 收藏 / 我的（占位）</div>
+    <a class="entry-card card-user" href="user/index.html">
+      <div class="card-inner">
+        <div class="card-header-area">
+          <span class="entry-icon">📱</span>
+          <div class="entry-title">用户端 (C端)</div>
+          <div class="entry-desc">面向消费者的移动端体验<br>AI对话推荐 · AI试戴 · 多选对比</div>
+          <span class="entry-badge badge-user">移动端页面</span>
+        </div>
+        <div class="card-divider"></div>
+        <div class="feature-list">
+          <div class="feature-item"><i class="ti ti-layout-grid"></i><span>首页推荐Feed流</span><small>瀑布流真实图片</small></div>
+          <div class="feature-item"><i class="ti ti-sparkles"></i><span>AI对话推荐</span><small>Gemini多轮对话</small></div>
+          <div class="feature-item"><i class="ti ti-wand"></i><span>AI试戴效果</span><small>手图+款式合成</small></div>
+          <div class="feature-item"><i class="ti ti-hand-finger"></i><span>手型分析</span><small>Qwen VL肤色/手型</small></div>
+          <div class="feature-item"><i class="ti ti-columns"></i><span>多选对比</span><small>2/4/6/9宫格</small></div>
+        </div>
+        <div class="card-go">进入用户端 <i class="ti ti-arrow-right"></i></div>
       </div>
     </a>
     
-    <a class="entry-card" href="admin/index.html">
-      <div class="entry-icon">💻</div>
-      <div class="entry-title">运营端 (B端)</div>
-      <div class="entry-desc">面向商户的智能运营后台<br>数据看板 · 素材管理 · 爆款推送 · 复盘报告</div>
-      <span class="entry-badge badge-admin">PC端后台</span>
-      <div class="pages-list">
-        <div>· 数据看板 + AI助手播报</div>
-        <div>· 素材管理（款式图+模板）</div>
-        <div>· 爆款推送卡片编辑</div>
-        <div>· 上传款式 / 确认标签</div>
-        <div>· 确认上架</div>
-        <div>· 复盘报告 + 运营建议</div>
+    <a class="entry-card card-admin" href="admin/index.html">
+      <div class="card-inner">
+        <div class="card-header-area">
+          <span class="entry-icon">💻</span>
+          <div class="entry-title">运营端 (B端)</div>
+          <div class="entry-desc">面向商户的智能运营后台<br>数据看板 · 爆款推送 · 复盘报告</div>
+          <span class="entry-badge badge-admin">PC端后台</span>
+        </div>
+        <div class="card-divider"></div>
+        <div class="feature-list">
+          <div class="feature-item"><i class="ti ti-chart-bar"></i><span>数据看板</span><small>AI助手智能播报</small></div>
+          <div class="feature-item"><i class="ti ti-photo"></i><span>素材管理</span><small>款式图+裸手模板</small></div>
+          <div class="feature-item"><i class="ti ti-rocket"></i><span>爆款推送</span><small>三路信号自动识别</small></div>
+          <div class="feature-item"><i class="ti ti-tags"></i><span>标签提取</span><small>12维度AI打标</small></div>
+          <div class="feature-item"><i class="ti ti-report-analytics"></i><span>复盘报告</span><small>Skills一键采纳</small></div>
+        </div>
+        <div class="card-go">进入运营端 <i class="ti ti-arrow-right"></i></div>
       </div>
     </a>
+  </div>
+
+  <div class="footer">
+    美团2026黑客松 · 赛题03 · <a href="https://github.com/xiyuanliang666/Meituan_hackathon2026" target="_blank">GitHub</a>
   </div>
 </div>
 </body>
