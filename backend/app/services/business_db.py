@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from app.config import get_settings
+from app.data.nail_taxonomy_v2_seed import STYLE_TAG_FIELD_KEYS
 from app.services.dataset_loader import load_evaluation_dataset
 
 
@@ -75,6 +76,7 @@ def list_styles(limit: int = 50) -> list[dict[str, Any]]:
         item = dict(row)
         raw_tags = json.loads(item.pop("tags_json") or "{}")
         # 确保所有 tag 值都是 list（enum 单选字段存为 string，需转 list）
+        # 并按业务优先级排序：颜色体系 > 风格标签 > 场景标签 > 季节标签 > ...
         normalized_tags = {}
         for k, v in raw_tags.items():
             if isinstance(v, list):
@@ -83,7 +85,14 @@ def list_styles(limit: int = 50) -> list[dict[str, Any]]:
                 normalized_tags[k] = [v]
             else:
                 normalized_tags[k] = []
-        item["tags"] = normalized_tags
+        sorted_tags = {}
+        for key in STYLE_TAG_FIELD_KEYS:
+            if key in normalized_tags:
+                sorted_tags[key] = normalized_tags[key]
+        for key in normalized_tags:
+            if key not in sorted_tags:
+                sorted_tags[key] = normalized_tags[key]
+        item["tags"] = sorted_tags
         styles.append(item)
     return styles
 

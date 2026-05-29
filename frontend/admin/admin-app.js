@@ -345,35 +345,114 @@ function renderExtractedTags(tags) {
   if (resultEl) resultEl.innerHTML = `<i class="ti ti-check"></i> 共识别到 <strong>${total}</strong> 个标签`;
 }
 
-function addTagPrompt(groupId, tagClass) {
-  if (!adminBackendAvailable) {
-    const name = prompt('输入标签名称：');
-    if (!name || !name.trim()) return;
-    _insertTag(groupId, tagClass, name.trim());
-    return;
+let activeTagDropdown = null;
+let tagSearchTimer = null;
+
+function closeTagDropdown(e) {
+  if (activeTagDropdown && (!e || !activeTagDropdown.contains(e.target))) {
+    activeTagDropdown.remove();
+    activeTagDropdown = null;
+    document.removeEventListener('click', closeTagDropdown);
+    document.removeEventListener('keydown', onTagDropdownKey);
   }
-  // 弹出搜索输入框
-  const fieldMap = { 'craft-tags': 'nail_technique', 'market-tags': 'color_system' };
-  const fieldKey = fieldMap[groupId] || 'style_tags';
-  const keyword = prompt('搜索标签（输入关键词）：');
-  if (!keyword || !keyword.trim()) return;
-  
-  apiGet('/taxonomy/options', { field_key: fieldKey, q: keyword.trim(), limit: 10 }).then(results => {
-    if (results && results.length > 0) {
-      const options = results.map(r => r.value);
-      const selected = prompt(`找到 ${options.length} 个匹配标签：\n\n${options.map((v,i)=>`${i+1}. ${v}`).join('\n')}\n\n输入序号选择（或直接输入新标签）：`);
-      if (!selected) return;
-      const idx = parseInt(selected) - 1;
-      const value = (idx >= 0 && idx < options.length) ? options[idx] : selected.trim();
-      if (value) _insertTag(groupId, tagClass, value);
-    } else {
-      const value = prompt('未找到匹配标签，直接输入新标签名称：');
-      if (value && value.trim()) _insertTag(groupId, tagClass, value.trim());
+}
+
+function onTagDropdownKey(e) {
+  if (e.key === 'Escape') closeTagDropdown();
+}
+
+function addTagPrompt(groupId, tagClass) {
+  closeTagDropdown();
+
+  const btn = document.querySelector(`#${groupId} .tag-add-btn`);
+  if (!btn) return;
+
+  const rect = btn.getBoundingClientRect();
+  const craftFields = ['nail_technique', 'nail_decoration', 'nail_finish', 'nail_shape', 'nail_length'];
+  const marketFields = ['color_system', 'style_tags', 'scene_tags', 'season_tags', 'hand_skin_tone', 'hand_shape'];
+  const fields = groupId === 'craft-tags' ? craftFields : marketFields;
+
+  const dd = document.createElement('div');
+  dd.className = 'tag-search-dropdown';
+  dd.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left}px;width:240px`;
+  dd.innerHTML = `<input type="text" placeholder="输入关键词搜索..." autocomplete="off">
+    <div class="tag-dd-list"><div class="tag-dd-empty">输入关键词搜索已有标签</div></div>
+    <div class="tag-dd-new">+ 添加为新标签</div>`;
+
+  const input = dd.querySelector('input');
+  const newBtn = dd.querySelector('.tag-dd-new');
+
+  input.addEventListener('input', function () {
+    clearTimeout(tagSearchTimer);
+    const q = this.value.trim();
+    if (!q) {
+      dd.querySelector('.tag-dd-list').innerHTML = '<div class="tag-dd-empty">输入关键词搜索已有标签</div>';
+      return;
     }
-  }).catch(() => {
-    const name = prompt('搜索失败，直接输入标签名称：');
-    if (name && name.trim()) _insertTag(groupId, tagClass, name.trim());
+    if (!adminBackendAvailable) return;
+    tagSearchTimer = setTimeout(() => _doTagSearch(q, fields, dd, groupId, tagClass), 250);
   });
+
+  newBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const v = input.value.trim();
+    if (v) {
+      _insertTag(groupId, tagClass, v);
+      closeTagDropdown();
+    }
+  });
+
+  dd.addEventListener('click', function (e) { e.stopPropagation(); });
+
+  document.body.appendChild(dd);
+  setTimeout(() => input.focus(), 50);
+  activeTagDropdown = dd;
+
+  setTimeout(() => {
+    document.addEventListener('click', closeTagDropdown);
+    document.addEventListener('keydown', onTagDropdownKey);
+  }, 0);
+}
+
+async function _doTagSearch(q, fields, dd, groupId, tagClass) {
+  const listEl = dd.querySelector('.tag-dd-list');
+  listEl.innerHTML = '<div class="tag-dd-empty">搜索中...</div>';
+
+  try {
+    const results = await Promise.all(fields.map(f =>
+      apiGet('/taxonomy/options', { field_key: f, q, limit: 5 })
+        .then(items => (items || []).map(item => ({ value: item.value, field: f })))
+        .catch(() => [])
+    ));
+
+    const allResults = results.flat();
+    if (allResults.length === 0) {
+      listEl.innerHTML = '<div class="tag-dd-empty">未找到匹配标签，在上方输入框输入后点击"添加为新标签"</div>';
+      return;
+    }
+
+    const seen = new Set();
+    const unique = allResults.filter(r => {
+      if (seen.has(r.value)) return false;
+      seen.add(r.value);
+      return true;
+    }).slice(0, 15);
+
+    listEl.innerHTML = '';
+    unique.forEach(r => {
+      const item = document.createElement('div');
+      item.className = 'tag-dd-item';
+      item.innerHTML = `<span>${r.value}</span><span class="dd-field">${r.field}</span>`;
+      item.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        _insertTag(groupId, tagClass, r.value);
+        closeTagDropdown();
+      });
+      listEl.appendChild(item);
+    });
+  } catch (e) {
+    listEl.innerHTML = '<div class="tag-dd-empty">搜索失败，请重试</div>';
+  }
 }
 
 function _insertTag(groupId, tagClass, name) {
@@ -421,6 +500,34 @@ async function createStyleInBackend() {
     loadStylesData();
   } catch (e) {
     console.warn('[入库] 失败:', e.message);
+  }
+}
+
+async function previewComposite() {
+  const area = document.getElementById('composite-preview-area');
+  if (!area || !lastUploadedImageUrl) return;
+
+  const selectedTpls = document.querySelectorAll('#upload-tpl-grid .tpl-item.selected img');
+  if (selectedTpls.length === 0) {
+    area.innerHTML = '<div style="font-size:12px;color:#CC2200;margin-top:8px">请先在模板网格中选择至少一个模板</div>';
+    return;
+  }
+
+  const templateUrl = selectedTpls[0].src;
+  area.innerHTML = '<div class="composite-preview-loading"><i class="ti ti-loader"></i> 合成中...</div>';
+
+  try {
+    const result = await apiPost('/generate-composite', {
+      style_image_url: lastUploadedImageUrl,
+      template_image_url: templateUrl,
+    });
+    if (result && result.composite_image_url) {
+      area.innerHTML = `<img src="${staticUrl(result.composite_image_url)}" class="composite-preview-img" alt="合成预览">`;
+    } else {
+      area.innerHTML = '<div style="font-size:12px;color:#CC2200;margin-top:8px">合成失败，请重试</div>';
+    }
+  } catch (e) {
+    area.innerHTML = '<div style="font-size:12px;color:#CC2200;margin-top:8px">合成失败：' + e.message + '</div>';
   }
 }
 
@@ -793,6 +900,15 @@ function openLightbox(imageUrl) {
     <div style="position:absolute;top:-12px;right:-12px;width:32px;height:32px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)" onclick="document.getElementById('lightbox-overlay').remove()"><i class="ti ti-x" style="font-size:16px"></i></div>
   </div>`;
   document.body.appendChild(overlay);
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+  };
+  document.addEventListener('keydown', onKey);
+  overlay._onKey = onKey;
 }
 
 // ===== 初始化 =====

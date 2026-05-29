@@ -419,3 +419,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue"
 .boost-post-detail{display:none;padding:10px 14px;background:#FFFDF5;border-top:.5px solid #F0EDE8;font-size:12px;color:#555;line-height:1.7}
 .boost-post-detail.show{display:block}
 .boost-post-item{cursor:pointer}
+
+/* ===== 标签搜索下拉 ===== */
+.tag-search-dropdown{position:absolute;top:100%;left:0;z-index:50;background:#fff;border-radius:10px;border:.5px solid #E8E6E0;box-shadow:0 4px 20px rgba(0,0,0,.1);width:220px;max-height:280px;overflow:hidden;margin-top:4px}
+.tag-search-dropdown input{width:100%;border:none;border-bottom:.5px solid #F0EDE8;padding:10px 12px;font-size:13px;outline:none;background:#FAFAF9}
+.tag-search-dropdown .tag-dd-list{max-height:200px;overflow-y:auto}
+.tag-search-dropdown .tag-dd-item{padding:8px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:#333;transition:background .1s}
+.tag-search-dropdown .tag-dd-item:hover{background:#FFFBE6}
+.tag-search-dropdown .tag-dd-item .dd-field{font-size:10px;color:#aaa;margin-left:6px}
+.tag-search-dropdown .tag-dd-new{padding:8px 12px;font-size:12px;color:#CC9900;cursor:pointer;border-top:.5px solid #F0EDE8;text-align:center}
+.tag-search-dropdown .tag-dd-new:hover{background:#FFFBE6}
+.tag-search-dropdown .tag-dd-empty{padding:10px 12px;font-size:12px;color:#aaa;text-align:center}
+.tag-add-btn{position:relative;display:inline-flex}
+
+/* ===== Lightbox ===== */
+.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease}
+.lightbox-overlay img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px}
+.lightbox-close{position:absolute;top:20px;right:20px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:20px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.lightbox-close:hover{background:rgba(255,255,255,.25)}
+.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:20px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.lightbox-nav.prev{left:20px}
+.lightbox-nav.next{right:20px}
+.lightbox-nav:hover{background:rgba(255,255,255,.25)}
+
+/* ===== 合成预览 ===== */
+.composite-preview-btn{margin-top:12px;width:100%;padding:10px;font-size:13px;background:#FFFBE6;border:.5px solid #E8D800;border-radius:8px;color:#7A5C00;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.composite-preview-btn:hover{background:#FFFAE0}
+.composite-preview-img{width:100%;border-radius:8px;margin-top:10px;border:.5px solid #E8E6E0}
+.composite-preview-area{position:relative}
+.composite-preview-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.8);border-radius:8px;font-size:13px;color:#888}
