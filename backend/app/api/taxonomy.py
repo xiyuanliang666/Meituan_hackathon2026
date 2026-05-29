@@ -13,8 +13,19 @@ from app.services.taxonomy_store import (
     set_submission_approved,
     submit_taxonomy_value,
 )
+from app.services.business_db import search_taxonomy_options
 
 router = APIRouter()
+
+
+@router.get("/taxonomy/options")
+def get_taxonomy_options(
+    field_key: str = Query(..., min_length=1),
+    q: str = Query(default="", description="模糊搜索关键词"),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[dict]:
+    """按字段+关键词模糊搜索已审批的标签值"""
+    return search_taxonomy_options(field_key=field_key, query=q, limit=limit)
 
 
 @router.get("/taxonomy", response_model=TaxonomyResponse)

@@ -1,4 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
+from typing import Any
 
 from app.schemas.style import (
     CompositeRequest,
@@ -10,7 +12,7 @@ from app.schemas.style import (
     UpdateStyleTagsRequest,
     UploadImageResponse,
 )
-from app.services.business_db import get_style
+from app.services.business_db import create_style, delete_style, get_style, update_style
 from app.services.image_generation import generate_composite_image, generate_try_on_image
 from app.services.image_storage import save_uploaded_image
 from app.services.tag_extractor import extract_style_tags, persist_style_tags
@@ -18,6 +20,71 @@ from app.services.taxonomy_store import get_style_tags_payload
 from app.services.tryon_history import save_tryon_record
 
 router = APIRouter()
+
+
+# ===== 款式 CRUD =====
+
+class CreateStyleRequest(BaseModel):
+    style_name: str
+    image_url: str
+    tags: dict[str, Any] = {}
+
+
+class UpdateStyleRequest(BaseModel):
+    style_name: str | None = None
+    image_url: str | None = None
+    tags: dict[str, Any] | None = None
+    tryon_enabled: bool | None = None
+    life_cycle: str | None = None
+
+
+class StyleResponse(BaseModel):
+    style_id: str
+    style_name: str | None = None
+    image_url: str = ""
+    tags: dict[str, Any] = {}
+    tryon_enabled: bool = True
+    life_cycle: str = "观察期"
+    created_at: str = ""
+
+
+@router.post("/styles", response_model=StyleResponse)
+def add_style(request: CreateStyleRequest) -> StyleResponse:
+    if not request.style_name or not request.image_url:
+        raise HTTPException(status_code=400, detail="style_name and image_url are required")
+    result = create_style(style_name=request.style_name, image_url=request.image_url, tags=request.tags)
+    return StyleResponse(
+        style_id=result["style_id"],
+        style_name=result["style_name"],
+        image_url=result["image_url"],
+        tags=result["tags"],
+        created_at=result["created_at"],
+    )
+
+
+@router.delete("/styles/{style_id}")
+def remove_style(style_id: str) -> dict:
+    ok = delete_style(style_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="style not found")
+    return {"deleted": True, "style_id": style_id}
+
+
+@router.put("/styles/{style_id}", response_model=StyleResponse)
+def modify_style(style_id: str, request: UpdateStyleRequest) -> StyleResponse:
+    updates = request.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="no fields to update")
+    result = update_style(style_id, updates)
+    if result is None:
+        raise HTTPException(status_code=404, detail="style not found")
+    return StyleResponse(
+        style_id=result["style_id"],
+        style_name=result.get("style_name"),
+        image_url=result.get("enhanced_style_image_url", ""),
+        tags=result.get("tags", {}),
+        life_cycle=result.get("life_cycle", "观察期"),
+    )
 
 
 @router.post("/upload-image", response_model=UploadImageResponse)

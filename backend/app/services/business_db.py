@@ -73,7 +73,17 @@ def list_styles(limit: int = 50) -> list[dict[str, Any]]:
     styles = []
     for row in rows:
         item = dict(row)
-        item["tags"] = json.loads(item.pop("tags_json") or "{}")
+        raw_tags = json.loads(item.pop("tags_json") or "{}")
+        # 确保所有 tag 值都是 list（enum 单选字段存为 string，需转 list）
+        normalized_tags = {}
+        for k, v in raw_tags.items():
+            if isinstance(v, list):
+                normalized_tags[k] = v
+            elif isinstance(v, str) and v:
+                normalized_tags[k] = [v]
+            else:
+                normalized_tags[k] = []
+        item["tags"] = normalized_tags
         styles.append(item)
     return styles
 
@@ -322,6 +332,145 @@ def get_style(style_id: str) -> dict[str, Any] | None:
         return item
 
 
+# ===== 款式 CRUD (B1/B2/B3) =====
+
+def create_style(style_name: str, image_url: str, tags: dict[str, Any] | None = None) -> dict[str, Any]:
+    """创建新款式并入库"""
+    style_id = f"style-{uuid4().hex[:10]}"
+    now = _now()
+    tags_json = json.dumps(tags or {}, ensure_ascii=False)
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            """
+            INSERT INTO styles (style_id, enhanced_style_image_url, style_name, tags_json, source, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (style_id, image_url, style_name, tags_json, "merchant_upload", now),
+        )
+    return {"style_id": style_id, "style_name": style_name, "image_url": image_url, "tags": tags or {}, "created_at": now}
+
+
+def delete_style(style_id: str) -> bool:
+    """删除款式及关联的 style_tags 和 style_signals"""
+    with connect_db() as conn:
+        _create_tables(conn)
+        existing = conn.execute("SELECT 1 FROM styles WHERE style_id = ?", (style_id,)).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM style_tags WHERE style_id = ?", (style_id,))
+        conn.execute("DELETE FROM style_signals WHERE style_id = ?", (style_id,))
+        conn.execute("DELETE FROM styles WHERE style_id = ?", (style_id,))
+    return True
+
+
+def update_style(style_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    """更新款式信息（名称、图片、标签、tryon_enabled等）"""
+    with connect_db() as conn:
+        _create_tables(conn)
+        row = conn.execute("SELECT * FROM styles WHERE style_id = ?", (style_id,)).fetchone()
+        if not row:
+            return None
+        sets = []
+        params: list[Any] = []
+        if "style_name" in updates:
+            sets.append("style_name = ?")
+            params.append(updates["style_name"])
+        if "image_url" in updates:
+            sets.append("enhanced_style_image_url = ?")
+            params.append(updates["image_url"])
+        if "tags" in updates:
+            sets.append("tags_json = ?")
+            params.append(json.dumps(updates["tags"], ensure_ascii=False))
+        if "life_cycle" in updates:
+            sets.append("life_cycle = ?")
+            params.append(updates["life_cycle"])
+        if "tryon_enabled" in updates:
+            sets.append("tryon_enabled = ?")
+            params.append(1 if updates["tryon_enabled"] else 0)
+        if sets:
+            params.append(style_id)
+            conn.execute(f"UPDATE styles SET {', '.join(sets)} WHERE style_id = ?", params)
+        return get_style(style_id)
+
+
+# ===== 模板 CRUD (B5/B6/B7/B8) =====
+
+def list_templates(source: str | None = None) -> list[dict[str, Any]]:
+    """获取裸手模板列表"""
+    with connect_db() as conn:
+        _create_tables(conn)
+        if source:
+            rows = conn.execute(
+                "SELECT hand_template_id, hand_image_url, source, created_at FROM hand_templates WHERE source = ? ORDER BY created_at DESC",
+                (source,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT hand_template_id, hand_image_url, source, created_at FROM hand_templates ORDER BY created_at DESC"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def create_template(image_url: str, label: str = "", source: str = "merchant_upload") -> dict[str, Any]:
+    """创建裸手模板"""
+    template_id = f"tpl-{uuid4().hex[:10]}"
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            "INSERT OR IGNORE INTO hand_templates (hand_template_id, hand_image_url, source, created_at) VALUES (?, ?, ?, ?)",
+            (template_id, image_url, source, now),
+        )
+    return {"hand_template_id": template_id, "hand_image_url": image_url, "label": label, "source": source, "created_at": now}
+
+
+def delete_template(template_id: str) -> bool:
+    """删除裸手模板"""
+    with connect_db() as conn:
+        _create_tables(conn)
+        existing = conn.execute("SELECT 1 FROM hand_templates WHERE hand_template_id = ?", (template_id,)).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM hand_templates WHERE hand_template_id = ?", (template_id,))
+    return True
+
+
+# 公共模板库（硬编码）
+PUBLIC_TEMPLATES = [
+    {"hand_template_id": "pub-01", "hand_image_url": "http://p0.meituan.net/pilotimages/b9632e3a699fdb63a1a6139bbfd6bf0d2159483.png", "label": "自然肤色A", "source": "public"},
+    {"hand_template_id": "pub-02", "hand_image_url": "http://p1.meituan.net/pilotimages/704b1c4bdf589b5d5367f2748f6868f42205269.png", "label": "自然肤色B", "source": "public"},
+    {"hand_template_id": "pub-03", "hand_image_url": "http://p0.meituan.net/pilotimages/3cd4bc446f321574df68ce0a749b16b62603765.png", "label": "白皙肤色A", "source": "public"},
+    {"hand_template_id": "pub-04", "hand_image_url": "http://p0.meituan.net/pilotimages/7c791f4b4b13659d62d991f172f5ffd02674881.png", "label": "白皙肤色B", "source": "public"},
+    {"hand_template_id": "pub-05", "hand_image_url": "http://p1.meituan.net/pilotimages/5a7efacd78020469ab44e4caca1afe972676586.png", "label": "暖肤色A", "source": "public"},
+    {"hand_template_id": "pub-06", "hand_image_url": "http://p1.meituan.net/pilotimages/6a3d032df4a143c79c3e2ec3cd4c53522723999.png", "label": "暖肤色B", "source": "public"},
+    {"hand_template_id": "pub-07", "hand_image_url": "http://p0.meituan.net/pilotimages/ed9a1cd3cca3997ede3779771dda6a772149757.png", "label": "冷白肤色", "source": "public"},
+    {"hand_template_id": "pub-08", "hand_image_url": "http://p1.meituan.net/pilotimages/a52c995f1f9e2e668c6093099cfd24032514125.png", "label": "深肤色", "source": "public"},
+]
+
+
+def list_public_templates() -> list[dict[str, Any]]:
+    return PUBLIC_TEMPLATES
+
+
+# ===== Taxonomy 模糊搜索 (B9) =====
+
+def search_taxonomy_options(field_key: str, query: str, limit: int = 20) -> list[dict[str, Any]]:
+    """按字段+关键词模糊搜索已审批标签值"""
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT option_id, field_key, value, is_approved, source
+            FROM taxonomy_options
+            WHERE field_key = ? AND value LIKE ? AND is_approved = 1
+            LIMIT ?
+            """,
+            (field_key, f"%{query}%", limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def _create_tables(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
@@ -340,6 +489,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             tags_json TEXT NOT NULL DEFAULT '{}',
             hot_score REAL NOT NULL DEFAULT 0,
             life_cycle TEXT NOT NULL DEFAULT '观察期',
+            tryon_enabled INTEGER NOT NULL DEFAULT 1,
             source TEXT NOT NULL DEFAULT 'seed_xlsx',
             created_at TEXT NOT NULL
         );

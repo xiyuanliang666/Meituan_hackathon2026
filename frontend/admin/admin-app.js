@@ -92,17 +92,18 @@ async function loadStylesData() {
     const data = await apiGet('/db/styles');
     if (data && data.styles && data.styles.length > 0) {
       stylesData = data.styles.map(s => ({
-        name: s.name || s.style_name,
-        tags: s.tags || [],
-        lc: 'none',
-        lcText: '未关联',
-        date: s.created_at || '2024-11-28',
+        style_id: s.style_id || s.id,
+        name: s.style_name || s.name || '',
+        tags: Object.values(s.tags || {}).flat().filter(Boolean).slice(0, 4),
+        lc: s.life_cycle === '上升期' ? 'up' : s.life_cycle === '峰值期' ? 'peak' : s.life_cycle === '衰退期' ? 'down' : '',
+        lcText: s.life_cycle || '',
+        date: s.created_at || '',
         bg: '#FAEEDA',
         bc: '#EF9F27',
         ic: '#BA7517',
         seasonal: false,
-        image_url: s.image_url || '',
-        style_id: s.style_id || s.id,
+        image_url: s.enhanced_style_image_url || '',
+        tryon_enabled: s.tryon_enabled !== false,
       }));
       renderStyleList();
     }
@@ -116,32 +117,142 @@ function renderStyleList() {
   if (!list) return;
   list.innerHTML = stylesData.map((s, i) => `
     <div class="style-item" id="style-${i}">
-      <div class="style-thumb" style="background:${s.bg};border-color:${s.bc}">
+      <div class="style-thumb" style="background:${s.bg};border-color:${s.bc};cursor:pointer" onclick="event.stopPropagation();${s.image_url ? `openLightbox('${s.image_url}')` : ''}">
         ${s.image_url ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><i class="ti ti-photo" style="color:${s.ic};display:none"></i>` : `<i class="ti ti-photo" style="color:${s.ic}"></i>`}
       </div>
       <div class="style-info">
         <div class="style-name-text">${s.name} ${s.seasonal ? '<span class="seasonal-badge">节日限定</span>' : '<span class="evergreen-badge">常青款</span>'}</div>
         <div class="style-tags-row">${s.tags.slice(0,3).map(t=>`<span class="stag stag-craft">${t}</span>`).join('')}</div>
-        <div class="style-meta-row"><span class="lc-pill lc-${s.lc}"><i class="ti ti-${s.lc==='up'?'trending-up':s.lc==='peak'?'flame':s.lc==='down'?'trending-down':'minus'}"></i>${s.lcText}</span><span class="style-date">${s.date}</span></div>
+        <div class="style-meta-row">${s.lcText ? `<span class="lc-pill lc-${s.lc}"><i class="ti ti-${s.lc==='up'?'trending-up':s.lc==='peak'?'flame':s.lc==='down'?'trending-down':'minus'}"></i>${s.lcText}</span>` : ''}<span class="style-date">${s.date}</span></div>
       </div>
-      <div class="style-actions"><div class="btn-icon"><i class="ti ti-edit"></i></div><div class="btn-icon danger" onclick="deleteStyle(${i})"><i class="ti ti-trash"></i></div></div>
+      <div class="style-actions">
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:${s.tryon_enabled?'#375623':'#aaa'};cursor:pointer" title="AI试戴开关">
+          <input type="checkbox" ${s.tryon_enabled?'checked':''} onchange="toggleTryon('${s.style_id}',this.checked)" style="accent-color:#FFCD00">试戴
+        </label>
+        <div class="btn-icon danger" onclick="deleteStyleFromBackend('${s.style_id}',${i})"><i class="ti ti-trash"></i></div>
+      </div>
     </div>`).join('');
 }
-function deleteStyle(idx) { const el = document.getElementById('style-'+idx); if(el){el.style.opacity='0.3';el.style.pointerEvents='none';} }
+
+async function deleteStyleFromBackend(styleId, idx) {
+  if (!confirm('确定删除该款式？')) return;
+  if (adminBackendAvailable) {
+    try {
+      await apiRequest(`/styles/${styleId}`, { method: 'DELETE' });
+      stylesData.splice(idx, 1);
+      renderStyleList();
+      showToast('款式已删除');
+      return;
+    } catch (e) {
+      console.warn('[删除] 失败:', e.message);
+    }
+  }
+  const el = document.getElementById('style-'+idx);
+  if (el) { el.style.opacity='0.3'; el.style.pointerEvents='none'; }
+}
+
+async function toggleTryon(styleId, enabled) {
+  if (!adminBackendAvailable) return;
+  try {
+    await apiRequest(`/styles/${styleId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tryon_enabled: enabled }),
+    });
+    showToast(enabled ? 'AI试戴已开通' : 'AI试戴已关闭');
+  } catch (e) {
+    console.warn('[试戴开关] 失败:', e.message);
+  }
+}
 
 const templates = [{ label:'自然肤色',selected:true },{ label:'白皙肤色',selected:true },{ label:'暖肤色',selected:true },{ label:'冷白肤色',selected:false },{ label:'店铺自有',selected:false }];
+let backendTemplates = [];
 
-function renderTemplates() {
+async function renderTemplates() {
   const grid = document.getElementById('template-grid');
   if (!grid) return;
+  
+  if (adminBackendAvailable) {
+    try {
+      const data = await apiGet('/templates');
+      if (Array.isArray(data) && data.length > 0) {
+        backendTemplates = data;
+        grid.innerHTML = data.map((t, i) => `<div class="tpl-item selected" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><img src="${t.hand_image_url}" style="width:100%;height:60%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'"><span style="font-size:10px;margin-top:2px">${t.label || t.source || '模板'}</span></div>`).join('');
+        updateTplCount();
+        return;
+      }
+    } catch (e) {}
+  }
+  
   grid.innerHTML = templates.map((t,i) => `<div class="tpl-item ${t.selected?'selected':''}" onclick="toggleTemplate(${i})"><div class="tpl-check">✓</div><i class="ti ti-hand-finger"></i><span>${t.label}</span></div>`).join('');
   updateTplCount();
 }
 function toggleTemplate(idx) { templates[idx].selected = !templates[idx].selected; renderTemplates(); }
-function updateTplCount() { const n = templates.filter(t=>t.selected).length; const el = document.getElementById('tpl-count'); if(el) el.textContent = '已选 '+n+' 张'; }
+function updateTplCount() { const n = document.querySelectorAll('.tpl-item.selected').length; const el = document.getElementById('tpl-count'); if(el) el.textContent = '已选 '+n+' 张'; }
 function toggleTplDropdown(e) { e.stopPropagation(); document.getElementById('tpl-add-dropdown').classList.toggle('show'); }
-function handleTplUpload() { document.getElementById('tpl-add-dropdown').classList.remove('show'); templates.push({label:'自定义'+(templates.length+1),selected:true}); renderTemplates(); }
-function handleTplPublic() { document.getElementById('tpl-add-dropdown').classList.remove('show'); templates.push({label:'公共'+(templates.length+1),selected:false}); renderTemplates(); }
+
+async function handleTplUpload() {
+  document.getElementById('tpl-add-dropdown').classList.remove('show');
+  if (adminBackendAvailable) {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const uploaded = await apiUpload('/upload-image', file);
+        const imageUrl = uploaded.url || uploaded.image_url;
+        await apiPost('/templates', { image_url: imageUrl, label: '自有模板' });
+        showToast('模板上传成功');
+        renderTemplates();
+      } catch (err) {
+        alert('上传失败：' + err.message);
+      }
+    };
+    fileInput.click();
+  } else {
+    templates.push({label:'自定义'+(templates.length+1),selected:true});
+    renderTemplates();
+  }
+}
+
+async function handleTplPublic() {
+  document.getElementById('tpl-add-dropdown').classList.remove('show');
+  if (adminBackendAvailable) {
+    try {
+      const publicTpls = await apiGet('/templates/public');
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay show';
+      modal.id = 'public-tpl-modal';
+      modal.innerHTML = `<div class="modal-content" style="max-width:500px;text-align:left">
+        <h3 style="margin-bottom:12px"><i class="ti ti-layout-grid" style="color:#CC9900"></i> 公共模板库</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:12px">选择模板后加入已选列表</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+          ${publicTpls.map(t => `<div class="tpl-item" style="aspect-ratio:1;cursor:pointer" onclick="selectPublicTpl('${t.hand_image_url}','${t.label}');this.classList.add('selected')"><div class="tpl-check">✓</div><img src="${t.hand_image_url}" style="width:100%;height:70%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'"><span style="font-size:9px">${t.label}</span></div>`).join('')}
+        </div>
+        <button class="btn-ghost" onclick="document.getElementById('public-tpl-modal').remove()">关闭</button>
+      </div>`;
+      document.body.appendChild(modal);
+    } catch (e) {
+      alert('加载公共模板库失败');
+    }
+  } else {
+    templates.push({label:'公共'+(templates.length+1),selected:false});
+    renderTemplates();
+  }
+}
+
+async function selectPublicTpl(imageUrl, label) {
+  if (!adminBackendAvailable) return;
+  try {
+    await apiPost('/templates', { image_url: imageUrl, label: label });
+    showToast('已添加: ' + label);
+    renderTemplates();
+  } catch (e) {
+    console.warn('[公共模板] 添加失败:', e.message);
+  }
+}
 document.addEventListener('click', function() { const dd = document.getElementById('tpl-add-dropdown'); if(dd) dd.classList.remove('show'); });
 
 // ===== 上传弹窗 =====
@@ -167,6 +278,7 @@ function goUploadPage() {
         // 自动提取标签并动态渲染
         if (result.url || result.image_url) {
           const imageUrl = result.url || result.image_url;
+          lastUploadedImageUrl = imageUrl;
           // 更新上传预览区域
           const previewImg = document.querySelector('.upload-img');
           if (previewImg) previewImg.innerHTML = `<img src="${staticUrl(imageUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='<i class=\\'ti ti-photo\\' style=\\'font-size:32px;color:#BA7517\\'></i>'">`;
@@ -174,6 +286,7 @@ function goUploadPage() {
           try {
             const tags = await apiPost('/extract-tags', { image_url: imageUrl });
             console.log('[标签提取] 成功:', tags);
+            lastExtractedTags = tags;
             renderExtractedTags(tags);
           } catch (tagErr) {
             console.warn('[标签提取] 失败，使用默认标签:', tagErr.message);
@@ -232,9 +345,50 @@ function renderExtractedTags(tags) {
   if (resultEl) resultEl.innerHTML = `<i class="ti ti-check"></i> 共识别到 <strong>${total}</strong> 个标签`;
 }
 
-function addTagPrompt(groupId, tagClass) { const name = prompt('输入标签名称：'); if(!name||!name.trim())return; const group=document.getElementById(groupId); const btn=group.querySelector('.tag-add-btn'); const tag=document.createElement('span'); tag.className='tag '+tagClass; tag.innerHTML=`${name.trim()} <i class="tag-del" onclick="this.parentElement.remove()">×</i>`; group.insertBefore(tag,btn); }
+function addTagPrompt(groupId, tagClass) {
+  if (!adminBackendAvailable) {
+    const name = prompt('输入标签名称：');
+    if (!name || !name.trim()) return;
+    _insertTag(groupId, tagClass, name.trim());
+    return;
+  }
+  // 弹出搜索输入框
+  const fieldMap = { 'craft-tags': 'nail_technique', 'market-tags': 'color_system' };
+  const fieldKey = fieldMap[groupId] || 'style_tags';
+  const keyword = prompt('搜索标签（输入关键词）：');
+  if (!keyword || !keyword.trim()) return;
+  
+  apiGet('/taxonomy/options', { field_key: fieldKey, q: keyword.trim(), limit: 10 }).then(results => {
+    if (results && results.length > 0) {
+      const options = results.map(r => r.value);
+      const selected = prompt(`找到 ${options.length} 个匹配标签：\n\n${options.map((v,i)=>`${i+1}. ${v}`).join('\n')}\n\n输入序号选择（或直接输入新标签）：`);
+      if (!selected) return;
+      const idx = parseInt(selected) - 1;
+      const value = (idx >= 0 && idx < options.length) ? options[idx] : selected.trim();
+      if (value) _insertTag(groupId, tagClass, value);
+    } else {
+      const value = prompt('未找到匹配标签，直接输入新标签名称：');
+      if (value && value.trim()) _insertTag(groupId, tagClass, value.trim());
+    }
+  }).catch(() => {
+    const name = prompt('搜索失败，直接输入标签名称：');
+    if (name && name.trim()) _insertTag(groupId, tagClass, name.trim());
+  });
+}
+
+function _insertTag(groupId, tagClass, name) {
+  const group = document.getElementById(groupId);
+  const btn = group.querySelector('.tag-add-btn');
+  const tag = document.createElement('span');
+  tag.className = 'tag ' + tagClass;
+  tag.innerHTML = `${name} <i class="tag-del" onclick="this.parentElement.remove()">×</i>`;
+  group.insertBefore(tag, btn);
+}
 
 // ===== 上传步骤 =====
+let lastUploadedImageUrl = ''; // 暂存上传图片URL
+let lastExtractedTags = {};    // 暂存提取的标签
+
 function goUploadStep(step) {
   document.querySelectorAll('.upload-step-panel').forEach(p => p.style.display = 'none');
   document.getElementById('upload-step-'+step).style.display = 'block';
@@ -246,9 +400,43 @@ function goUploadStep(step) {
     else el.querySelector('.step-num').textContent = s;
   });
   if (step === 3) {
-    const grid = document.getElementById('upload-tpl-grid');
-    if (grid) grid.innerHTML = templates.map((t,i) => `<div class="tpl-item ${t.selected?'selected':''}" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><i class="ti ti-hand-finger"></i><span>${t.label}</span></div>`).join('');
+    loadTemplatesForUpload();
   }
+  if (step === 4) {
+    // 步骤4：入库
+    createStyleInBackend();
+  }
+}
+
+async function createStyleInBackend() {
+  if (!adminBackendAvailable || !lastUploadedImageUrl) return;
+  try {
+    await apiPost('/styles', {
+      style_name: lastExtractedTags.style_name || '新款式',
+      image_url: lastUploadedImageUrl,
+      tags: lastExtractedTags,
+    });
+    console.log('[入库] 款式入库成功');
+    // 自动刷新素材列表
+    loadStylesData();
+  } catch (e) {
+    console.warn('[入库] 失败:', e.message);
+  }
+}
+
+async function loadTemplatesForUpload() {
+  const grid = document.getElementById('upload-tpl-grid');
+  if (!grid) return;
+  if (adminBackendAvailable) {
+    try {
+      const data = await apiGet('/templates');
+      if (Array.isArray(data) && data.length > 0) {
+        grid.innerHTML = data.map(t => `<div class="tpl-item selected" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><img src="${t.hand_image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'"><span>${t.label || t.source}</span></div>`).join('');
+        return;
+      }
+    } catch (e) {}
+  }
+  grid.innerHTML = templates.map((t,i) => `<div class="tpl-item ${t.selected?'selected':''}" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><i class="ti ti-hand-finger"></i><span>${t.label}</span></div>`).join('');
 }
 
 // ===== 爆款推送（联调 /api/push-cards） =====
@@ -592,6 +780,19 @@ function uploadOwnImage() {
   } else {
     alert('打开图片选择器…\n\n（Demo模拟：商户可上传自己拍摄的款式图替换AI合成图）');
   }
+}
+
+// ===== Lightbox 大图查看 (F5) =====
+function openLightbox(imageUrl) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'lightbox-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div style="max-width:90vw;max-height:90vh;position:relative">
+    <img src="${imageUrl}" style="max-width:100%;max-height:85vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+    <div style="position:absolute;top:-12px;right:-12px;width:32px;height:32px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)" onclick="document.getElementById('lightbox-overlay').remove()"><i class="ti ti-x" style="font-size:16px"></i></div>
+  </div>`;
+  document.body.appendChild(overlay);
 }
 
 // ===== 初始化 =====
