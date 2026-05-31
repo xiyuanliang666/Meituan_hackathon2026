@@ -10,7 +10,7 @@
 <body>
 <!-- 顶部导航 -->
 <nav class="top-nav">
-  <div class="nav-left"><div class="nav-logo">🦘 美甲智能运营</div></div>
+  <div class="nav-left"><div class="nav-logo"><span class="brand-en">Prism</span><span class="brand-cn">商户运营台</span></div></div>
   <div class="nav-center">
     <div class="nav-tabs">
       <div class="nav-tab active" data-page="home" onclick="switchPage('home')"><i class="ti ti-home"></i> 首页</div>
@@ -30,7 +30,7 @@
 
 <!-- ===== 首页 ===== -->
 <div class="page-panel active" id="panel-home">
-  <div class="home-banner"><div class="home-banner-left"><h2>你好，蔻丹美甲 👋</h2><p>今日店铺运营状态良好，有 <strong>1</strong> 条新爆款推送待处理</p></div><div class="home-banner-icon">🦘</div></div>
+  <div class="home-banner"><div class="home-banner-left"><h2>Prism 商户运营台</h2><p>今日店铺运营状态良好，有 <strong>1</strong> 条新爆款推送待处理</p></div><div class="home-banner-icon"><i class="ti ti-sparkles"></i></div></div>
   <div class="home-stats">
     <div class="home-stat-card" onclick="switchPage('dashboard')"><div class="home-stat-val">1,284</div><div class="home-stat-label">本周试戴次数</div><div class="home-stat-delta delta-up">↑ 31%</div></div>
     <div class="home-stat-card" onclick="switchPage('dashboard')"><div class="home-stat-val">34%</div><div class="home-stat-label">试戴收藏率</div><div class="home-stat-delta delta-up">↑ 6pp</div></div>
@@ -55,7 +55,7 @@
 
 <!-- ===== 数据看板 ===== -->
 <div class="page-panel" id="panel-dashboard">
-  <div class="assistant-card"><div class="assistant-icon">🦘</div><div class="assistant-body"><div class="assistant-header"><div class="assistant-title"><i class="ti ti-sparkles"></i> 运营助手播报</div><div class="period-switch"><button class="period-btn active" onclick="switchPeriod(this,'today')">今日</button><button class="period-btn" onclick="switchPeriod(this,'week')">本周</button></div></div><div class="assistant-bubble" id="assistant-bubble"><div class="bubble-line">· 今日试戴总次数 <span class="hl-up">↑ 23%</span>，其中投流带来的试戴占比达 <span class="hl-up">41%</span>，效果显著。</div><div class="bubble-line">· <span class="hl-warn">奶油渐变猫眼</span> 收藏率今日达 <span class="hl-up">38%</span>，连续3天上升，建议今日上架并考虑加大投流。</div><div class="bubble-line">· <span class="hl-warn">圣诞红绿镜面</span> 试戴率较昨日 <span class="hl-down">↓ 12%</span>，热度进入衰退，建议准备新年替换款。</div><div class="bubble-line">· 自然流量下单转化率 <span class="hl-up">9.2%</span>，高于上周同期，店铺整体运营状态良好。</div></div><button class="regen-link" onclick="regenBubble()"><i class="ti ti-refresh"></i> <span id="regen-label">重新生成播报</span></button></div></div>
+  <div class="assistant-card"><div class="assistant-icon"><i class="ti ti-sparkles"></i></div><div class="assistant-body"><div class="assistant-header"><div class="assistant-title"><i class="ti ti-sparkles"></i> 运营助手播报</div><div class="period-switch"><button class="period-btn active" onclick="switchPeriod(this,'today')">今日</button><button class="period-btn" onclick="switchPeriod(this,'week')">本周</button></div></div><div class="assistant-bubble" id="assistant-bubble"><div class="bubble-line">· 今日试戴总次数 <span class="hl-up">↑ 23%</span>，其中投流带来的试戴占比达 <span class="hl-up">41%</span>，效果显著。</div><div class="bubble-line">· <span class="hl-warn">奶油渐变猫眼</span> 收藏率今日达 <span class="hl-up">38%</span>，连续3天上升，建议今日上架并考虑加大投流。</div><div class="bubble-line">· <span class="hl-warn">圣诞红绿镜面</span> 试戴率较昨日 <span class="hl-down">↓ 12%</span>，热度进入衰退，建议准备新年替换款。</div><div class="bubble-line">· 自然流量下单转化率 <span class="hl-up">9.2%</span>，高于上周同期，店铺整体运营状态良好。</div></div><button class="regen-link" onclick="regenBubble()"><i class="ti ti-refresh"></i> <span id="regen-label">重新生成播报</span></button></div></div>
   <!-- 转化漏斗 + 迷你趋势图 -->
   <div class="card">
     <div class="card-header"><div class="card-title"><i class="ti ti-filter"></i> 转化漏斗对比</div><span class="card-sub">数据周期：本周</span></div>
@@ -65,14 +65,46 @@
         <div class="funnel-row"><span class="funnel-label">试戴点击</span><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:76%;background:#9FE1CB"></div></div><span class="funnel-val">76%</span><span class="delta delta-up">+4%</span></div>
         <div class="funnel-row"><span class="funnel-label">试戴收藏</span><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:44%;background:#5DCAA5"></div></div><span class="funnel-val">44%</span><span class="delta delta-up">+7%</span></div>
         <div class="funnel-row"><span class="funnel-label">试戴下单</span><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:18%;background:#1D9E75"></div></div><span class="funnel-val">18%</span><span class="delta delta-up">+2%</span></div>
-        <div class="mini-chart"><svg viewBox="0 0 200 50" class="trend-svg"><polyline points="10,40 40,35 70,30 100,28 130,24 160,22 190,18" fill="none" stroke="#1D9E75" stroke-width="2"/><polyline points="10,40 40,35 70,30 100,28 130,24 160,22 190,18" fill="url(#grad-a)" stroke="none"/><defs><linearGradient id="grad-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1D9E75" stop-opacity="0.2"/><stop offset="100%" stop-color="#1D9E75" stop-opacity="0"/></linearGradient></defs></svg><span class="mini-chart-label">近7天趋势</span></div>
+        <div class="mini-chart chart-natural">
+          <div class="mini-chart-head"><span>近 7 天转化趋势</span><em>+7.4%</em></div>
+          <svg viewBox="0 0 220 96" class="trend-svg" aria-hidden="true">
+            <defs><linearGradient id="grad-natural" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7fa98b" stop-opacity="0.32"/><stop offset="100%" stop-color="#7fa98b" stop-opacity="0"/></linearGradient></defs>
+            <path class="chart-grid" d="M14 16H206 M14 40H206 M14 64H206"/>
+            <path class="chart-area" d="M14,62 L46,56 L78,50 L110,46 L142,38 L174,30 L206,22 L206,76 L14,76 Z" fill="url(#grad-natural)"/>
+            <polyline class="chart-line" points="14,62 46,56 78,50 110,46 142,38 174,30 206,22" stroke="#7fa98b"/>
+            <circle class="chart-pt d1" cx="14" cy="62" r="2.4" fill="#7fa98b"/>
+            <circle class="chart-pt d2" cx="46" cy="56" r="2.4" fill="#7fa98b"/>
+            <circle class="chart-pt d3" cx="78" cy="50" r="2.4" fill="#7fa98b"/>
+            <circle class="chart-pt d4" cx="110" cy="46" r="2.4" fill="#7fa98b"/>
+            <circle class="chart-pt d5" cx="142" cy="38" r="2.4" fill="#7fa98b"/>
+            <circle class="chart-pt d6" cx="174" cy="30" r="2.4" fill="#7fa98b"/>
+            <circle class="chart-pt chart-pt-end d7" cx="206" cy="22" r="4.5" fill="#7fa98b"/>
+            <g class="chart-axis"><text x="14" y="92">一</text><text x="46" y="92">二</text><text x="78" y="92">三</text><text x="110" y="92">四</text><text x="142" y="92">五</text><text x="174" y="92">六</text><text x="206" y="92">日</text></g>
+          </svg>
+        </div>
       </div>
       <div class="funnel-col">
         <div class="channel-label"><span class="badge badge-paid">投流流量</span> 推广帖子进入</div>
         <div class="funnel-row"><span class="funnel-label">试戴点击</span><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:88%;background:#AFA9EC"></div></div><span class="funnel-val">88%</span><span class="delta delta-up">+11%</span></div>
         <div class="funnel-row"><span class="funnel-label">试戴收藏</span><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:58%;background:#7F77DD"></div></div><span class="funnel-val">58%</span><span class="delta delta-up">+14%</span></div>
         <div class="funnel-row"><span class="funnel-label">试戴下单</span><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:26%;background:#534AB7"></div></div><span class="funnel-val">26%</span><span class="delta delta-up">+8%</span></div>
-        <div class="mini-chart"><svg viewBox="0 0 200 50" class="trend-svg"><polyline points="10,42 40,38 70,32 100,26 130,20 160,17 190,14" fill="none" stroke="#534AB7" stroke-width="2"/><polyline points="10,42 40,38 70,32 100,26 130,20 160,17 190,14" fill="url(#grad-b)" stroke="none"/><defs><linearGradient id="grad-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#534AB7" stop-opacity="0.2"/><stop offset="100%" stop-color="#534AB7" stop-opacity="0"/></linearGradient></defs></svg><span class="mini-chart-label">近7天趋势</span></div>
+        <div class="mini-chart chart-paid">
+          <div class="mini-chart-head"><span>近 7 天投流趋势</span><em>+12.8%</em></div>
+          <svg viewBox="0 0 220 96" class="trend-svg" aria-hidden="true">
+            <defs><linearGradient id="grad-paid" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8d79b8" stop-opacity="0.34"/><stop offset="100%" stop-color="#8d79b8" stop-opacity="0"/></linearGradient></defs>
+            <path class="chart-grid" d="M14 16H206 M14 40H206 M14 64H206"/>
+            <path class="chart-area" d="M14,66 L46,58 L78,48 L110,40 L142,30 L174,22 L206,14 L206,76 L14,76 Z" fill="url(#grad-paid)"/>
+            <polyline class="chart-line" points="14,66 46,58 78,48 110,40 142,30 174,22 206,14" stroke="#8d79b8"/>
+            <circle class="chart-pt d1" cx="14" cy="66" r="2.4" fill="#8d79b8"/>
+            <circle class="chart-pt d2" cx="46" cy="58" r="2.4" fill="#8d79b8"/>
+            <circle class="chart-pt d3" cx="78" cy="48" r="2.4" fill="#8d79b8"/>
+            <circle class="chart-pt d4" cx="110" cy="40" r="2.4" fill="#8d79b8"/>
+            <circle class="chart-pt d5" cx="142" cy="30" r="2.4" fill="#8d79b8"/>
+            <circle class="chart-pt d6" cx="174" cy="22" r="2.4" fill="#8d79b8"/>
+            <circle class="chart-pt chart-pt-end d7" cx="206" cy="14" r="4.5" fill="#8d79b8"/>
+            <g class="chart-axis"><text x="14" y="92">一</text><text x="46" y="92">二</text><text x="78" y="92">三</text><text x="110" y="92">四</text><text x="142" y="92">五</text><text x="174" y="92">六</text><text x="206" y="92">日</text></g>
+          </svg>
+        </div>
       </div>
     </div>
   </div>
