@@ -24,6 +24,7 @@ class PushCardResponse(BaseModel):
     coupon_price: float
     tagline: str
     status: str = "pending"
+    audit_details: dict[str, Any] = {}
 
 
 class AuditPushCardRequest(BaseModel):
@@ -41,6 +42,10 @@ class AuditPushCardResponse(BaseModel):
     style_id: str
     status: str
     message: str
+    selected_image_url: str | None = None
+    selected_coupon_url: str | None = None
+    final_tagline: str | None = None
+    final_price: float | None = None
 
 
 class ReportRequest(BaseModel):
@@ -60,10 +65,34 @@ class Suggestion(BaseModel):
     adopted: bool = False
 
 
+class ReportMetric(BaseModel):
+    key: str
+    label: str
+    value: str
+    delta: str = ""
+    delta_direction: Literal["up", "down", "flat"] = "flat"
+
+
+class ReportHotStyleItem(BaseModel):
+    style_id: str
+    style_name: str
+    hot_score: float
+    life_cycle: str
+    try_on_count: int = 0
+    favorite_count: int = 0
+    order_count: int = 0
+    favorite_rate: float = 0
+
+
 class ReportResponse(BaseModel):
     report_summary: str
     suggestions: list[Suggestion]
     generation_mode: str = "mock"
+    snapshot_id: str | None = None
+    period_label: str = ""
+    metrics: list[ReportMetric] = []
+    hot_styles: list[ReportHotStyleItem] = []
+    merchant_prefs: dict[str, Any] = {}
 
 
 class SkillExecuteRequest(BaseModel):

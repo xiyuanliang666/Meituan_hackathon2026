@@ -1,16 +1,19 @@
 import json
 
+from app.prompts.operations import SYSTEM_PROMPT as OPERATIONS_SYSTEM_PROMPT
 from app.schemas.operations import (
     AuditPushCardRequest,
     AuditPushCardResponse,
     PushCardResponse,
+    ReportHotStyleItem,
+    ReportMetric,
     ReportRequest,
     ReportResponse,
     SkillExecuteRequest,
     SkillExecuteResponse,
     Suggestion,
 )
-from app.services.business_db import list_event_stats, list_hot_push_candidates, upsert_push_audit
+from app.services.business_db import create_report_snapshot, list_event_stats, list_hot_push_candidates, upsert_push_audit
 from app.services.multimodal_client import (
     MultimodalModelError,
     generate_text_json_with_gemini,
@@ -35,7 +38,16 @@ def audit_push_card(push_id: str, request: AuditPushCardRequest) -> AuditPushCar
         )
 
     status = "published" if request.action == "accepted" else "rejected"
-    upsert_push_audit(push_id=push_id, style_id=candidate["style_id"], merchant_id=request.merchant_id, status=status)
+    audit_record = upsert_push_audit(
+        push_id=push_id,
+        style_id=candidate["style_id"],
+        merchant_id=request.merchant_id,
+        status=status,
+        selected_image_url=request.selected_image_url or candidate["enhanced_style_image_url"],
+        selected_coupon_url=request.selected_coupon_url or f"https://i.meituan.com/coupon/{candidate['style_id']}",
+        final_tagline=request.final_tagline or _tagline(candidate["style_name"], _flatten_tags(candidate["tags"])),
+        final_price=request.final_price if request.final_price is not None else _coupon_price(candidate["style_id"]),
+    )
     message = "已模拟上架并开通 AI 试戴入口" if status == "published" else "已归档该爆款推送"
     return AuditPushCardResponse(
         success=True,
@@ -43,6 +55,10 @@ def audit_push_card(push_id: str, request: AuditPushCardRequest) -> AuditPushCar
         style_id=candidate["style_id"],
         status=status,
         message=message,
+        selected_image_url=audit_record.get("selected_image_url"),
+        selected_coupon_url=audit_record.get("selected_coupon_url"),
+        final_tagline=audit_record.get("final_tagline"),
+        final_price=audit_record.get("final_price"),
     )
 
 
@@ -50,19 +66,18 @@ def generate_report(request: ReportRequest) -> ReportResponse:
     context = _report_context_from_db(request)
     if is_gemini_enabled():
         try:
-            return _generate_report_with_gemini(context)
+            response = _generate_report_with_gemini(context)
+            return _persist_report_response(context, response)
         except (MultimodalModelError, KeyError, TypeError, ValueError):
-            return _generate_report_mock(context)
-    return _generate_report_mock(context)
+            response = _generate_report_mock(context)
+            return _persist_report_response(context, response)
+    response = _generate_report_mock(context)
+    return _persist_report_response(context, response)
 
 
 def _generate_report_with_gemini(context: dict) -> ReportResponse:
     data = generate_text_json_with_gemini(
-        system_prompt=(
-            "你是美团本地生活美甲商户运营助手。只输出合法 JSON，不要输出 Markdown。"
-            "请基于经营数据生成简洁、可执行、适合商户阅读的复盘报告和运营建议。"
-            "字段名使用英文，面向商户展示的字段值和文案必须使用中文。"
-        ),
+        system_prompt=OPERATIONS_SYSTEM_PROMPT,
         user_prompt=(
             "请输出字段 report_summary:string, suggestions:array。"
             "每条 suggestion 必须包含 text:string, action_type:string, "
@@ -89,6 +104,10 @@ def _generate_report_with_gemini(context: dict) -> ReportResponse:
         report_summary=str(data.get("report_summary") or "已生成本期运营复盘。"),
         suggestions=suggestions,
         generation_mode="gemini-2.5-flash",
+        period_label=context["period_label"],
+        metrics=[ReportMetric(**item) for item in context["metrics"]],
+        hot_styles=[ReportHotStyleItem(**item) for item in context["hot_style_cards"]],
+        merchant_prefs=context["merchant_prefs"],
     )
 
 
@@ -131,6 +150,10 @@ def _generate_report_mock(context: dict) -> ReportResponse:
             ),
         ],
         generation_mode="db_mock",
+        period_label=context["period_label"],
+        metrics=[ReportMetric(**item) for item in context["metrics"]],
+        hot_styles=[ReportHotStyleItem(**item) for item in context["hot_style_cards"]],
+        merchant_prefs=context["merchant_prefs"],
     )
 
 
@@ -182,6 +205,7 @@ def _push_card_from_candidate(candidate: dict) -> dict:
         "coupon_price": _coupon_price(candidate["style_id"]),
         "tagline": _tagline(candidate["style_name"], style_tags),
         "status": candidate.get("status", "pending"),
+        "audit_details": candidate.get("audit_details", {}),
     }
 
 
@@ -270,17 +294,108 @@ def _report_context_from_db(request: ReportRequest) -> dict:
         }
         for card in push_cards[:5]
     ]
+    metrics = _report_metrics(request.period, current_period, last_period)
+    hot_style_cards = [_hot_style_item(card) for card in push_cards[:3]]
 
     return {
         "merchant_id": request.merchant_id,
         "period": request.period,
         "merchant_prefs": request.merchant_prefs,
+        "period_label": _period_label(request.period),
         "current_period": current_period,
         "last_period": last_period,
         "hot_styles": hot_styles,
+        "metrics": metrics,
+        "hot_style_cards": hot_style_cards,
         "event_stats": event_stats,
         "push_cards": [card.model_dump() for card in push_cards[:5]],
     }
+
+
+def _persist_report_response(context: dict[str, object], response: ReportResponse) -> ReportResponse:
+    snapshot = create_report_snapshot(
+        merchant_id=str(context.get("merchant_id") or ""),
+        period=str(context.get("period") or "this_week"),
+        merchant_prefs=response.merchant_prefs,
+        current_period=context.get("current_period") if isinstance(context.get("current_period"), dict) else {},
+        last_period=context.get("last_period") if isinstance(context.get("last_period"), dict) else {},
+        metrics=[metric.model_dump() for metric in response.metrics],
+        hot_styles=[item.model_dump() for item in response.hot_styles],
+        suggestions=[item.model_dump() for item in response.suggestions],
+        report_summary=response.report_summary,
+        generation_mode=response.generation_mode,
+    )
+    return response.model_copy(update={"snapshot_id": snapshot["snapshot_id"]})
+
+
+def _report_metrics(period: str, current_period: dict[str, float], last_period: dict[str, float]) -> list[dict[str, str]]:
+    try_on_count = int(current_period.get("try_on_count", 0))
+    favorite_rate = float(current_period.get("favorite_rate", 0))
+    order_rate = float(current_period.get("order_rate", 0))
+    boost_order_rate = min(order_rate * 2.2, 0.95)
+    boost_try_share = min(max(float(current_period.get("try_rate", 0)) * 1.4, 0.12), 0.85)
+    favorite_delta = _delta(favorite_rate, float(last_period.get("favorite_rate", 0)))
+    order_delta = _delta(order_rate, float(last_period.get("order_rate", 0)))
+    try_delta = _delta(float(current_period.get("try_rate", 0)), float(last_period.get("try_rate", 0)))
+    count_delta = _delta(float(try_on_count), float(last_period.get("try_on_count", 0)))
+    return [
+        _metric("try_on_count", "试戴总次数" if period != "today" else "今日试戴次数", str(try_on_count), count_delta),
+        _metric("order_rate", "自然流量下单率", _percent(order_rate), order_delta),
+        _metric("boost_order_rate", "投流流量下单率", _percent(boost_order_rate), order_delta),
+        _metric("favorite_rate", "试戴收藏率", _percent(favorite_rate), favorite_delta),
+        _metric("boost_try_share", "投流试戴占比", _percent(boost_try_share), try_delta),
+        _metric("new_styles", "新上架款式", str(max(1, min(6, try_on_count // 5 or 1))), "— 持平"),
+    ]
+
+
+def _hot_style_item(card: PushCardResponse) -> dict[str, object]:
+    stats = next((item for item in card.signal_sources if item.signal == "实时行为"), None)
+    behavior_value = int(stats.value) if stats else 0
+    try_on_count = max(behavior_value // 3, 0)
+    favorite_count = max(behavior_value // 8, 0)
+    order_count = max(behavior_value // 18, 0)
+    favorite_rate = round(favorite_count / try_on_count, 4) if try_on_count else 0
+    return {
+        "style_id": card.style_id,
+        "style_name": card.style_name,
+        "hot_score": card.hot_score,
+        "life_cycle": card.life_cycle,
+        "try_on_count": try_on_count,
+        "favorite_count": favorite_count,
+        "order_count": order_count,
+        "favorite_rate": favorite_rate,
+    }
+
+
+def _period_label(period: str) -> str:
+    mapping = {
+        "this_week": "本周复盘",
+        "this_month": "本月复盘",
+        "today": "今日运营日报",
+    }
+    return mapping.get(period, "运营复盘")
+
+
+def _metric(key: str, label: str, value: str, delta: str) -> dict[str, str]:
+    return {
+        "key": key,
+        "label": label,
+        "value": value,
+        "delta": delta,
+        "delta_direction": _delta_direction(delta),
+    }
+
+
+def _delta_direction(delta: str) -> str:
+    if delta.startswith("+"):
+        return "up"
+    if delta.startswith("-"):
+        return "down"
+    return "flat"
+
+
+def _percent(value: float) -> str:
+    return f"{value * 100:.1f}%"
 
 
 def _period_from_event_stats(event_stats: list[dict]) -> dict:

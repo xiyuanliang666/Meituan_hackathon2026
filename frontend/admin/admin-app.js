@@ -1,19 +1,35 @@
 // ===== 页面切换 =====
-function switchPage(page) {
+const ADMIN_PAGES = new Set(['home', 'dashboard', 'assets', 'push', 'boost', 'report', 'notify', 'upload', 'confirm']);
+const SPECIAL_PAGE_NAV_PARENT = { confirm: 'push', upload: 'assets', notify: 'home' };
+
+function pageFromHash() {
+  const page = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+  return ADMIN_PAGES.has(page) ? page : 'home';
+}
+
+function switchPage(page, options = {}) {
+  if (!ADMIN_PAGES.has(page)) page = 'home';
+  const shouldUpdateHash = options.updateHash !== false;
+
   document.querySelectorAll('.page-panel').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
-  const special = ['confirm', 'upload', 'notify'];
   const panel = document.getElementById('panel-' + page);
   if (panel) { panel.style.display = 'block'; panel.classList.add('active'); }
-  if (!special.includes(page)) {
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const tab = document.querySelector(`.nav-tab[data-page="${page}"]`);
-    if (tab) tab.classList.add('active');
+  const navPage = SPECIAL_PAGE_NAV_PARENT[page] || page;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  const tab = document.querySelector(`.nav-tab[data-page="${navPage}"]`);
+  if (tab) tab.classList.add('active');
+  if (shouldUpdateHash && window.location.hash !== '#' + page) {
+    window.location.hash = page;
   }
   // 页面加载时从后端拉取数据
   if (page === 'dashboard') loadDashboardData();
   if (page === 'push') loadPushData();
   if (page === 'report') loadReportData('week');
 }
+
+window.addEventListener('hashchange', () => {
+  switchPage(pageFromHash(), { updateHash: false });
+});
 
 // ===== 后端状态 =====
 let adminBackendAvailable = false;
@@ -79,23 +95,33 @@ async function regenBubble() {
 }
 
 // ===== 素材管理 =====
-let stylesData = [
-  { name: '奶油渐变猫眼', tags: ['猫眼','渐变','奶油白','玫瑰金'], lc: 'up', lcText: '上升期', date: '2024-11-28', bg: '#FAEEDA', bc: '#EF9F27', ic: '#BA7517', seasonal: false, image_url: 'http://p1.meituan.net/pilotimages/69614397f0ecb559b98cb46a5a46f3b32642714.png' },
-  { name: '圣诞红绿镜面', tags: ['镜面','红色','绿色','圣诞'], lc: 'peak', lcText: '峰值期', date: '2024-11-25', bg: '#E1F5EE', bc: '#5DCAA5', ic: '#0F6E56', seasonal: true, image_url: 'http://p0.meituan.net/pilotimages/bc153edf655dd6961dc9f8e95ad8cd1e2561531.png' },
-  { name: '法式简约纯色', tags: ['法式','简约','裸色'], lc: 'down', lcText: '衰退期', date: '2024-11-20', bg: '#EEEDFE', bc: '#AFA9EC', ic: '#534AB7', seasonal: false, image_url: 'http://p0.meituan.net/pilotimages/1248ad42d355b98257e5fbcdf90efc552138079.png' },
-  { name: '暗红晕染手绘', tags: ['晕染','手绘','暗红'], lc: 'none', lcText: '未关联', date: '2024-11-18', bg: '#FCE4D6', bc: '#F0997B', ic: '#993C1D', seasonal: false, image_url: 'http://p0.meituan.net/pilotimages/137aad1f6a36655ae395cf7dc57604642782680.png' }
-];
+let stylesData = [];
+let stylesLoading = false;
+let activeStyleStatus = 'active';
+let styleSearchQuery = '';
+const selectedStyleIds = new Set();
+let styleSearchTimer = null;
+let styleDeleteMode = false;
 
 async function loadStylesData() {
-  if (!adminBackendAvailable) return;
+  if (!adminBackendAvailable) {
+    renderStyleList();
+    return;
+  }
+  stylesLoading = true;
+  renderStyleList();
   try {
-    const data = await apiGet('/db/styles');
+    const data = await apiGet('/db/styles', {
+      status: activeStyleStatus,
+      q: styleSearchQuery,
+      limit: 200,
+    });
     if (data && data.styles && data.styles.length > 0) {
       stylesData = data.styles.map(s => ({
         style_id: s.style_id || s.id,
         name: s.style_name || s.name || '',
         tags: Object.values(s.tags || {}).flat().filter(Boolean).slice(0, 4),
-        lc: s.life_cycle === '上升期' ? 'up' : s.life_cycle === '峰值期' ? 'peak' : s.life_cycle === '衰退期' ? 'down' : '',
+        lc: lifeCycleClass(s.life_cycle),
         lcText: s.life_cycle || '',
         date: s.created_at || '',
         bg: '#FAEEDA',
@@ -104,34 +130,157 @@ async function loadStylesData() {
         seasonal: false,
         image_url: s.enhanced_style_image_url || '',
         tryon_enabled: s.tryon_enabled !== false,
+        status: s.status || 'active',
+        review_status: s.review_status || '',
+        source: s.source || '',
       }));
-      renderStyleList();
+    } else {
+      stylesData = [];
     }
   } catch (e) {
     console.warn('[素材] 加载款式失败:', e.message);
+    stylesData = [];
   }
+  stylesLoading = false;
+  renderStyleList();
+}
+
+function switchStyleTab(status, btn) {
+  activeStyleStatus = status;
+  selectedStyleIds.clear();
+  styleDeleteMode = false;
+  document.querySelectorAll('#panel-assets .asset-tabs .asset-tab').forEach(b => {
+    if (b.textContent.includes('已上架') || b.textContent.includes('草稿箱')) b.classList.remove('active');
+  });
+  if (btn) btn.classList.add('active');
+  updateStyleDeleteUI();
+  loadStylesData();
+}
+
+function onStyleSearchInput(value) {
+  styleSearchQuery = value.trim();
+  clearTimeout(styleSearchTimer);
+  styleSearchTimer = setTimeout(loadStylesData, 250);
 }
 
 function renderStyleList() {
   const list = document.getElementById('style-list');
   if (!list) return;
+
+  if (stylesLoading) {
+    list.innerHTML = `<div class="style-empty-loading"><i class="ti ti-loader" style="font-size:20px;animation:spin 1s linear infinite;display:block;margin-bottom:8px"></i><span>标签提取中...</span></div>`;
+    return;
+  }
+
+  if (!stylesData.length) {
+    updateStyleCount();
+    list.innerHTML = `<div class="style-empty-loading"><i class="ti ti-photo" style="font-size:20px;display:block;margin-bottom:8px;color:#ccc"></i><span>暂无款式，请上传新款式</span></div>`;
+    return;
+  }
+
+  updateStyleCount();
   list.innerHTML = stylesData.map((s, i) => `
-    <div class="style-item" id="style-${i}">
-      <div class="style-thumb" style="background:${s.bg};border-color:${s.bc};cursor:pointer" onclick="event.stopPropagation();${s.image_url ? `openLightbox('${s.image_url}')` : ''}">
+    <div class="style-item" id="style-${i}" onclick="${styleDeleteMode ? `toggleStyleSelection('${s.style_id}', !selectedStyleIds.has('${s.style_id}')); renderStyleList(); updateStyleDeleteUI()` : `continueDraft('${s.style_id}')`}">
+      ${styleDeleteMode ? `<input type="checkbox" class="style-select" ${selectedStyleIds.has(s.style_id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleStyleSelection('${s.style_id}', this.checked); updateStyleDeleteUI()">` : ''}
+      <div class="style-thumb" style="background:${s.bg};border-color:${s.bc}">
         ${s.image_url ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><i class="ti ti-photo" style="color:${s.ic};display:none"></i>` : `<i class="ti ti-photo" style="color:${s.ic}"></i>`}
       </div>
       <div class="style-info">
-        <div class="style-name-text">${s.name} ${s.seasonal ? '<span class="seasonal-badge">节日限定</span>' : '<span class="evergreen-badge">常青款</span>'}</div>
+        <div class="style-name-text">${s.name || '未命名款式'} ${s.status === 'draft' ? '<span class="seasonal-badge">草稿</span>' : '<span class="evergreen-badge">已上架</span>'}</div>
         <div class="style-tags-row">${s.tags.slice(0,3).map(t=>`<span class="stag stag-craft">${t}</span>`).join('')}</div>
-        <div class="style-meta-row">${s.lcText ? `<span class="lc-pill lc-${s.lc}"><i class="ti ti-${s.lc==='up'?'trending-up':s.lc==='peak'?'flame':s.lc==='down'?'trending-down':'minus'}"></i>${s.lcText}</span>` : ''}<span class="style-date">${s.date}</span></div>
+        <div class="style-meta-row">${styleStatusPill(s)}<span class="style-date">${s.date}</span></div>
       </div>
       <div class="style-actions">
         <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:${s.tryon_enabled?'#375623':'#aaa'};cursor:pointer" title="AI试戴开关">
-          <input type="checkbox" ${s.tryon_enabled?'checked':''} onchange="toggleTryon('${s.style_id}',this.checked)" style="accent-color:#FFCD00">试戴
+          <input type="checkbox" ${s.tryon_enabled?'checked':''} onclick="event.stopPropagation()" onchange="toggleTryon('${s.style_id}',this.checked)" style="accent-color:#FFCD00">试戴
         </label>
-        <div class="btn-icon danger" onclick="deleteStyleFromBackend('${s.style_id}',${i})"><i class="ti ti-trash"></i></div>
       </div>
     </div>`).join('');
+}
+
+function updateStyleCount() {
+  const el = document.getElementById('style-count');
+  if (el) el.textContent = `共 ${stylesData.length} 款`;
+}
+
+function styleStatusPill(style) {
+  if (style.status === 'draft') {
+    const klass = style.review_status === 'tag_extracting' ? 'peak' : style.review_status === 'tag_failed' ? 'down' : 'watch';
+    const icon = style.review_status === 'tag_extracting' ? 'loader' : style.review_status === 'tag_failed' ? 'alert-circle' : 'clock';
+    return `<span class="lc-pill lc-${klass}"><i class="ti ti-${icon}"></i>${reviewStatusText(style.review_status)}</span>`;
+  }
+  const text = style.lcText || '观察期';
+  return `<span class="lc-pill lc-${lifeCycleClass(text)}"><i class="ti ti-${lifeCycleIcon(text)}"></i>${text}</span>`;
+}
+
+function lifeCycleClass(lifeCycle) {
+  if (lifeCycle === '上升期') return 'up';
+  if (lifeCycle === '峰值期') return 'peak';
+  if (lifeCycle === '衰退期') return 'down';
+  return 'watch';
+}
+
+function lifeCycleIcon(lifeCycle) {
+  if (lifeCycle === '上升期') return 'trending-up';
+  if (lifeCycle === '峰值期') return 'flame';
+  if (lifeCycle === '衰退期') return 'trending-down';
+  return 'eye';
+}
+
+function reviewStatusText(status) {
+  return {
+    tag_extracting: '标签提取中',
+    tag_ready: '待确认标签',
+    merchant_confirmed: '标签已确认',
+    composite_ready: '合成待确认',
+    published: '已完成',
+    tag_failed: '提取失败',
+  }[status] || status;
+}
+
+function toggleStyleSelection(styleId, checked) {
+  if (checked) selectedStyleIds.add(styleId);
+  else selectedStyleIds.delete(styleId);
+}
+
+function toggleStyleDeleteMode(force) {
+  styleDeleteMode = typeof force === 'boolean' ? force : !styleDeleteMode;
+  if (!styleDeleteMode) selectedStyleIds.clear();
+  updateStyleDeleteUI();
+  renderStyleList();
+}
+
+function updateStyleDeleteUI() {
+  const bar = document.getElementById('style-delete-bar');
+  const toggle = document.getElementById('style-delete-toggle');
+  const selectAll = document.getElementById('style-select-all');
+  if (bar) bar.style.display = styleDeleteMode ? 'flex' : 'none';
+  if (toggle) toggle.innerHTML = `<i class="ti ti-trash"></i> ${styleDeleteMode ? '删除中' : '删除'}`;
+  if (selectAll) {
+    selectAll.checked = !!stylesData.length && selectedStyleIds.size === stylesData.length;
+    selectAll.indeterminate = selectedStyleIds.size > 0 && selectedStyleIds.size < stylesData.length;
+  }
+}
+
+function toggleSelectAllStyles(checked) {
+  selectedStyleIds.clear();
+  if (checked) stylesData.forEach(item => selectedStyleIds.add(item.style_id));
+  renderStyleList();
+  updateStyleDeleteUI();
+}
+
+async function confirmDeleteSelectedStyles() {
+  const ids = [...selectedStyleIds];
+  if (!ids.length) { showToast('请先选择款式'); return; }
+  if (!confirm(`确定删除选中的 ${ids.length} 款？`)) return;
+  if (adminBackendAvailable) {
+    await apiPost('/styles/batch-delete', { style_ids: ids });
+  }
+  selectedStyleIds.clear();
+  styleDeleteMode = false;
+  updateStyleDeleteUI();
+  showToast('已删除所选款式');
+  loadStylesData();
 }
 
 async function deleteStyleFromBackend(styleId, idx) {
@@ -165,34 +314,240 @@ async function toggleTryon(styleId, enabled) {
   }
 }
 
-const templates = [{ label:'自然肤色',selected:true },{ label:'白皙肤色',selected:true },{ label:'暖肤色',selected:true },{ label:'冷白肤色',selected:false },{ label:'店铺自有',selected:false }];
-let backendTemplates = [];
+const selectedTemplateIds = new Set();
+const selectedMerchantTemplateIds = new Set();
+let publicTemplates = [];
+let merchantTemplates = [];
+let activeTemplateTab = 'public';
+let activeUploadTemplateTab = 'public';
+let merchantTemplateDeleteMode = false;
+const MAX_COMPOSITE_TEMPLATE_SELECTION = 4;
 
 async function renderTemplates() {
-  const grid = document.getElementById('template-grid');
-  if (!grid) return;
-  
   if (adminBackendAvailable) {
     try {
-      const data = await apiGet('/templates');
-      if (Array.isArray(data) && data.length > 0) {
-        backendTemplates = data;
-        grid.innerHTML = data.map((t, i) => `<div class="tpl-item selected" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><img src="${t.hand_image_url}" style="width:100%;height:60%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'"><span style="font-size:10px;margin-top:2px">${t.label || t.source || '模板'}</span></div>`).join('');
-        updateTplCount();
-        return;
-      }
-    } catch (e) {}
+      publicTemplates = await apiGet('/templates/public');
+      merchantTemplates = await apiGet('/templates', { source: 'merchant' });
+    } catch (e) {
+      console.warn('[模板] 加载失败:', e.message);
+    }
   }
-  
-  grid.innerHTML = templates.map((t,i) => `<div class="tpl-item ${t.selected?'selected':''}" onclick="toggleTemplate(${i})"><div class="tpl-check">✓</div><i class="ti ti-hand-finger"></i><span>${t.label}</span></div>`).join('');
+  renderTemplateLibrary('template-groups', activeTemplateTab);
+  renderTemplateLibrary('upload-template-groups', activeUploadTemplateTab);
+  updateTplCount();
+  updateMerchantTemplateDeleteUI();
+}
+
+function switchTemplateTab(tab, btn, isUpload = false) {
+  if (isUpload) activeUploadTemplateTab = tab;
+  else {
+    activeTemplateTab = tab;
+    if (tab !== 'merchant') {
+      merchantTemplateDeleteMode = false;
+      selectedMerchantTemplateIds.clear();
+    }
+  }
+  const scope = isUpload ? '#upload-step-3' : '#panel-assets';
+  document.querySelectorAll(`${scope} .asset-tab`).forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (!isUpload) {
+    const toolbar = document.getElementById('merchant-template-toolbar');
+    if (toolbar) toolbar.style.display = tab === 'merchant' ? 'flex' : 'none';
+    updateMerchantTemplateDeleteUI();
+  }
+  renderTemplateLibrary(isUpload ? 'upload-template-groups' : 'template-groups', tab);
+}
+
+function renderTemplateLibrary(containerId, tab) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const items = tab === 'public' ? publicTemplates : merchantTemplates;
+  if (!items.length) {
+    container.innerHTML = `<div class="style-empty-loading"><i class="ti ti-hand-finger" style="font-size:20px;display:block;margin-bottom:8px;color:#ccc"></i><span>${tab === 'public' ? '公共模板加载中' : '暂无自有模板，请上传'}</span></div>`;
+    return;
+  }
+  const grouped = groupTemplatesBySkinTone(items);
+  container.innerHTML = Object.entries(grouped).map(([group, groupItems]) => `
+    <div class="tpl-group">
+      <div class="tag-section-label">${group}</div>
+      <div class="template-grid">${groupItems.map(item => renderTemplateItem(item, tab, containerId)).join('')}</div>
+    </div>
+  `).join('');
+}
+
+function groupTemplatesBySkinTone(items) {
+  return items.reduce((acc, item) => {
+    const key = item.skin_tone || '未分类';
+    (acc[key] ||= []).push(item);
+    return acc;
+  }, {});
+}
+
+function renderTemplateItem(t, tab = 'public', containerId = '') {
+  const id = t.hand_template_id;
+  const isMerchant = tab === 'merchant';
+  const showDeleteSelect = isMerchant && containerId === 'template-groups' && merchantTemplateDeleteMode;
+  const clickAction = showDeleteSelect
+    ? `toggleMerchantTemplateDeleteSelection('${id}', !selectedMerchantTemplateIds.has('${id}')); renderTemplateLibrary('template-groups', 'merchant'); updateMerchantTemplateDeleteUI()`
+    : `toggleTemplateSelection('${id}')`;
+  return `<div class="tpl-item ${selectedTemplateIds.has(id) ? 'selected' : ''}" onclick="${clickAction}">
+    <div class="tpl-check">✓</div>
+    ${showDeleteSelect ? `<input type="checkbox" class="tpl-delete-check" ${selectedMerchantTemplateIds.has(id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleMerchantTemplateDeleteSelection('${id}', this.checked)">` : ''}
+    <button class="tpl-info-btn" onclick="event.stopPropagation();openTemplateInfo('${id}')"><i class="ti ti-info-circle"></i></button>
+    <img src="${staticUrl(t.hand_image_url)}" style="width:100%;height:70%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'">
+    <span>${t.label || t.skin_tone || '模板'}</span>
+  </div>`;
+}
+
+function toggleTemplateSelection(templateId) {
+  if (selectedTemplateIds.has(templateId)) selectedTemplateIds.delete(templateId);
+  else {
+    if (selectedTemplateIds.size >= MAX_COMPOSITE_TEMPLATE_SELECTION) {
+      showToast(`最多只能选择 ${MAX_COMPOSITE_TEMPLATE_SELECTION} 张模板`);
+      return;
+    }
+    selectedTemplateIds.add(templateId);
+  }
+  renderTemplateLibrary('template-groups', activeTemplateTab);
+  renderTemplateLibrary('upload-template-groups', activeUploadTemplateTab);
   updateTplCount();
 }
-function toggleTemplate(idx) { templates[idx].selected = !templates[idx].selected; renderTemplates(); }
-function updateTplCount() { const n = document.querySelectorAll('.tpl-item.selected').length; const el = document.getElementById('tpl-count'); if(el) el.textContent = '已选 '+n+' 张'; }
-function toggleTplDropdown(e) { e.stopPropagation(); document.getElementById('tpl-add-dropdown').classList.toggle('show'); }
+
+function toggleMerchantTemplateDeleteSelection(templateId, checked) {
+  if (checked) selectedMerchantTemplateIds.add(templateId);
+  else selectedMerchantTemplateIds.delete(templateId);
+}
+
+function toggleMerchantTemplateDeleteMode(force) {
+  merchantTemplateDeleteMode = typeof force === 'boolean' ? force : !merchantTemplateDeleteMode;
+  if (!merchantTemplateDeleteMode) selectedMerchantTemplateIds.clear();
+  updateMerchantTemplateDeleteUI();
+  renderTemplateLibrary('template-groups', 'merchant');
+}
+
+function updateMerchantTemplateDeleteUI() {
+  const bar = document.getElementById('merchant-template-delete-bar');
+  const toggle = document.getElementById('template-delete-toggle');
+  const selectAll = document.getElementById('merchant-template-select-all');
+  if (bar) bar.style.display = activeTemplateTab === 'merchant' && merchantTemplateDeleteMode ? 'flex' : 'none';
+  if (toggle) toggle.innerHTML = `<i class="ti ti-trash"></i> ${merchantTemplateDeleteMode ? '删除中' : '删除'}`;
+  if (selectAll) {
+    selectAll.checked = !!merchantTemplates.length && selectedMerchantTemplateIds.size === merchantTemplates.length;
+    selectAll.indeterminate = selectedMerchantTemplateIds.size > 0 && selectedMerchantTemplateIds.size < merchantTemplates.length;
+  }
+}
+
+function toggleSelectAllMerchantTemplates(checked) {
+  selectedMerchantTemplateIds.clear();
+  if (checked) merchantTemplates.forEach(item => selectedMerchantTemplateIds.add(item.hand_template_id));
+  renderTemplateLibrary('template-groups', 'merchant');
+  updateMerchantTemplateDeleteUI();
+}
+
+async function confirmDeleteSelectedTemplates() {
+  const ids = [...selectedMerchantTemplateIds];
+  if (!ids.length) { showToast('请先选择自有模板'); return; }
+  if (!confirm(`确定删除选中的 ${ids.length} 张自有模板？`)) return;
+  try {
+    await apiPost('/templates/batch-delete', { template_ids: ids });
+    ids.forEach(id => {
+      selectedMerchantTemplateIds.delete(id);
+      selectedTemplateIds.delete(id);
+    });
+    merchantTemplateDeleteMode = false;
+    updateMerchantTemplateDeleteUI();
+    showToast('自有模板已删除');
+    await renderTemplates();
+  } catch (e) {
+    alert('删除失败：' + e.message);
+  }
+}
+
+function updateTplCount() {
+  const text = `已选 ${selectedTemplateIds.size}/${MAX_COMPOSITE_TEMPLATE_SELECTION} 张`;
+  const el = document.getElementById('tpl-count');
+  const uploadEl = document.getElementById('upload-tpl-count');
+  if (el) el.textContent = text;
+  if (uploadEl) uploadEl.textContent = text;
+}
+function toggleTplDropdown(e) { e.stopPropagation(); }
+
+function findTemplateInMemory(templateId) {
+  return [...publicTemplates, ...merchantTemplates].find(item => item.hand_template_id === templateId);
+}
+
+async function openTemplateInfo(templateId) {
+  let template = findTemplateInMemory(templateId);
+  if (adminBackendAvailable) {
+    try {
+      template = await apiGet(`/templates/${templateId}`);
+    } catch (e) {
+      console.warn('[模板] 详情加载失败:', e.message);
+    }
+  }
+  if (!template) return;
+
+  const editable = template.source === 'merchant' || template.source === 'merchant_upload';
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay show';
+  modal.id = 'template-info-modal';
+  modal.innerHTML = `<div class="modal-content template-info-modal">
+    <div class="detail-head"><h3>${editable ? '编辑自有模板信息' : '公共模板信息'}</h3><button class="btn-icon" onclick="document.getElementById('template-info-modal').remove()"><i class="ti ti-x"></i></button></div>
+    <div class="template-info-grid">
+      <img src="${staticUrl(template.hand_image_url)}" class="template-info-img" onerror="this.style.display='none'">
+      <div class="template-info-form">
+        <label>模板名称</label>
+        <input id="tpl-edit-label" class="asset-search" value="${escapeAttr(template.label || '')}" ${editable ? '' : 'disabled'}>
+        <label>肤色分类</label>
+        ${templateSelect('tpl-edit-skin', ['冷白', '自然肤', '暖黄', '深肤', 'unknown'], template.skin_tone, editable)}
+        <label>手型分类</label>
+        ${templateSelect('tpl-edit-shape', ['修长', '标准', '短宽', 'unknown'], template.hand_shape, editable)}
+        <label>分析依据</label>
+        <textarea id="tpl-edit-reason" class="template-reason-input" ${editable ? '' : 'disabled'}>${escapeHtml(template.analysis_reason || '')}</textarea>
+        <div class="style-tags-row">${(template.recommended_colors || []).map(t => `<span class="stag stag-color">${t}</span>`).join('')}${(template.recommended_styles || []).map(t => `<span class="stag stag-style">${t}</span>`).join('')}</div>
+        <div class="style-date">来源：${template.source || ''}${template.analysis_mode ? ' · ' + template.analysis_mode : ''}</div>
+        ${editable ? `<button class="btn-primary-sm" onclick="saveTemplateInfo('${templateId}')"><i class="ti ti-device-floppy"></i> 保存信息</button>` : `<div class="style-date">公共模板由平台维护，商家不可修改</div>`}
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function templateSelect(id, options, value, editable) {
+  return `<select id="${id}" class="coupon-select" ${editable ? '' : 'disabled'}>${options.map(opt => `<option value="${opt}" ${opt === value ? 'selected' : ''}>${opt}</option>`).join('')}</select>`;
+}
+
+function escapeAttr(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function saveTemplateInfo(templateId) {
+  try {
+    const payload = {
+      label: document.getElementById('tpl-edit-label').value.trim(),
+      skin_tone: document.getElementById('tpl-edit-skin').value,
+      hand_shape: document.getElementById('tpl-edit-shape').value,
+      analysis_reason: document.getElementById('tpl-edit-reason').value.trim(),
+    };
+    await apiRequest(`/templates/${templateId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    showToast('模板信息已保存');
+    document.getElementById('template-info-modal').remove();
+    await renderTemplates();
+  } catch (e) {
+    alert('保存失败：' + e.message);
+  }
+}
 
 async function handleTplUpload() {
-  document.getElementById('tpl-add-dropdown').classList.remove('show');
+  const dd = document.getElementById('tpl-add-dropdown');
+  if (dd) dd.classList.remove('show');
   if (adminBackendAvailable) {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -211,57 +566,34 @@ async function handleTplUpload() {
       }
     };
     fileInput.click();
-  } else {
-    templates.push({label:'自定义'+(templates.length+1),selected:true});
-    renderTemplates();
   }
 }
-
-async function handleTplPublic() {
-  document.getElementById('tpl-add-dropdown').classList.remove('show');
-  if (adminBackendAvailable) {
-    try {
-      const publicTpls = await apiGet('/templates/public');
-      const modal = document.createElement('div');
-      modal.className = 'modal-overlay show';
-      modal.id = 'public-tpl-modal';
-      modal.innerHTML = `<div class="modal-content" style="max-width:500px;text-align:left">
-        <h3 style="margin-bottom:12px"><i class="ti ti-layout-grid" style="color:#CC9900"></i> 公共模板库</h3>
-        <p style="font-size:12px;color:#888;margin-bottom:12px">选择模板后加入已选列表</p>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
-          ${publicTpls.map(t => `<div class="tpl-item" style="aspect-ratio:1;cursor:pointer" onclick="selectPublicTpl('${t.hand_image_url}','${t.label}');this.classList.add('selected')"><div class="tpl-check">✓</div><img src="${t.hand_image_url}" style="width:100%;height:70%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'"><span style="font-size:9px">${t.label}</span></div>`).join('')}
-        </div>
-        <button class="btn-ghost" onclick="document.getElementById('public-tpl-modal').remove()">关闭</button>
-      </div>`;
-      document.body.appendChild(modal);
-    } catch (e) {
-      alert('加载公共模板库失败');
-    }
-  } else {
-    templates.push({label:'公共'+(templates.length+1),selected:false});
-    renderTemplates();
-  }
-}
-
-async function selectPublicTpl(imageUrl, label) {
-  if (!adminBackendAvailable) return;
-  try {
-    await apiPost('/templates', { image_url: imageUrl, label: label });
-    showToast('已添加: ' + label);
-    renderTemplates();
-  } catch (e) {
-    console.warn('[公共模板] 添加失败:', e.message);
-  }
-}
-document.addEventListener('click', function() { const dd = document.getElementById('tpl-add-dropdown'); if(dd) dd.classList.remove('show'); });
 
 // ===== 上传弹窗 =====
 function showUploadModal() { document.getElementById('upload-modal').classList.add('show'); }
-function hideUploadModal() { document.getElementById('upload-modal').classList.remove('show'); }
+function hideUploadModal() {
+  document.getElementById('upload-modal').classList.remove('show');
+  setUploadModalStatus('');
+}
+
+function setUploadModalStatus(text) {
+  const el = document.getElementById('upload-modal-status');
+  if (el) el.textContent = text || '';
+}
+
+function getStyleTabButton(status) {
+  return [...document.querySelectorAll('#panel-assets .asset-tabs .asset-tab')]
+    .find(btn => status === 'draft' ? btn.textContent.includes('草稿箱') : btn.textContent.includes('已上架')) || null;
+}
+
+function openDraftStylesTab() {
+  switchPage('assets');
+  switchStyleTab('draft', getStyleTabButton('draft'));
+}
 
 function goUploadPage() {
   hideUploadModal();
-  
+
   if (adminBackendAvailable) {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -272,25 +604,36 @@ function goUploadPage() {
       try {
         const result = await apiUpload('/upload-image', file);
         console.log('[上传] 款式图上传成功:', result);
-        goUploadStep(2);
-        switchPage('upload');
-        
-        // 自动提取标签并动态渲染
+
         if (result.url || result.image_url) {
           const imageUrl = result.url || result.image_url;
           lastUploadedImageUrl = imageUrl;
-          // 更新上传预览区域
+          const draft = await apiPost('/styles/upload-draft', {
+            image_url: imageUrl,
+            style_name: file.name.replace(/\.[^.]+$/, '') || '新款式草稿',
+          });
+          currentUploadStyleId = draft.style_id;
+          localStorage.setItem('current_upload_style_id', currentUploadStyleId);
+
+          // 先更新预览图，切到步骤2
           const previewImg = document.querySelector('.upload-img');
-          if (previewImg) previewImg.innerHTML = `<img src="${staticUrl(imageUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='<i class=\\'ti ti-photo\\' style=\\'font-size:32px;color:#BA7517\\'></i>'">`;
-          
-          try {
-            const tags = await apiPost('/extract-tags', { image_url: imageUrl });
-            console.log('[标签提取] 成功:', tags);
-            lastExtractedTags = tags;
-            renderExtractedTags(tags);
-          } catch (tagErr) {
-            console.warn('[标签提取] 失败，使用默认标签:', tagErr.message);
-          }
+          if (previewImg) previewImg.innerHTML = `<img src="${staticUrl(imageUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer" onclick="event.stopPropagation();openLightbox('${staticUrl(imageUrl)}')" onerror="this.outerHTML='<i class=\\'ti ti-photo\\' style=\\'font-size:32px;color:#BA7517\\'></i>'">`;
+
+          // 更新文件信息
+          const filenameEl = document.querySelector('.upload-filename');
+          if (filenameEl) filenameEl.textContent = file.name;
+          const nameInput = document.getElementById('upload-style-name');
+          if (nameInput) nameInput.value = draft.style_name || file.name.replace(/\.[^.]+$/, '') || '新款式草稿';
+          const sizeEl = document.querySelector('.upload-size');
+          if (sizeEl) sizeEl.textContent = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+
+          // 显示标签提取中
+          const statusEl = document.getElementById('upload-tag-status');
+          if (statusEl) { statusEl.style.display = 'inline-flex'; statusEl.innerHTML = '<i class="ti ti-loader"></i> 标签提取中...'; }
+
+          goUploadStep(2);
+          switchPage('upload');
+          pollDraftTags(currentUploadStyleId);
         }
       } catch (err) {
         alert('上传失败：' + err.message);
@@ -301,6 +644,62 @@ function goUploadPage() {
     goUploadStep(2);
     switchPage('upload');
   }
+}
+
+function goBatchUploadPage() {
+  if (!adminBackendAvailable) {
+    showToast('当前环境暂不支持批量上传');
+    return;
+  }
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*';
+  fileInput.multiple = true;
+  fileInput.onchange = async (e) => {
+    const files = [...(e.target.files || [])].filter(Boolean);
+    if (!files.length) return;
+    showUploadModal();
+    setUploadModalStatus(`准备上传 ${files.length} 张款式图...`);
+    const uploadedItems = [];
+    let uploadedCount = 0;
+    let failedCount = 0;
+
+    for (const file of files) {
+      try {
+        setUploadModalStatus(`正在上传第 ${uploadedCount + failedCount + 1}/${files.length} 张：${file.name}`);
+        const result = await apiUpload('/upload-image', file);
+        const imageUrl = result.url || result.image_url;
+        if (!imageUrl) throw new Error('未返回图片地址');
+        uploadedItems.push({
+          image_url: imageUrl,
+          style_name: file.name.replace(/\.[^.]+$/, '') || '新款式草稿',
+        });
+        uploadedCount += 1;
+      } catch (err) {
+        failedCount += 1;
+        console.warn('[批量上传] 单张上传失败:', file.name, err.message);
+      }
+    }
+
+    if (!uploadedItems.length) {
+      setUploadModalStatus('');
+      alert('批量上传失败：没有可用的款式图片上传成功');
+      return;
+    }
+
+    try {
+      setUploadModalStatus(`正在创建 ${uploadedItems.length} 个草稿并提交标签提取...`);
+      const result = await apiPost('/styles/upload-drafts', { items: uploadedItems });
+      hideUploadModal();
+      openDraftStylesTab();
+      await loadStylesData();
+      showToast(`已创建 ${result.created || uploadedItems.length} 个草稿，正在提取标签${failedCount ? `，${failedCount} 张上传失败` : ''}`);
+    } catch (err) {
+      setUploadModalStatus('');
+      alert('批量建草稿失败：' + err.message);
+    }
+  };
+  fileInput.click();
 }
 
 // 将后端返回的标签动态渲染到确认标签页
@@ -324,11 +723,13 @@ function renderExtractedTags(tags) {
   if (tags.scene_tags) marketTags.push(...tags.scene_tags);
   if (tags.season_tags) marketTags.push(...tags.season_tags);
   
+  const candidateGroups = splitCandidateTags(tags.candidate_tags || []);
+
   // 渲染工艺维度
   const craftFiltered = craftTags.filter(t => t && t !== 'unknown');
-  craftGroup.innerHTML = craftFiltered.map(t => 
-    `<span class="tag tag-craft">${t} <i class="tag-del" onclick="this.parentElement.remove()">×</i></span>`
-  ).join('') + '<button class="tag-add-btn" onclick="addTagPrompt(\'craft-tags\',\'tag-craft\')">+</button>';
+  craftGroup.innerHTML = craftFiltered.map(t => renderTagChip(t, 'tag-craft')).join('')
+    + candidateGroups.craft.map(t => renderTagChip(t, 'tag-craft', true)).join('')
+    + '<button class="tag-add-btn" onclick="addTagPrompt(\'craft-tags\',\'tag-craft\')">+</button>';
   
   // 渲染营销维度
   const marketFiltered = marketTags.filter(t => t && t !== 'unknown');
@@ -336,17 +737,65 @@ function renderExtractedTags(tags) {
   marketGroup.innerHTML = marketFiltered.map((t, i) => {
     const cls = i < (tags.color_system || []).length ? 'tag-color' : 
                 i < (tags.color_system || []).length + (tags.style_tags || []).length ? 'tag-style' : 'tag-season';
-    return `<span class="tag ${cls}">${t} <i class="tag-del" onclick="this.parentElement.remove()">×</i></span>`;
-  }).join('') + '<button class="tag-add-btn" onclick="addTagPrompt(\'market-tags\',\'tag-color\')">+</button>';
+    return renderTagChip(t, cls);
+  }).join('')
+    + candidateGroups.market.map(t => renderTagChip(t, 'tag-color', true)).join('')
+    + '<button class="tag-add-btn" onclick="addTagPrompt(\'market-tags\',\'tag-color\')">+</button>';
   
   // 更新标签计数
   const total = craftFiltered.length + marketFiltered.length;
-  const resultEl = document.querySelector('.upload-result');
-  if (resultEl) resultEl.innerHTML = `<i class="ti ti-check"></i> 共识别到 <strong>${total}</strong> 个标签`;
+  const resultEl = document.getElementById('upload-tag-status');
+  if (resultEl) {
+    resultEl.style.display = 'inline-flex';
+    resultEl.innerHTML = `<i class="ti ti-check"></i> 共识别到 <strong>${total}</strong> 个标签`;
+  }
+}
+
+function renderTagChip(name, tagClass, isCandidate = false) {
+  return `<span class="tag ${tagClass}" data-candidate="${isCandidate ? '1' : '0'}">${name} <i class="tag-del" onclick="removeUploadTag(this)">×</i></span>`;
+}
+
+function splitCandidateTags(candidateTags) {
+  const groups = { craft: [], market: [] };
+  candidateTags.forEach(item => {
+    const text = String(item || '').trim();
+    if (!text) return;
+    const parts = text.split(':');
+    const field = parts.length > 1 ? parts[0].trim() : '';
+    const value = (parts.length > 1 ? parts.slice(1).join(':') : text).trim();
+    if (!value) return;
+    if (field === '工艺维度' || field === 'craft-tags') groups.craft.push(value);
+    else groups.market.push(value);
+  });
+  return groups;
+}
+
+function removeUploadTag(el) {
+  el.parentElement.remove();
+  scheduleSaveCurrentUploadTags();
 }
 
 let activeTagDropdown = null;
 let tagSearchTimer = null;
+let taxonomyCatalogCache = null;
+
+const TAG_FIELD_GROUPS = {
+  craft: [
+    'nail_technique',
+    'nail_decoration',
+    'nail_finish',
+    'nail_shape',
+    'nail_length'
+  ],
+  market: [
+    'color_system',
+    'style_tags',
+    'scene_tags',
+    'season_tags',
+    'hand_skin_tone',
+    'hand_shape'
+  ]
+};
 
 function closeTagDropdown(e) {
   if (activeTagDropdown && (!e || !activeTagDropdown.contains(e.target))) {
@@ -361,52 +810,171 @@ function onTagDropdownKey(e) {
   if (e.key === 'Escape') closeTagDropdown();
 }
 
-function addTagPrompt(groupId, tagClass) {
+async function ensureTaxonomyCatalog() {
+  if (taxonomyCatalogCache) return taxonomyCatalogCache;
+  if (!adminBackendAvailable) return null;
+  const data = await apiGet('/taxonomy');
+  taxonomyCatalogCache = {
+    version: data.version || 'v2',
+    fields: Array.isArray(data.fields) ? data.fields : []
+  };
+  return taxonomyCatalogCache;
+}
+
+function getTagPromptConfig(groupId) {
+  const kind = groupId === 'craft-tags' ? 'craft' : 'market';
+  return {
+    kind,
+    fields: TAG_FIELD_GROUPS[kind]
+  };
+}
+
+function positionTagDropdown(dd, rect) {
+  const dropdownWidth = 320;
+  const margin = 12;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const estimatedHeight = 420;
+
+  let left = rect.left;
+  if (left + dropdownWidth > viewportWidth - margin) {
+    left = Math.max(margin, viewportWidth - dropdownWidth - margin);
+  }
+
+  let top = rect.bottom + 4;
+  if (top + estimatedHeight > viewportHeight - margin) {
+    top = Math.max(margin, rect.top - estimatedHeight - 4);
+  }
+
+  dd.style.left = `${left}px`;
+  dd.style.top = `${top}px`;
+  dd.style.width = `${dropdownWidth}px`;
+}
+
+function renderTagDropdownList(dd, groupId, tagClass, query) {
+  const listEl = dd.querySelector('.tag-dd-list');
+  const config = getTagPromptConfig(groupId);
+  const fields = config.fields;
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const existingValues = new Set(
+    [...document.querySelectorAll(`#${groupId} .tag`)]
+      .map(el => tagText(el).toLowerCase())
+  );
+
+  if (!taxonomyCatalogCache || !Array.isArray(taxonomyCatalogCache.fields)) {
+    listEl.innerHTML = '<div class="tag-dd-empty">标签库暂时不可用</div>';
+    return;
+  }
+
+  const fieldGroups = taxonomyCatalogCache.fields
+    .filter(field => fields.includes(field.field_key))
+    .map(field => {
+      const options = Array.isArray(field.options) ? field.options : [];
+      const filtered = options.filter(option => {
+        const value = String(option.value || '').trim();
+        if (!value) return false;
+        if (value.toLowerCase() === 'unknown') return false;
+        if (!normalizedQuery) return true;
+        return value.toLowerCase().includes(normalizedQuery);
+      });
+      return {
+        fieldKey: field.field_key,
+        label: field.label_cn || field.field_key,
+        options: filtered
+      };
+    })
+    .filter(group => group.options.length > 0);
+
+  if (!fieldGroups.length) {
+    listEl.innerHTML = normalizedQuery
+      ? '<div class="tag-dd-empty">没有找到匹配标签，可以直接添加为新标签</div>'
+      : '<div class="tag-dd-empty">当前分类下暂无可选标签</div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  fieldGroups.forEach(group => {
+    const section = document.createElement('div');
+    section.className = 'tag-dd-group';
+
+    const title = document.createElement('div');
+    title.className = 'tag-dd-group-title';
+    title.textContent = group.label;
+    section.appendChild(title);
+
+    const optionsWrap = document.createElement('div');
+    optionsWrap.className = 'tag-dd-group-options';
+
+    group.options.forEach(option => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'tag-dd-item';
+      item.innerHTML = `<span>${option.value}</span>${existingValues.has(String(option.value).toLowerCase()) ? '<span class="dd-picked">已添加</span>' : ''}`;
+      if (existingValues.has(String(option.value).toLowerCase())) {
+        item.classList.add('is-selected');
+      }
+      item.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (existingValues.has(String(option.value).toLowerCase())) return;
+        _insertTag(groupId, tagClass, option.value, false);
+        renderTagDropdownList(dd, groupId, tagClass, dd.querySelector('input').value);
+      });
+      optionsWrap.appendChild(item);
+    });
+
+    section.appendChild(optionsWrap);
+    listEl.appendChild(section);
+  });
+}
+
+async function addTagPrompt(groupId, tagClass) {
   closeTagDropdown();
 
   const btn = document.querySelector(`#${groupId} .tag-add-btn`);
   if (!btn) return;
 
   const rect = btn.getBoundingClientRect();
-  const craftFields = ['nail_technique', 'nail_decoration', 'nail_finish', 'nail_shape', 'nail_length'];
-  const marketFields = ['color_system', 'style_tags', 'scene_tags', 'season_tags', 'hand_skin_tone', 'hand_shape'];
-  const fields = groupId === 'craft-tags' ? craftFields : marketFields;
 
   const dd = document.createElement('div');
   dd.className = 'tag-search-dropdown';
-  dd.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left}px;width:240px`;
+  dd.style.cssText = 'position:fixed;width:320px';
   dd.innerHTML = `<input type="text" placeholder="输入关键词搜索..." autocomplete="off">
-    <div class="tag-dd-list"><div class="tag-dd-empty">输入关键词搜索已有标签</div></div>
+    <div class="tag-dd-list"><div class="tag-dd-empty">标签加载中...</div></div>
     <div class="tag-dd-new">+ 添加为新标签</div>`;
+  positionTagDropdown(dd, rect);
 
   const input = dd.querySelector('input');
   const newBtn = dd.querySelector('.tag-dd-new');
+  const listEl = dd.querySelector('.tag-dd-list');
 
   input.addEventListener('input', function () {
     clearTimeout(tagSearchTimer);
     const q = this.value.trim();
-    if (!q) {
-      dd.querySelector('.tag-dd-list').innerHTML = '<div class="tag-dd-empty">输入关键词搜索已有标签</div>';
-      return;
-    }
-    if (!adminBackendAvailable) return;
-    tagSearchTimer = setTimeout(() => _doTagSearch(q, fields, dd, groupId, tagClass), 250);
+    tagSearchTimer = setTimeout(() => renderTagDropdownList(dd, groupId, tagClass, q), 120);
   });
 
   newBtn.addEventListener('click', function (e) {
     e.stopPropagation();
     const v = input.value.trim();
     if (v) {
-      _insertTag(groupId, tagClass, v);
+      _insertTag(groupId, tagClass, v, true);
       closeTagDropdown();
     }
   });
 
   dd.addEventListener('click', function (e) { e.stopPropagation(); });
+  listEl.addEventListener('wheel', function (e) { e.stopPropagation(); }, { passive: true });
 
   document.body.appendChild(dd);
   setTimeout(() => input.focus(), 50);
   activeTagDropdown = dd;
+
+  try {
+    await ensureTaxonomyCatalog();
+    renderTagDropdownList(dd, groupId, tagClass, '');
+  } catch (e) {
+    dd.querySelector('.tag-dd-list').innerHTML = '<div class="tag-dd-empty">标签加载失败，请稍后重试</div>';
+  }
 
   setTimeout(() => {
     document.addEventListener('click', closeTagDropdown);
@@ -414,61 +982,32 @@ function addTagPrompt(groupId, tagClass) {
   }, 0);
 }
 
-async function _doTagSearch(q, fields, dd, groupId, tagClass) {
-  const listEl = dd.querySelector('.tag-dd-list');
-  listEl.innerHTML = '<div class="tag-dd-empty">搜索中...</div>';
-
-  try {
-    const results = await Promise.all(fields.map(f =>
-      apiGet('/taxonomy/options', { field_key: f, q, limit: 5 })
-        .then(items => (items || []).map(item => ({ value: item.value, field: f })))
-        .catch(() => [])
-    ));
-
-    const allResults = results.flat();
-    if (allResults.length === 0) {
-      listEl.innerHTML = '<div class="tag-dd-empty">未找到匹配标签，在上方输入框输入后点击"添加为新标签"</div>';
-      return;
-    }
-
-    const seen = new Set();
-    const unique = allResults.filter(r => {
-      if (seen.has(r.value)) return false;
-      seen.add(r.value);
-      return true;
-    }).slice(0, 15);
-
-    listEl.innerHTML = '';
-    unique.forEach(r => {
-      const item = document.createElement('div');
-      item.className = 'tag-dd-item';
-      item.innerHTML = `<span>${r.value}</span><span class="dd-field">${r.field}</span>`;
-      item.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        _insertTag(groupId, tagClass, r.value);
-        closeTagDropdown();
-      });
-      listEl.appendChild(item);
-    });
-  } catch (e) {
-    listEl.innerHTML = '<div class="tag-dd-empty">搜索失败，请重试</div>';
-  }
-}
-
-function _insertTag(groupId, tagClass, name) {
+function _insertTag(groupId, tagClass, name, isCandidate = false) {
   const group = document.getElementById(groupId);
   const btn = group.querySelector('.tag-add-btn');
+  const normalized = String(name || '').trim().toLowerCase();
+  const exists = [...group.querySelectorAll('.tag')].some(el => tagText(el).toLowerCase() === normalized);
+  if (exists) return;
   const tag = document.createElement('span');
   tag.className = 'tag ' + tagClass;
-  tag.innerHTML = `${name} <i class="tag-del" onclick="this.parentElement.remove()">×</i>`;
+  tag.dataset.candidate = isCandidate ? '1' : '0';
+  tag.innerHTML = `${name} <i class="tag-del" onclick="removeUploadTag(this)">×</i>`;
   group.insertBefore(tag, btn);
+  scheduleSaveCurrentUploadTags();
 }
 
 // ===== 上传步骤 =====
 let lastUploadedImageUrl = ''; // 暂存上传图片URL
 let lastExtractedTags = {};    // 暂存提取的标签
+let currentUploadStyleId = localStorage.getItem('current_upload_style_id') || '';
+let currentCompositeIds = [];
+let draftPollTimer = null;
+let uploadTagSaveTimer = null;
 
-function goUploadStep(step) {
+async function goUploadStep(step) {
+  if (step === 3 && currentUploadStyleId) {
+    await saveCurrentUploadTags();
+  }
   document.querySelectorAll('.upload-step-panel').forEach(p => p.style.display = 'none');
   document.getElementById('upload-step-'+step).style.display = 'block';
   [2,3,4].forEach(s => {
@@ -481,48 +1020,164 @@ function goUploadStep(step) {
   if (step === 3) {
     loadTemplatesForUpload();
   }
-  if (step === 4) {
-    // 步骤4：入库
-    createStyleInBackend();
+}
+
+async function saveCurrentUploadTags() {
+  await saveUploadStyleName();
+  const payload = {
+    color_system: lastExtractedTags.color_system || [],
+    style_tags: lastExtractedTags.style_tags || [],
+    scene_tags: lastExtractedTags.scene_tags || [],
+    season_tags: lastExtractedTags.season_tags || [],
+    skin_tone_suitability: lastExtractedTags.skin_tone_suitability || [],
+    nail_technique: lastExtractedTags.nail_technique || [],
+    nail_decoration: lastExtractedTags.nail_decoration || [],
+    nail_finish: lastExtractedTags.nail_finish || 'unknown',
+    nail_shape: lastExtractedTags.nail_shape || 'unknown',
+    nail_length: lastExtractedTags.nail_length || 'unknown',
+    finger_shape: lastExtractedTags.finger_shape || 'unknown',
+    nail_bed_shape: lastExtractedTags.nail_bed_shape || 'unknown',
+    candidate_tags: lastExtractedTags.candidate_tags || [],
+  };
+  const craftEls = [...document.querySelectorAll('#craft-tags .tag')];
+  const marketEls = [...document.querySelectorAll('#market-tags .tag')];
+  const craftTexts = craftEls.map(tagText).filter(Boolean);
+  const marketTexts = marketEls.map(tagText).filter(Boolean);
+  if (craftTexts.length) payload.nail_technique = craftTexts;
+  if (marketTexts.length) payload.style_tags = marketTexts;
+  payload.candidate_tags = [
+    ...craftEls.filter(el => el.dataset.candidate === '1').map(el => `工艺维度: ${tagText(el)}`),
+    ...marketEls.filter(el => el.dataset.candidate === '1').map(el => `营销维度: ${tagText(el)}`),
+  ].filter(Boolean);
+  try {
+    const saved = await apiRequest(`/styles/${currentUploadStyleId}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    lastExtractedTags = saved;
+  } catch (e) {
+    console.warn('[标签] 保存失败:', e.message);
   }
 }
 
-async function createStyleInBackend() {
-  if (!adminBackendAvailable || !lastUploadedImageUrl) return;
+function tagText(el) {
+  return el.textContent.replace('×', '').trim();
+}
+
+function scheduleSaveCurrentUploadTags() {
+  if (!currentUploadStyleId) return;
+  clearTimeout(uploadTagSaveTimer);
+  uploadTagSaveTimer = setTimeout(saveCurrentUploadTags, 350);
+}
+
+async function saveUploadStyleName() {
+  if (!adminBackendAvailable || !currentUploadStyleId) return;
+  const input = document.getElementById('upload-style-name');
+  const styleName = (input?.value || '').trim();
+  if (!styleName || styleName === '待上传...') return;
   try {
-    await apiPost('/styles', {
-      style_name: lastExtractedTags.style_name || '新款式',
-      image_url: lastUploadedImageUrl,
-      tags: lastExtractedTags,
+    await apiRequest(`/styles/${currentUploadStyleId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ style_name: styleName }),
     });
-    console.log('[入库] 款式入库成功');
-    // 自动刷新素材列表
-    loadStylesData();
   } catch (e) {
-    console.warn('[入库] 失败:', e.message);
+    console.warn('[款式名称] 保存失败:', e.message);
   }
+}
+
+async function continueDraft(styleId) {
+  currentUploadStyleId = styleId;
+  localStorage.setItem('current_upload_style_id', styleId);
+  await restoreUploadDraft(styleId);
+  goUploadStep(2);
+  switchPage('upload');
+}
+
+async function restoreUploadDraft(styleId = currentUploadStyleId) {
+  if (!styleId || !adminBackendAvailable) return;
+  try {
+    const style = await apiGet(`/styles/${styleId}`);
+    currentUploadStyleId = style.style_id;
+    lastUploadedImageUrl = style.image_url;
+    lastExtractedTags = style.tags || {};
+    const previewImg = document.querySelector('.upload-img');
+    if (previewImg && style.image_url) previewImg.innerHTML = `<img src="${staticUrl(style.image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer" onclick="event.stopPropagation();openLightbox('${staticUrl(style.image_url)}')">`;
+    const filenameEl = document.querySelector('.upload-filename');
+    if (filenameEl) filenameEl.textContent = style.style_name || '新款式草稿';
+    const nameInput = document.getElementById('upload-style-name');
+    if (nameInput) nameInput.value = style.style_name || '新款式草稿';
+    const sizeEl = document.querySelector('.upload-size');
+    if (sizeEl) sizeEl.textContent = reviewStatusText(style.review_status || '');
+    if (style.review_status === 'tag_extracting') {
+      setTagStatus('标签仍在提取中，请等待', true);
+      pollDraftTags(styleId);
+    } else if (Object.keys(lastExtractedTags).length) {
+      renderExtractedTags(lastExtractedTags);
+    }
+  } catch (e) {
+    console.warn('[草稿] 恢复失败:', e.message);
+  }
+}
+
+function setTagStatus(text, loading = false) {
+  const statusEl = document.getElementById('upload-tag-status');
+  if (statusEl) {
+    statusEl.style.display = 'inline-flex';
+    statusEl.innerHTML = `<i class="ti ti-${loading ? 'loader' : 'info-circle'}"></i> ${text}`;
+  }
+}
+
+function pollDraftTags(styleId) {
+  clearInterval(draftPollTimer);
+  draftPollTimer = setInterval(async () => {
+    try {
+      const style = await apiGet(`/styles/${styleId}`);
+      if (style.review_status === 'tag_extracting') {
+        setTagStatus('标签仍在提取中，请等待', true);
+        return;
+      }
+      clearInterval(draftPollTimer);
+      lastExtractedTags = style.tags || {};
+      if (style.review_status === 'tag_failed') {
+        setTagStatus('标签提取失败，请手动添加');
+      } else {
+        renderExtractedTags(lastExtractedTags);
+      }
+      loadStylesData();
+    } catch (e) {
+      clearInterval(draftPollTimer);
+    }
+  }, 1500);
 }
 
 async function previewComposite() {
   const area = document.getElementById('composite-preview-area');
-  if (!area || !lastUploadedImageUrl) return;
+  if (!area || !currentUploadStyleId) return;
 
-  const selectedTpls = document.querySelectorAll('#upload-tpl-grid .tpl-item.selected img');
-  if (selectedTpls.length === 0) {
+  const templateIds = [...selectedTemplateIds];
+  if (templateIds.length === 0) {
     area.innerHTML = '<div style="font-size:12px;color:#CC2200;margin-top:8px">请先在模板网格中选择至少一个模板</div>';
     return;
   }
+  if (templateIds.length > MAX_COMPOSITE_TEMPLATE_SELECTION) {
+    area.innerHTML = `<div style="font-size:12px;color:#CC2200;margin-top:8px">最多只能选择 ${MAX_COMPOSITE_TEMPLATE_SELECTION} 张模板进行合成</div>`;
+    return;
+  }
 
-  const templateUrl = selectedTpls[0].src;
-  area.innerHTML = '<div class="composite-preview-loading"><i class="ti ti-loader"></i> 合成中...</div>';
+  area.innerHTML = '<div class="composite-preview-loading"><i class="ti ti-loader"></i> 批量合成中...</div>';
 
   try {
-    const result = await apiPost('/generate-composite', {
-      style_image_url: lastUploadedImageUrl,
-      template_image_url: templateUrl,
+    const results = await apiPost(`/styles/${currentUploadStyleId}/composites/batch-generate`, {
+      template_ids: templateIds,
     });
-    if (result && result.composite_image_url) {
-      area.innerHTML = `<img src="${staticUrl(result.composite_image_url)}" class="composite-preview-img" alt="合成预览">`;
+    if (Array.isArray(results) && results.length) {
+      currentCompositeIds = results.map(item => item.composite_id);
+      area.innerHTML = `<div class="composite-grid">${results.map(item => `
+        <div class="composite-card selected" onclick="toggleCompositeCard(this, '${item.composite_id}')">
+          <div class="tpl-check">✓</div>
+          <img src="${staticUrl(item.result_image_url)}" class="composite-preview-img" alt="合成预览">
+        </div>
+      `).join('')}</div>`;
     } else {
       area.innerHTML = '<div style="font-size:12px;color:#CC2200;margin-top:8px">合成失败，请重试</div>';
     }
@@ -532,18 +1187,35 @@ async function previewComposite() {
 }
 
 async function loadTemplatesForUpload() {
-  const grid = document.getElementById('upload-tpl-grid');
-  if (!grid) return;
-  if (adminBackendAvailable) {
-    try {
-      const data = await apiGet('/templates');
-      if (Array.isArray(data) && data.length > 0) {
-        grid.innerHTML = data.map(t => `<div class="tpl-item selected" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><img src="${t.hand_image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'"><span>${t.label || t.source}</span></div>`).join('');
-        return;
-      }
-    } catch (e) {}
+  await renderTemplates();
+}
+
+function toggleCompositeCard(el, compositeId) {
+  el.classList.toggle('selected');
+  if (el.classList.contains('selected')) {
+    if (!currentCompositeIds.includes(compositeId)) currentCompositeIds.push(compositeId);
+  } else {
+    currentCompositeIds = currentCompositeIds.filter(id => id !== compositeId);
   }
-  grid.innerHTML = templates.map((t,i) => `<div class="tpl-item ${t.selected?'selected':''}" onclick="this.classList.toggle('selected')"><div class="tpl-check">✓</div><i class="ti ti-hand-finger"></i><span>${t.label}</span></div>`).join('');
+}
+
+async function finishUpload() {
+  if (!currentUploadStyleId) return;
+  try {
+    if (currentCompositeIds.length) {
+      await apiRequest(`/styles/${currentUploadStyleId}/composites/selection`, {
+        method: 'PUT',
+        body: JSON.stringify({ selected_composite_ids: currentCompositeIds }),
+      });
+    }
+    await apiPost(`/styles/${currentUploadStyleId}/publish`, {});
+    localStorage.removeItem('current_upload_style_id');
+    goUploadStep(4);
+    loadStylesData();
+    showToast('款式已完成上传');
+  } catch (e) {
+    alert('完成上传失败：' + e.message);
+  }
 }
 
 // ===== 爆款推送（联调 /api/push-cards） =====
@@ -633,11 +1305,18 @@ function goConfirm() {
 async function confirmPublish() {
   if (adminBackendAvailable && pushCardsData.length > 0) {
     try {
-      await apiPost(`/push-cards/${pushCardsData[0].push_id}/audit`, {
+      const selectedCouponId = document.getElementById('coupon-select').value;
+      const selectedCoupon = coupons[selectedCouponId];
+      const result = await apiPost(`/push-cards/${pushCardsData[0].push_id}/audit`, {
         action: 'accepted',
         merchant_id: 'demo_shop',
+        selected_image_url: pushCardsData[0].style_image_urls?.[0] || null,
+        selected_coupon_url: pushCardsData[0].coupon_url || selectedCoupon?.name || null,
+        final_tagline: document.getElementById('push-tagline').textContent.trim(),
+        final_price: Number(document.getElementById('price-slider-val').textContent || 0),
       });
       console.log('[上架] 审核通过');
+      if (result && result.message) showToast(result.message);
     } catch (e) {
       console.warn('[上架] API 调用失败:', e.message);
     }
@@ -705,10 +1384,90 @@ async function loadReportData(period) {
     });
     if (result) {
       console.log('[报告] 加载成功:', result);
+      renderApiReportData(result, period);
     }
   } catch (e) {
     console.warn('[报告] 加载失败:', e.message);
   }
+}
+
+let currentReportSuggestions = [];
+
+function renderApiReportData(result, period) {
+  if (result.period_label) {
+    document.getElementById('report-title').textContent = result.period_label;
+  }
+  if (Array.isArray(result.metrics) && result.metrics.length > 0) {
+    document.getElementById('report-metrics').innerHTML = result.metrics.map(m => `
+      <div class="metric-card">
+        <div class="metric-label">${m.label}</div>
+        <div class="metric-val">${m.value}</div>
+        <div class="metric-delta delta-${m.delta_direction || 'flat'}"><i class="ti ti-${metricIcon(m.delta_direction)}"></i>${m.delta || '— 持平'}</div>
+      </div>
+    `).join('');
+  }
+  if (Array.isArray(result.hot_styles) && result.hot_styles.length > 0) {
+    const hotList = document.querySelector('#panel-report .hot-list');
+    if (hotList) {
+      hotList.innerHTML = result.hot_styles.map(item => `
+        <div class="hot-item">
+          <div class="hot-thumb" style="background:#FAEEDA;border-color:#EF9F27"><i class="ti ti-photo" style="color:#BA7517"></i></div>
+          <div class="hot-info">
+            <div class="hot-name">${item.style_name}</div>
+            <div class="hot-detail">评分 ${Math.round(item.hot_score)} · 收藏率 ${(Number(item.favorite_rate || 0) * 100).toFixed(0)}% · 试戴 ${item.try_on_count || 0} 次</div>
+          </div>
+          <div class="lc-pill ${hotLifeCycleClass(item.life_cycle)}"><i class="ti ti-${hotLifeCycleIcon(item.life_cycle)}"></i>${item.life_cycle}</div>
+        </div>
+      `).join('');
+    }
+  }
+  if (Array.isArray(result.suggestions) && result.suggestions.length > 0) {
+    currentReportSuggestions = result.suggestions;
+    const list = document.querySelector('#panel-report .suggestion-list');
+    if (list) {
+      list.innerHTML = result.suggestions.map((item, idx) => `
+        <div class="suggestion-item ${suggestionClass(item.action_type)}" id="sug-${idx}">
+          <div class="sug-icon">${suggestionIcon(item.action_type)}</div>
+          <div class="sug-body">
+            <div class="sug-tag">${suggestionLabel(item.action_type)}</div>
+            <div class="sug-text">${item.text}</div>
+            <div class="sug-actions" id="sug-actions-${idx}">
+              <button class="btn-adopt" onclick="adoptSug(${idx})">采纳建议</button>
+              <button class="btn-ignore" onclick="ignoreSug(${idx})">忽略</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } else {
+    currentReportSuggestions = [];
+  }
+  if (result.report_summary) {
+    document.getElementById('report-sub').textContent = result.report_summary;
+  } else {
+    const data = reportData[period] || reportData.week;
+    document.getElementById('report-sub').textContent = data.sub;
+  }
+}
+
+function hotLifeCycleClass(lifeCycle) {
+  if (lifeCycle === '上升期') return 'lc-up';
+  if (lifeCycle === '峰值期') return 'lc-peak';
+  if (lifeCycle === '衰退期') return 'lc-down';
+  return 'lc-up';
+}
+
+function hotLifeCycleIcon(lifeCycle) {
+  if (lifeCycle === '上升期') return 'trending-up';
+  if (lifeCycle === '峰值期') return 'flame';
+  if (lifeCycle === '衰退期') return 'trending-down';
+  return 'minus';
+}
+
+function metricIcon(direction) {
+  if (direction === 'up') return 'trending-up';
+  if (direction === 'down') return 'trending-down';
+  return 'minus';
 }
 
 function switchReportPeriod(btn, period) {
@@ -731,15 +1490,46 @@ function switchReportPeriod(btn, period) {
 }
 
 // Skills执行层（联调 /api/skills/execute）
-const sugSkills = [
-  { action:'boost_budget', label:'加大投流预算', requiresConfirm:true, confirmMsg:'确认将「奶油渐变猫眼」投流预算从 ¥500/天 提升至 ¥650/天？\n\n调整幅度：+30%\n预计额外消耗：¥1,050/周' },
-  { action:'prepare_replacement', label:'准备替换款', requiresConfirm:false, execMsg:'已标记「圣诞红绿镜面」为待替换，素材管理页已高亮上传入口' },
-  { action:'maintain_strategy', label:'维持当前策略', requiresConfirm:false, execMsg:'已记录：当前策略维持不变' },
-  { action:'take_down_style', label:'下架款式', requiresConfirm:false, execMsg:'已将「法式简约纯色」标记为待下架，请在素材管理中确认' }
-];
+const skillUiByAction = {
+  boost_budget: { label:'加大投流预算', requiresConfirm:true, confirmMsg:'确认提高该款式投流预算？', execMsg:'已记录投流预算调整建议' },
+  prepare_replacement: { label:'准备替换款', requiresConfirm:false, execMsg:'已标记为待替换款' },
+  maintain_strategy: { label:'维持当前策略', requiresConfirm:false, execMsg:'已记录：当前策略维持不变' },
+  take_down_style: { label:'下架款式', requiresConfirm:false, execMsg:'已标记为待下架款式' },
+  publish_style: { label:'上架款式', requiresConfirm:false, execMsg:'已记录上架执行' },
+  pause_budget: { label:'收缩预算', requiresConfirm:false, execMsg:'已记录预算收缩建议' }
+};
+const fallbackSuggestionActions = ['boost_budget', 'prepare_replacement', 'maintain_strategy', 'take_down_style'];
+
+function suggestionLabel(action) { return (skillUiByAction[action] || {}).label || '运营建议'; }
+function suggestionIcon(action) {
+  const mapping = { boost_budget:'📈', prepare_replacement:'⏰', maintain_strategy:'✅', take_down_style:'🔄', publish_style:'🚀', pause_budget:'🛑' };
+  return mapping[action] || '💡';
+}
+function suggestionClass(action) {
+  const mapping = { boost_budget:'sug-boost', prepare_replacement:'sug-warn', maintain_strategy:'sug-maintain', take_down_style:'sug-replace', publish_style:'sug-boost', pause_budget:'sug-warn' };
+  return mapping[action] || 'sug-maintain';
+}
 
 function adoptSug(idx) {
-  const skill = sugSkills[idx];
+  const backendSkill = currentReportSuggestions[idx];
+  const baseSkill = backendSkill ? {
+    action: backendSkill.action_type,
+    requiresConfirm: !!backendSkill.requires_confirm,
+    execMsg: (skillUiByAction[backendSkill.action_type] || {}).execMsg,
+    confirmMsg: (skillUiByAction[backendSkill.action_type] || {}).confirmMsg,
+    action_params: backendSkill.action_params || {},
+    label: suggestionLabel(backendSkill.action_type),
+  } : null;
+  const fallbackAction = fallbackSuggestionActions[idx];
+  const fallbackSkill = fallbackAction ? {
+    action: fallbackAction,
+    requiresConfirm: !!(skillUiByAction[fallbackAction] || {}).requiresConfirm,
+    execMsg: (skillUiByAction[fallbackAction] || {}).execMsg,
+    confirmMsg: (skillUiByAction[fallbackAction] || {}).confirmMsg,
+    action_params: {},
+    label: suggestionLabel(fallbackAction),
+  } : null;
+  const skill = baseSkill || fallbackSkill;
   if (!skill) return;
   if (skill.requiresConfirm) {
     if (confirm(skill.confirmMsg)) {
@@ -761,7 +1551,7 @@ async function executeSkill(idx, skill) {
     try {
       await apiPost('/skills/execute', {
         action_type: skill.action,
-        action_params: {},
+        action_params: skill.action_params || {},
       });
       console.log('[Skills] 执行成功:', skill.action);
     } catch (e) {
@@ -914,11 +1704,16 @@ function openLightbox(imageUrl) {
 // ===== 初始化 =====
 function init() {
   renderStyleList();
+  updateStyleDeleteUI();
   renderTemplates();
-  switchPage('home');
+  switchPage(pageFromHash(), { updateHash: false });
   initAdminBackend().then(() => {
     if (adminBackendAvailable) {
       loadStylesData();
+      renderTemplates();
+      if (pageFromHash() === 'upload' && currentUploadStyleId) {
+        restoreUploadDraft(currentUploadStyleId);
+      }
     }
   });
 }

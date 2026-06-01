@@ -1,4 +1,5 @@
 from app.data.nail_taxonomy_v2_seed import HAND_SHAPE_PROFILE_MAP, SKIN_TONE_PROFILE_MAP
+from app.prompts.recommender import SYSTEM_PROMPT as RECOMMENDER_SYSTEM_PROMPT
 from app.schemas.recommendation import RecommendationItem, RecommendationRequest, RecommendationResponse
 from app.services.business_db import list_recommendation_candidates
 from app.services.hand_analyzer import get_hand_profile
@@ -98,7 +99,7 @@ def _build_reasons_with_llm(
 
     try:
         data = generate_text_json_with_gemini(
-            system_prompt="你是美甲推荐顾问。只输出合法JSON，不要输出Markdown。",
+            system_prompt=RECOMMENDER_SYSTEM_PROMPT,
             user_prompt=prompt,
         )
         return {

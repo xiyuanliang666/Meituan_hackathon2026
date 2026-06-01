@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class ExtractTagsRequest(BaseModel):
     image_url: str = Field(..., examples=["https://example.com/nail.png"])
+    style_id: str | None = Field(default=None, examples=["style-seed-001"])
 
 
 class UploadImageResponse(BaseModel):
@@ -13,7 +14,7 @@ class UploadImageResponse(BaseModel):
 
 
 class StyleTagsResponse(BaseModel):
-    style_id: str
+    style_id: str | None = None
     color_system: list[str] = Field(default_factory=list)
     style_tags: list[str] = Field(default_factory=list)
     scene_tags: list[str] = Field(default_factory=list)

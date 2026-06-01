@@ -1,5 +1,7 @@
+import base64
 import json
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -95,6 +97,31 @@ def _generate_text_json_openai_compatible(
         return _post_and_parse(endpoint, headers, payload, timeout_seconds)
 
 
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1"})
+
+
+def _resolve_image_url(image_url: str, timeout_seconds: float) -> str:
+    """Convert local/private image URLs to base64 data URIs.
+
+    Remote model gateways (api.gpt.ge etc.) cannot reach localhost or private IPs.
+    We download the image ourselves and embed it as a data URI instead.
+    """
+    host = (urlparse(image_url).hostname or "").lower()
+    if host not in _LOCAL_HOSTS and not host.startswith("192.168.") and not host.startswith("10."):
+        return image_url
+
+    try:
+        with httpx.Client(timeout=min(timeout_seconds, 30.0)) as client:
+            resp = client.get(image_url)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise MultimodalModelError(f"failed to fetch local image: {exc}") from exc
+
+    content_type = resp.headers.get("content-type", "image/png")
+    b64 = base64.b64encode(resp.content).decode("ascii")
+    return f"data:{content_type};base64,{b64}"
+
+
 def _analyze_image_json_openai_compatible(
     image_url: str,
     system_prompt: str,
@@ -108,9 +135,14 @@ def _analyze_image_json_openai_compatible(
 
     Gemini and Qwen are configured through their OpenAI-compatible endpoints by
     default. If the provider gateway differs, only this adapter should change.
+
+    Local image URLs are automatically converted to base64 data URIs so that
+    remote gateways can access them without direct network reachability.
     """
     if not api_key:
         raise MultimodalModelError("model API key is not configured")
+
+    resolved_url = _resolve_image_url(image_url, timeout_seconds)
 
     endpoint = base_url.rstrip("/") + "/chat/completions"
     headers = {
@@ -127,7 +159,7 @@ def _analyze_image_json_openai_compatible(
                 "role": "user",
                 "content": [
                     {"type": "text", "text": user_prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}},
+                    {"type": "image_url", "image_url": {"url": resolved_url}},
                 ],
             },
         ],

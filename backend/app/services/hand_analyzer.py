@@ -1,5 +1,9 @@
 from hashlib import sha1
 
+from app.prompts.hand_analysis import (
+    SYSTEM_PROMPT as HAND_ANALYSIS_SYSTEM_PROMPT,
+    USER_PROMPT as HAND_ANALYSIS_USER_PROMPT,
+)
 from app.schemas.hand import AnalyzeHandRequest, HandProfileResponse
 from app.services.multimodal_client import (
     MultimodalModelError,
@@ -26,22 +30,58 @@ def analyze_hand(request: AnalyzeHandRequest) -> HandProfileResponse:
     return result
 
 
+def analyze_seed_hand_templates(limit: int | None = None) -> dict[str, object]:
+    from app.services.business_db import (
+        init_db,
+        list_seed_hand_templates,
+        update_hand_template_analysis,
+    )
+
+    init_db(seed=True)
+    templates = list_seed_hand_templates(limit=limit)
+    analyzed = 0
+    failed = 0
+    modes: dict[str, int] = {}
+    skin_tones: dict[str, int] = {}
+
+    for template in templates:
+        try:
+            profile = analyze_hand(
+                AnalyzeHandRequest(
+                    user_id="template-analysis",
+                    hand_image_url=template["hand_image_url"],
+                )
+            )
+            update_hand_template_analysis(
+                template_id=template["hand_template_id"],
+                skin_tone=profile.skin_tone,
+                hand_shape=profile.hand_shape,
+                recommended_colors=profile.recommended_colors,
+                recommended_styles=profile.recommended_styles,
+                recommended_nail_shapes=profile.recommended_nail_shapes,
+                analysis_reason=profile.analysis_reason,
+                analysis_mode=profile.analysis_mode,
+            )
+            analyzed += 1
+            modes[profile.analysis_mode] = modes.get(profile.analysis_mode, 0) + 1
+            skin_tones[profile.skin_tone] = skin_tones.get(profile.skin_tone, 0) + 1
+        except Exception:
+            failed += 1
+
+    return {
+        "total_templates": len(templates),
+        "analyzed_templates": analyzed,
+        "failed_templates": failed,
+        "analysis_modes": modes,
+        "skin_tones": skin_tones,
+    }
+
+
 def _analyze_hand_with_model(request: AnalyzeHandRequest) -> HandProfileResponse:
     data = analyze_image_json_with_qwen_vl(
         image_url=request.hand_image_url,
-        system_prompt=(
-            "你是美甲推荐顾问。只输出合法 JSON，不要输出 Markdown。"
-            "只分析美甲推荐所需的手部视觉特征，不输出身份、健康或敏感判断。"
-            "字段名必须使用英文，所有字段值必须使用中文，禁止输出英文标签。"
-        ),
-        user_prompt=(
-            "请分析用户手图，输出字段："
-            "skin_tone:string, hand_shape:string, recommended_colors:string[], "
-            "recommended_styles:string[], recommended_nail_shapes:string[], analysis_reason:string。"
-            "skin_tone 只能是 冷白/自然肤/暖黄/深肤/unknown；"
-            "hand_shape 只能是 修长/标准/短宽/unknown。"
-            "recommended_colors、recommended_styles、recommended_nail_shapes 和 analysis_reason 必须使用中文。"
-        ),
+        system_prompt=HAND_ANALYSIS_SYSTEM_PROMPT,
+        user_prompt=HAND_ANALYSIS_USER_PROMPT,
     )
     digest = sha1(request.hand_image_url.encode("utf-8")).hexdigest()
     return HandProfileResponse(

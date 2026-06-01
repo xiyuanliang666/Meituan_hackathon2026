@@ -1,4 +1,3 @@
-from hashlib import sha1
 from typing import Any
 
 from app.schemas.style import StyleTagsResponse
@@ -18,21 +17,21 @@ from app.services.taxonomy_store import (
 )
 
 
-def extract_style_tags(image_url: str) -> StyleTagsResponse:
+def extract_style_tags(image_url: str, style_id: str | None = None) -> StyleTagsResponse:
     if is_gemini_enabled():
         try:
-            return _extract_style_tags_with_model(image_url, provider="gemini")
+            return _extract_style_tags_with_model(image_url, provider="gemini", style_id=style_id)
         except MultimodalModelError:
             pass
     if is_qwen_vl_enabled():
         try:
-            return _extract_style_tags_with_model(image_url, provider="qwen")
+            return _extract_style_tags_with_model(image_url, provider="qwen", style_id=style_id)
         except MultimodalModelError:
             pass
-    return _extract_style_tags_mock(image_url)
+    return _extract_style_tags_mock(image_url, style_id=style_id)
 
 
-def _extract_style_tags_with_model(image_url: str, provider: str) -> StyleTagsResponse:
+def _extract_style_tags_with_model(image_url: str, provider: str, style_id: str | None = None) -> StyleTagsResponse:
     analyze = analyze_image_json_with_gemini if provider == "gemini" else analyze_image_json_with_qwen_vl
     system_prompt, user_prompt = build_tagging_prompt()
     data = analyze(
@@ -40,7 +39,6 @@ def _extract_style_tags_with_model(image_url: str, provider: str) -> StyleTagsRe
         system_prompt=system_prompt,
         user_prompt=user_prompt,
     )
-    style_id = "style-" + sha1(image_url.encode("utf-8")).hexdigest()[:8]
     normalized = validate_style_tags(data)
     return _to_response(
         style_id=style_id,
@@ -49,9 +47,8 @@ def _extract_style_tags_with_model(image_url: str, provider: str) -> StyleTagsRe
     )
 
 
-def _extract_style_tags_mock(image_url: str) -> StyleTagsResponse:
+def _extract_style_tags_mock(image_url: str, style_id: str | None = None) -> StyleTagsResponse:
     normalized = image_url.lower()
-    style_id = "style-" + sha1(image_url.encode("utf-8")).hexdigest()[:8]
 
     tags: dict[str, Any] = {
         "color_system": ["裸色系", "粉色系"],
@@ -172,7 +169,7 @@ def tag_seed_styles(limit: int = 25) -> dict:
 
     for style in styles:
         try:
-            tags = extract_style_tags(style["enhanced_style_image_url"])
+            tags = extract_style_tags(style["enhanced_style_image_url"], style_id=style["style_id"])
             persist_style_tags(
                 style_id=style["style_id"],
                 tags=tags_response_to_dict(tags),
@@ -205,7 +202,7 @@ def batch_extract_dataset_tags(limit: int | None = None) -> dict:
 
     for style in styles:
         try:
-            tags = extract_style_tags(style.enhanced_style_image_url)
+            tags = extract_style_tags(style.enhanced_style_image_url, style_id=style.style_id)
             persist_style_tags(
                 style_id=style.style_id,
                 tags=tags_response_to_dict(tags),

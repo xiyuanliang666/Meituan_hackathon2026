@@ -9,3 +9,6 @@ docs
 __pycache__
 *.pyc
 node_modules
+.claude/
+backend/storage/uploads/
+backend/storage/generated/

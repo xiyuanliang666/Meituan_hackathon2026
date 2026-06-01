@@ -14,6 +14,12 @@ from app.data.nail_taxonomy_v2_seed import (
     TAXONOMY_V2_FIELDS,
     TAXONOMY_V2_OPTIONS,
 )
+from app.prompts.tagging import (
+    SYSTEM_PROMPT as TAGGING_SYSTEM_PROMPT,
+    USER_PROMPT_PREFIX as TAGGING_USER_PROMPT_PREFIX,
+    USER_PROMPT_SUFFIX as TAGGING_USER_PROMPT_SUFFIX,
+    build_value_domain_lines,
+)
 from app.services.business_db import connect_db, _now
 
 
@@ -143,33 +149,9 @@ def build_tagging_prompt() -> tuple[str, str]:
         ensure_taxonomy_seeded(conn)
         approved = get_approved_values_map(conn)
 
-    value_domain_lines: list[str] = []
-    for field in TAXONOMY_V2_FIELDS:
-        key = str(field["field_key"])
-        label = str(field["label_cn"])
-        vtype = str(field["value_type"])
-        values = sorted(approved.get(key, set()))
-        if vtype == "array":
-            value_domain_lines.append(f"- {key}（{label}，数组，可多选）: {', '.join(values)}")
-        else:
-            value_domain_lines.append(f"- {key}（{label}，枚举，单选）: {', '.join(values)}")
-
-    system_prompt = (
-        "你是美甲款式图结构化打标助手。只输出合法 JSON，不要输出 Markdown。"
-        "必须对全部 12 个字段完成打标；数组字段只能从值域中选一个或多个；"
-        "枚举字段只能选一个值；无法判断时数组填 []，枚举填 unknown。"
-        "禁止自造值域外标签；若确有合适但值域没有的新词，写入 candidate_tags，格式为「字段名: 建议值」。"
-        "字段名使用英文，字段值使用中文。"
-    )
-    user_prompt = (
-        "请分析这张美甲款式图，输出 JSON，包含以下字段：\n"
-        + "\n".join(value_domain_lines)
-        + "\n- candidate_tags（数组，无溢出时填 []）\n"
-        "打标原则：season_tags 若选「四季通用」则不再叠加其他季节；"
-        "nail_decoration 若选「无装饰」则不再叠加其他装饰；"
-        "skin_tone_suitability 若选「全肤色通用」则不再叠加其他肤色。"
-    )
-    return system_prompt, user_prompt
+    value_domain_lines = build_value_domain_lines(approved, TAXONOMY_V2_FIELDS)
+    user_prompt = TAGGING_USER_PROMPT_PREFIX + "\n".join(value_domain_lines) + "\n" + TAGGING_USER_PROMPT_SUFFIX
+    return TAGGING_SYSTEM_PROMPT, user_prompt
 
 
 def validate_style_tags(raw: dict[str, Any]) -> dict[str, Any]:
@@ -187,7 +169,7 @@ def validate_style_tags(raw: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(values, list):
             values = []
         allowed = approved.get(key, set())
-        normalized[key] = [str(v).strip() for v in values if str(v).strip() in allowed]
+        normalized[key] = _dedupe_keep_order([str(v).strip() for v in values if str(v).strip() in allowed])
 
     for key in ENUM_FIELD_KEYS:
         value = raw.get(key, "unknown")
@@ -195,11 +177,35 @@ def validate_style_tags(raw: dict[str, Any]) -> dict[str, Any]:
         text = str(value).strip() if value is not None else "unknown"
         normalized[key] = text if text in allowed else "unknown"
 
+    normalized["season_tags"] = _normalize_exclusive_array(normalized["season_tags"], "四季通用")
+    normalized["nail_decoration"] = _normalize_exclusive_array(normalized["nail_decoration"], "无装饰")
+    normalized["skin_tone_suitability"] = _normalize_exclusive_array(
+        normalized["skin_tone_suitability"],
+        "全肤色通用",
+    )
+
     candidate = raw.get("candidate_tags", [])
     if not isinstance(candidate, list):
         candidate = []
-    normalized["candidate_tags"] = [str(item).strip() for item in candidate if str(item).strip()]
+    normalized["candidate_tags"] = _dedupe_keep_order([str(item).strip() for item in candidate if str(item).strip()])
     return normalized
+
+
+def _dedupe_keep_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+    return deduped
+
+
+def _normalize_exclusive_array(values: list[str], exclusive_value: str) -> list[str]:
+    if exclusive_value in values:
+        return [exclusive_value]
+    return values
 
 
 def style_tags_to_storage_dict(tags: dict[str, Any]) -> dict[str, list[str]]:

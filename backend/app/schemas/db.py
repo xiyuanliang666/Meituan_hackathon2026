@@ -20,6 +20,11 @@ class DbStyleResponse(BaseModel):
     tags: dict[str, list[str]]
     hot_score: float
     life_cycle: str
+    tryon_enabled: bool = True
+    status: str = "active"
+    review_status: str = "merchant_confirmed"
+    source: str = ""
+    created_at: str = ""
 
 
 class DbEventResponse(BaseModel):
@@ -53,3 +58,11 @@ class EventStatsItem(BaseModel):
     favorite_rate: float = 0
     order_rate: float = 0
 
+
+class ReportSnapshotItem(BaseModel):
+    snapshot_id: str
+    merchant_id: str = ""
+    period: str
+    report_summary: str = ""
+    generation_mode: str = "mock"
+    created_at: str

@@ -122,8 +122,40 @@
 <!-- ===== 素材管理 ===== -->
 <div class="page-panel" id="panel-assets">
   <div class="page-top"><div><h2 class="page-title">素材管理</h2><p class="page-sub">管理店铺款式图和合成模板图</p></div></div>
-  <div class="card"><div class="card-header"><div class="card-title"><i class="ti ti-photo"></i> 款式图管理 <span class="count-badge">共 4 款</span></div><button class="btn-primary-sm" onclick="showUploadModal()"><i class="ti ti-plus"></i> 上传新款式</button></div><div class="style-list" id="style-list"></div></div>
-  <div class="card"><div class="card-header"><div class="card-title"><i class="ti ti-hand-finger"></i> 模板图管理 <span class="count-badge" id="tpl-count">已选 3 张</span></div></div><p class="card-desc">选择合成时使用的裸手模板图</p><div class="template-grid" id="template-grid"></div><div class="tpl-add-wrap"><div class="tpl-add-btn" onclick="toggleTplDropdown(event)"><i class="ti ti-plus"></i><span>添加模板</span></div><div class="tpl-add-dropdown" id="tpl-add-dropdown"><div class="tpl-dd-item" onclick="handleTplUpload()"><i class="ti ti-upload" style="color:#CC9900"></i> 上传自有模板</div><div class="tpl-dd-item" onclick="handleTplPublic()"><i class="ti ti-layout-grid" style="color:#CC9900"></i> 从公共模板库选择</div></div></div><p class="hint-text">建议选择 3–5 张</p></div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="ti ti-photo"></i> 款式图管理 <span class="count-badge" id="style-count">共 0 款</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost-sm" onclick="goBatchUploadPage()"><i class="ti ti-stack-2"></i> 批量上传款式图片</button>
+        <button class="btn-primary-sm" onclick="showUploadModal()"><i class="ti ti-plus"></i> 上传新款式</button>
+      </div>
+    </div>
+    <div class="asset-toolbar">
+      <input class="asset-search" id="style-search" placeholder="搜索款式名或标签" oninput="onStyleSearchInput(this.value)">
+      <button class="btn-ghost-sm" id="style-delete-toggle" onclick="toggleStyleDeleteMode()"><i class="ti ti-trash"></i> 删除</button>
+    </div>
+    <div class="delete-mode-bar" id="style-delete-bar" style="display:none">
+      <label class="delete-mode-check"><input type="checkbox" id="style-select-all" onchange="toggleSelectAllStyles(this.checked)"> 全选</label>
+      <span class="delete-mode-hint">可选择单个或批量删除</span>
+      <button class="btn-ghost-sm" onclick="toggleStyleDeleteMode(false)">取消</button>
+      <button class="btn-danger-sm" onclick="confirmDeleteSelectedStyles()"><i class="ti ti-trash"></i> 删除</button>
+    </div>
+    <div class="asset-tabs"><button class="asset-tab active" onclick="switchStyleTab('active', this)">已上架</button><button class="asset-tab" onclick="switchStyleTab('draft', this)">草稿箱</button></div>
+    <div class="style-list" id="style-list"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title"><i class="ti ti-hand-finger"></i> 模板图管理 <span class="count-badge" id="tpl-count">已选 0 张</span></div><button class="btn-primary-sm" onclick="handleTplUpload()"><i class="ti ti-upload"></i> 上传自有模板</button></div>
+    <p class="card-desc">公共模板库和店铺自有模板库可同时勾选，用于后续批量合成</p>
+    <div class="asset-tabs"><button class="asset-tab active" onclick="switchTemplateTab('public', this)">公共模板库</button><button class="asset-tab" onclick="switchTemplateTab('merchant', this)">店铺自有模板库</button></div>
+    <div class="asset-toolbar" id="merchant-template-toolbar" style="display:none"><button class="btn-ghost-sm" id="template-delete-toggle" onclick="toggleMerchantTemplateDeleteMode()"><i class="ti ti-trash"></i> 删除</button></div>
+    <div class="delete-mode-bar" id="merchant-template-delete-bar" style="display:none">
+      <label class="delete-mode-check"><input type="checkbox" id="merchant-template-select-all" onchange="toggleSelectAllMerchantTemplates(this.checked)"> 全选</label>
+      <span class="delete-mode-hint">可选择单个或批量删除</span>
+      <button class="btn-ghost-sm" onclick="toggleMerchantTemplateDeleteMode(false)">取消</button>
+      <button class="btn-danger-sm" onclick="confirmDeleteSelectedTemplates()"><i class="ti ti-trash"></i> 删除</button>
+    </div>
+    <div id="template-groups"></div>
+  </div>
 </div>
 
 <!-- ===== 爆款推送 ===== -->
@@ -240,12 +272,12 @@
   <div class="step-bar"><div class="step step-done"><div class="step-num"><i class="ti ti-check"></i></div><span>上传图片</span></div><div class="step-line"></div><div class="step" id="step-2"><div class="step-num">2</div><span>确认标签</span></div><div class="step-line"></div><div class="step" id="step-3"><div class="step-num">3</div><span>配置模板</span></div><div class="step-line"></div><div class="step" id="step-4"><div class="step-num">4</div><span>完成入库</span></div></div>
   <!-- 步骤2：确认标签 -->
   <div class="upload-step-panel" id="upload-step-2">
-    <div class="card"><div class="card-title-sm"><i class="ti ti-photo"></i> 已上传款式图</div><div class="upload-preview"><div class="upload-img"><i class="ti ti-photo" style="font-size:32px;color:#BA7517"></i><span>款式预览图</span></div><div class="upload-info"><div class="upload-filename">奶油渐变猫眼_秋冬款.png</div><div class="upload-size">2.3 MB · 1080 × 1080px</div><div class="upload-result"><i class="ti ti-check"></i> 共识别到 <strong>8</strong> 个标签</div></div></div></div>
-    <div class="card"><div class="card-title-sm"><i class="ti ti-tags"></i> 识别到的款式标签</div><p class="card-desc">点击 × 删除；点击 + 补充</p><div class="tag-section"><div class="tag-section-label">工艺维度</div><div class="tags-group" id="craft-tags"><span class="tag tag-craft">猫眼 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><span class="tag tag-craft">渐变 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><span class="tag tag-craft">普通钻饰 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><button class="tag-add-btn" onclick="addTagPrompt('craft-tags','tag-craft')">+</button></div></div><div class="tag-section"><div class="tag-section-label">营销维度</div><div class="tags-group" id="market-tags"><span class="tag tag-color">奶油白 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><span class="tag tag-color">玫瑰金 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><span class="tag tag-style">简约 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><span class="tag tag-scene">日常 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><span class="tag tag-season">秋冬 <i class="tag-del" onclick="this.parentElement.remove()">×</i></span><button class="tag-add-btn" onclick="addTagPrompt('market-tags','tag-color')">+</button></div></div><div class="upload-actions"><button class="btn-ghost" onclick="switchPage('assets')">← 返回</button><button class="btn-primary-sm" onclick="goUploadStep(3)">确认标签，下一步 →</button></div></div>
+    <div class="card"><div class="card-title-sm"><i class="ti ti-photo"></i> 已上传款式图</div><div class="upload-preview"><div class="upload-img"><i class="ti ti-photo" style="font-size:32px;color:#BA7517"></i><span>款式预览图</span></div><div class="upload-info"><label class="upload-name-label">款式名称</label><input class="upload-style-name-input" id="upload-style-name" value="待上传..." onblur="saveUploadStyleName()" onkeydown="if(event.key==='Enter') this.blur()"><div class="upload-size">请先选择图片</div><div class="upload-result" id="upload-tag-status" style="display:none"><i class="ti ti-loader"></i> 标签提取中...</div></div></div></div>
+    <div class="card"><div class="card-title-sm"><i class="ti ti-tags"></i> 识别到的款式标签</div><p class="card-desc">点击 × 删除；点击 + 补充</p><div class="tag-section"><div class="tag-section-label">工艺维度</div><div class="tags-group" id="craft-tags"><button class="tag-add-btn" onclick="addTagPrompt('craft-tags','tag-craft')">+</button></div></div><div class="tag-section"><div class="tag-section-label">营销维度</div><div class="tags-group" id="market-tags"><button class="tag-add-btn" onclick="addTagPrompt('market-tags','tag-color')">+</button></div></div><div class="upload-actions"><button class="btn-ghost" onclick="switchPage('assets')">← 返回</button><button class="btn-primary-sm" onclick="goUploadStep(3)">确认标签，下一步 →</button></div></div>
   </div>
   <!-- 步骤3：配置模板 -->
   <div class="upload-step-panel" id="upload-step-3" style="display:none">
-    <div class="card"><div class="card-title-sm"><i class="ti ti-hand-finger"></i> 选择合成模板</div><p class="card-desc">选择用于生成爆款推送图的裸手模板（可多选）</p><div class="template-grid" id="upload-tpl-grid"></div><button class="composite-preview-btn" onclick="previewComposite()"><i class="ti ti-eye"></i> 预览合成效果</button><div class="composite-preview-area" id="composite-preview-area"></div><div class="upload-actions"><button class="btn-ghost" onclick="goUploadStep(2)">← 返回标签</button><button class="btn-primary-sm" onclick="goUploadStep(4)">确认模板，下一步 →</button></div></div>
+    <div class="card"><div class="card-title-sm"><i class="ti ti-hand-finger"></i> 选择合成模板 <span class="count-badge" id="upload-tpl-count">已选 0/4 张</span></div><p class="card-desc">最多选择 4 张裸手模板，预览时会批量生成所有选中模板的合成图</p><div class="asset-tabs"><button class="asset-tab active" onclick="switchTemplateTab('public', this, true)">公共模板库</button><button class="asset-tab" onclick="switchTemplateTab('merchant', this, true)">店铺自有模板库</button></div><div id="upload-template-groups"></div><button class="composite-preview-btn" onclick="previewComposite()"><i class="ti ti-eye"></i> 批量预览效果</button><div class="composite-preview-area" id="composite-preview-area"></div><div class="upload-actions"><button class="btn-ghost" onclick="goUploadStep(2)">← 返回标签</button><button class="btn-primary-sm" onclick="finishUpload()">完成上传</button></div></div>
   </div>
   <!-- 步骤4：完成入库 -->
   <div class="upload-step-panel" id="upload-step-4" style="display:none">
@@ -278,7 +310,7 @@
 
 <!-- 上传弹窗 -->
 <div class="modal-overlay" id="upload-modal">
-  <div class="modal-content"><i class="ti ti-upload" style="font-size:40px;color:#CC9900"></i><h3>上传新款式图</h3><p>上传后AI将自动识别标签</p><div class="modal-upload-area" onclick="goUploadPage()"><i class="ti ti-photo-plus" style="font-size:32px;color:#CC9900"></i><span>点击选择图片</span></div><button class="btn-ghost" onclick="hideUploadModal()">取消</button></div>
+  <div class="modal-content"><i class="ti ti-upload" style="font-size:40px;color:#CC9900"></i><h3>上传新款式图</h3><p>上传后AI将自动识别标签</p><div class="modal-upload-area" onclick="goUploadPage()"><i class="ti ti-photo-plus" style="font-size:32px;color:#CC9900"></i><span>单张上传</span></div><div class="modal-upload-area" onclick="goBatchUploadPage()"><i class="ti ti-stack-2" style="font-size:32px;color:#8D79B8"></i><span>批量上传款式图片</span></div><div id="upload-modal-status" style="font-size:12px;color:#777;margin:-4px 0 12px"></div><button class="btn-ghost" onclick="hideUploadModal()">取消</button></div>
 </div>
 
 <!-- Signal Tooltip (全局) -->
