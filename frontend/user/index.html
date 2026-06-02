@@ -6,6 +6,15 @@
 <title>美甲AI试戴</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="styles.css?v=20260602d">
+<style>
+/* 强制覆盖缓存：feed图片3:4竖向，cover居中，常驻标签+款式名 */
+.feed-img{width:100%!important;aspect-ratio:3/4!important;position:relative!important;overflow:hidden!important;display:block!important;background:#f0ece8!important}
+.feed-img img{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center!important;display:block!important}
+.feed-emoji-placeholder{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:40px!important}
+.feed-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(transparent,rgba(0,0,0,.4));pointer-events:none;z-index:1}
+.feed-tryon-label{position:absolute!important;bottom:9px!important;left:50%!important;transform:translateX(-50%)!important;background:rgba(255,255,255,.93)!important;color:#8d79b8!important;font-size:10px!important;font-weight:600!important;padding:3px 12px!important;border-radius:20px!important;white-space:nowrap!important;pointer-events:none!important;z-index:2!important;box-shadow:0 1px 5px rgba(141,121,184,.25)!important}
+.feed-img-name{font-size:12px!important;font-weight:600!important;color:rgba(42,32,24,.88)!important;margin-bottom:5px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+</style>
 </head>
 <body>
 <div id="app">
