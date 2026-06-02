@@ -45,18 +45,37 @@ async function loadStylesFromBackend() {
   try {
     const data = await apiGet('/db/styles');
     if (data && data.styles && data.styles.length > 0) {
-      nailStyles = data.styles.map((s, idx) => ({
-        id: s.id || idx + 1,
-        name: s.name || s.style_name,
-        tags: s.tags || [],
-        bg: getStyleBg(idx),
-        emoji: getStyleEmoji(s.tags || []),
-        price: s.price || (120 + Math.floor(Math.random() * 100)),
-        reason: s.reason || '',
-        shop: s.shop || '蔻丹美甲·朝阳店',
-        image_url: s.image_url || '',
-        style_id: s.style_id || String(s.id || idx + 1),
-      }));
+      nailStyles = data.styles.map((s, idx) => {
+        // tags 可能是对象（{style_tags:[], scene_tags:[], ...}）或数组
+        let tagsArr = [];
+        if (Array.isArray(s.tags)) {
+          tagsArr = s.tags;
+        } else if (s.tags && typeof s.tags === 'object') {
+          // 展平所有子标签，优先取 style_tags + scene_tags + color_system
+          tagsArr = [
+            ...(s.tags.style_tags || []),
+            ...(s.tags.scene_tags || []),
+            ...(s.tags.color_system || []),
+          ].slice(0, 4);
+        }
+        // 图片：优先 enhanced，其次 original，其次 image_url
+        const imageUrl = s.enhanced_style_image_url
+          || s.original_style_image_url
+          || s.image_url
+          || '';
+        return {
+          id: s.id || idx + 1,
+          name: s.style_name || s.name || '美甲款式',
+          tags: tagsArr,
+          bg: getStyleBg(idx),
+          emoji: getStyleEmoji(tagsArr),
+          price: s.price || (120 + Math.floor(Math.random() * 100)),
+          reason: s.reason || '',
+          shop: s.shop || '蔻丹美甲·朝阳店',
+          image_url: imageUrl,
+          style_id: s.style_id || String(s.id || idx + 1),
+        };
+      });
       renderFeed();
     }
   } catch (e) {
