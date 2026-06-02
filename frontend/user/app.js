@@ -99,46 +99,25 @@ function goBackFromDetail() { navigateTo(detailFrom); }
 // ===== 首页Feed =====
 function renderFeed() {
   const tagColors = {'法式':'feed-tag-style','简约':'feed-tag-style','可爱':'feed-tag-scene','ins风':'feed-tag-scene','炫彩':'feed-tag-default','高级感':'feed-tag-style','温柔':'feed-tag-scene','日系':'feed-tag-season','节日':'feed-tag-season','闪粉':'feed-tag-default','圣诞':'feed-tag-season','清新':'feed-tag-scene','秋冬':'feed-tag-season','冷淡':'feed-tag-style','夏日':'feed-tag-season','高级':'feed-tag-style','猫眼':'feed-tag-style','渐变':'feed-tag-default','镜面':'feed-tag-style','手绘':'feed-tag-scene'};
-  document.getElementById('feed-container').innerHTML = nailStyles.map(s => {
-    const isFav = favoritesSet.has(s.id);
-    return `
+  document.getElementById('feed-container').innerHTML = nailStyles.map(s => `
     <div class="feed-card" onclick="openDetail(${s.id},'home')">
       <div class="feed-img" style="background:${s.bg}">
         ${s.image_url ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:auto;display:block;border-radius:20px 20px 0 0" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:38px;width:100%;min-height:140px;align-items:center;justify-content:center">${s.emoji}</span>` : `<span style="font-size:38px;min-height:140px;display:flex;align-items:center;justify-content:center;width:100%">${s.emoji}</span>`}
         <div class="feed-tryon-label">立即试戴</div>
-        <div class="feed-fav-btn${isFav?' faved':''}" id="feed-fav-${s.id}" onclick="event.stopPropagation();toggleFeedFavorite(${s.id})">
-          <i class="ti ${isFav?'ti-heart-filled':'ti-heart'}"></i>
-        </div>
       </div>
       <div class="feed-card-bottom">
-        <div class="feed-name">${s.name}</div>
+        <div class="feed-img-name">${s.name}</div>
         <div class="feed-tags">${s.tags.slice(0,3).map(t=>`<span class="feed-tag ${tagColors[t]||'feed-tag-default'}">${t}</span>`).join('')}</div>
         <div class="feed-bottom-row">
           <div class="feed-price"><span class="feed-price-unit">¥</span>${s.price}</div>
           <button class="tryon-btn" onclick="event.stopPropagation();tryFromFeed(${s.id})">AI 试款</button>
         </div>
       </div>
-    </div>`;
-  }).join('');
+    </div>
+  `).join('');
 }
 
-// Feed 卡片收藏切换（实心/空心爱心）
-function toggleFeedFavorite(styleId) {
-  if (favoritesSet.has(styleId)) {
-    favoritesSet.delete(styleId);
-  } else {
-    favoritesSet.add(styleId);
-    reportEvent('favorite', styleId);
-  }
-  localStorage.setItem('prism_favorites', JSON.stringify([...favoritesSet]));
-  const btn = document.getElementById(`feed-fav-${styleId}`);
-  if (btn) {
-    const isFav = favoritesSet.has(styleId);
-    btn.className = `feed-fav-btn${isFav?' faved':''}`;
-    btn.querySelector('i').className = `ti ${isFav?'ti-heart-filled':'ti-heart'}`;
-  }
-  renderFavoritesPage();
-}
+
 
 function tryFromFeed(id) {
   if (!handUploaded) {
@@ -287,13 +266,6 @@ function toggleFavorite(styleId) {
     btn.className = `tryon-action-btn${isFav?' faved':''}`;
     const icon = btn.querySelector('i');
     if (icon) icon.className = `ti ${isFav?'ti-heart-filled':'ti-heart'}`;
-  }
-  // 同步更新 Feed 收藏按钮
-  const feedBtn = document.getElementById(`feed-fav-${styleId}`);
-  if (feedBtn) {
-    feedBtn.className = `feed-fav-btn${isFav?' faved':''}`;
-    const fi = feedBtn.querySelector('i');
-    if (fi) fi.className = `ti ${isFav?'ti-heart-filled':'ti-heart'}`;
   }
   renderFavoritesPage();
 }

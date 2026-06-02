@@ -41,12 +41,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .feed-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:52px;background:linear-gradient(transparent,rgba(255,255,255,.86));pointer-events:none}
 /* 立即试戴悬浮标签 — 常驻显示 */
 .feed-tryon-label{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(184,165,216,.92),rgba(141,121,184,.92));color:#fff;font-size:11px;font-weight:500;padding:4px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(141,121,184,.3)}
-/* Feed 卡片收藏按钮 */
-.feed-fav-btn{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.82);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);box-shadow:0 1px 4px rgba(0,0,0,.12);z-index:2;cursor:pointer;transition:transform .15s}
-.feed-fav-btn:active{transform:scale(.88)}
-.feed-fav-btn i{font-size:15px;color:#ccc;transition:color .2s}
-.feed-fav-btn.faved i{color:#e8547a}
-.feed-card-bottom{padding:12px 12px 13px}
+.feed-card-bottom{padding:10px 12px 13px}
+/* 图片下方第一行：款式名称 */
+.feed-img-name{font-size:13px;font-weight:600;margin-bottom:5px;color:var(--text);letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .feed-name{font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text);letter-spacing:-.1px}
 .feed-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
 .feed-tag{font-size:10px;border-radius:999px;padding:2px 8px;font-weight:500}
