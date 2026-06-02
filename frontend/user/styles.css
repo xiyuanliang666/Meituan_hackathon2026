@@ -39,9 +39,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .feed-img{width:100%;min-height:140px;display:flex;align-items:center;justify-content:center;font-size:38px;position:relative;border-radius:20px 20px 0 0;overflow:hidden;background:#f7f4ef}
 .feed-img img{width:100%;height:auto;display:block;border-radius:20px 20px 0 0}
 .feed-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:52px;background:linear-gradient(transparent,rgba(255,255,255,.86));pointer-events:none}
-/* 立即试戴悬浮标签 */
-.feed-tryon-label{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(184,165,216,.92),rgba(141,121,184,.92));color:#fff;font-size:11px;font-weight:500;padding:4px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(141,121,184,.3);opacity:0;transition:opacity .2s}
-.feed-card:hover .feed-tryon-label{opacity:1}
+/* 立即试戴悬浮标签 — 常驻显示 */
+.feed-tryon-label{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(184,165,216,.92),rgba(141,121,184,.92));color:#fff;font-size:11px;font-weight:500;padding:4px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(141,121,184,.3)}
+/* Feed 卡片收藏按钮 */
+.feed-fav-btn{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.82);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);box-shadow:0 1px 4px rgba(0,0,0,.12);z-index:2;cursor:pointer;transition:transform .15s}
+.feed-fav-btn:active{transform:scale(.88)}
+.feed-fav-btn i{font-size:15px;color:#ccc;transition:color .2s}
+.feed-fav-btn.faved i{color:#e8547a}
 .feed-card-bottom{padding:12px 12px 13px}
 .feed-name{font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text);letter-spacing:-.1px}
 .feed-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
@@ -160,6 +164,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .tryon-action-btn{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.9);border:.5px solid #e8e8e8;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px);transition:transform .15s}
 .tryon-action-btn:hover{transform:scale(1.1)}
 .tryon-action-btn i{font-size:14px;color:#555}
+.tryon-action-btn.faved i{color:#e8547a}
 .nail-meta{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding:0 2px}
 .nail-name{font-size:13px;font-weight:500}
 .nail-tags-row{display:flex;gap:4px}

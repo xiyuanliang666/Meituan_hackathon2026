@@ -99,11 +99,16 @@ function goBackFromDetail() { navigateTo(detailFrom); }
 // ===== 首页Feed =====
 function renderFeed() {
   const tagColors = {'法式':'feed-tag-style','简约':'feed-tag-style','可爱':'feed-tag-scene','ins风':'feed-tag-scene','炫彩':'feed-tag-default','高级感':'feed-tag-style','温柔':'feed-tag-scene','日系':'feed-tag-season','节日':'feed-tag-season','闪粉':'feed-tag-default','圣诞':'feed-tag-season','清新':'feed-tag-scene','秋冬':'feed-tag-season','冷淡':'feed-tag-style','夏日':'feed-tag-season','高级':'feed-tag-style','猫眼':'feed-tag-style','渐变':'feed-tag-default','镜面':'feed-tag-style','手绘':'feed-tag-scene'};
-  document.getElementById('feed-container').innerHTML = nailStyles.map(s => `
+  document.getElementById('feed-container').innerHTML = nailStyles.map(s => {
+    const isFav = favoritesSet.has(s.id);
+    return `
     <div class="feed-card" onclick="openDetail(${s.id},'home')">
       <div class="feed-img" style="background:${s.bg}">
         ${s.image_url ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:auto;display:block;border-radius:20px 20px 0 0" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:38px;width:100%;min-height:140px;align-items:center;justify-content:center">${s.emoji}</span>` : `<span style="font-size:38px;min-height:140px;display:flex;align-items:center;justify-content:center;width:100%">${s.emoji}</span>`}
         <div class="feed-tryon-label">立即试戴</div>
+        <div class="feed-fav-btn${isFav?' faved':''}" id="feed-fav-${s.id}" onclick="event.stopPropagation();toggleFeedFavorite(${s.id})">
+          <i class="ti ${isFav?'ti-heart-filled':'ti-heart'}"></i>
+        </div>
       </div>
       <div class="feed-card-bottom">
         <div class="feed-name">${s.name}</div>
@@ -113,8 +118,26 @@ function renderFeed() {
           <button class="tryon-btn" onclick="event.stopPropagation();tryFromFeed(${s.id})">AI 试款</button>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+}
+
+// Feed 卡片收藏切换（实心/空心爱心）
+function toggleFeedFavorite(styleId) {
+  if (favoritesSet.has(styleId)) {
+    favoritesSet.delete(styleId);
+  } else {
+    favoritesSet.add(styleId);
+    reportEvent('favorite', styleId);
+  }
+  localStorage.setItem('prism_favorites', JSON.stringify([...favoritesSet]));
+  const btn = document.getElementById(`feed-fav-${styleId}`);
+  if (btn) {
+    const isFav = favoritesSet.has(styleId);
+    btn.className = `feed-fav-btn${isFav?' faved':''}`;
+    btn.querySelector('i').className = `ti ${isFav?'ti-heart-filled':'ti-heart'}`;
+  }
+  renderFavoritesPage();
 }
 
 function tryFromFeed(id) {
@@ -195,7 +218,6 @@ function renderDetailPage() {
 
   if (!multiSelectMode || selectedThumbs.size <= 1) {
     const isFav = favoritesSet.has(item.id);
-    const heartStyle = isFav ? 'color:#8b5cf6' : '';
     const lastResult = historyImgs.length > 0 ? historyImgs[historyImgs.length-1] : null;
 
     document.getElementById('tryon-main').innerHTML = `
@@ -209,7 +231,7 @@ function renderDetailPage() {
         <div class="tryon-actions">
           <div class="tryon-action-btn" title="保存" onclick="downloadTryonResult(${item.id})"><i class="ti ti-download"></i></div>
           <div class="tryon-action-btn" title="分享" onclick="alert('分享链接已复制')"><i class="ti ti-share"></i></div>
-          <div class="tryon-action-btn" title="收藏" id="fav-btn-${item.id}" onclick="toggleFavorite(${item.id})"><i class="ti ti-heart" style="${heartStyle}"></i></div>
+          <div class="tryon-action-btn${isFav?' faved':''}" title="收藏" id="fav-btn-${item.id}" onclick="toggleFavorite(${item.id})"><i class="ti ${isFav?'ti-heart-filled':'ti-heart'}"></i></div>
         </div>
       </div>
       <div class="nail-meta"><span class="nail-name">${item.name}</span><div class="nail-tags-row">${item.tags.map(t=>`<span class="nail-tag">${t}</span>`).join('')}</div></div>
@@ -258,12 +280,21 @@ function toggleFavorite(styleId) {
     reportEvent('favorite', styleId);
   }
   localStorage.setItem('prism_favorites', JSON.stringify([...favoritesSet]));
+  const isFav = favoritesSet.has(styleId);
+  // 更新详情页收藏按钮图标（实心/空心）
   const btn = document.getElementById(`fav-btn-${styleId}`);
   if (btn) {
+    btn.className = `tryon-action-btn${isFav?' faved':''}`;
     const icon = btn.querySelector('i');
-    if (icon) icon.style.color = favoritesSet.has(styleId) ? '#8b5cf6' : '';
+    if (icon) icon.className = `ti ${isFav?'ti-heart-filled':'ti-heart'}`;
   }
-  // 同步更新收藏页
+  // 同步更新 Feed 收藏按钮
+  const feedBtn = document.getElementById(`feed-fav-${styleId}`);
+  if (feedBtn) {
+    feedBtn.className = `feed-fav-btn${isFav?' faved':''}`;
+    const fi = feedBtn.querySelector('i');
+    if (fi) fi.className = `ti ${isFav?'ti-heart-filled':'ti-heart'}`;
+  }
   renderFavoritesPage();
 }
 
