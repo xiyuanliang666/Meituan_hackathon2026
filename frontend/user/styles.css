@@ -36,11 +36,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .feed-card{background:rgba(255,255,255,.68);border-radius:22px;overflow:hidden;border:1px solid rgba(160,128,96,.12);cursor:pointer;transition:transform .18s,box-shadow .22s,border-color .22s;box-shadow:0 8px 28px rgba(130,100,70,.08);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .feed-card:hover{box-shadow:0 14px 38px rgba(130,100,70,.12),0 0 0 1px rgba(141,121,184,.07);border-color:rgba(141,121,184,.16);transform:translateY(-3px)}
 .feed-card:active{transform:scale(.98)}
-.feed-img{width:100%;min-height:140px;display:flex;align-items:center;justify-content:center;font-size:38px;position:relative;border-radius:20px 20px 0 0;overflow:hidden;background:#f7f4ef}
-.feed-img img{width:100%;height:auto;display:block;border-radius:20px 20px 0 0}
-.feed-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:52px;background:linear-gradient(transparent,rgba(255,255,255,.86));pointer-events:none}
-/* 立即试戴悬浮标签 — 常驻显示 */
-.feed-tryon-label{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(184,165,216,.92),rgba(141,121,184,.92));color:#fff;font-size:11px;font-weight:500;padding:4px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(141,121,184,.3)}
+/* feed-img 改为 block，跟随图片原生比例，不裁切 */
+.feed-img{width:100%;display:block;position:relative;border-radius:20px 20px 0 0;overflow:hidden;background:#f7f4ef;font-size:38px}
+.feed-img img{width:100%;height:auto;display:block;border-radius:0}
+/* 无图时 emoji 占位 */
+.feed-img .feed-emoji-placeholder{width:100%;padding:36px 0;display:flex;align-items:center;justify-content:center}
+/* 图片底部渐变遮罩 + 标签依赖它做定位基准 */
+.feed-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:64px;background:linear-gradient(transparent,rgba(20,10,30,.38));pointer-events:none;border-radius:0}
+/* 立即试戴悬浮标签 — 常驻显示在图片底部 */
+.feed-tryon-label{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.92);color:#8d79b8;font-size:10px;font-weight:600;padding:3px 12px;border-radius:20px;white-space:nowrap;pointer-events:none;box-shadow:0 1px 6px rgba(141,121,184,.25);letter-spacing:.04em}
 .feed-card-bottom{padding:10px 12px 13px}
 /* 图片下方第一行：款式名称 */
 .feed-img-name{font-size:13px;font-weight:600;margin-bottom:5px;color:var(--text);letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

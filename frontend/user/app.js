@@ -102,7 +102,10 @@ function renderFeed() {
   document.getElementById('feed-container').innerHTML = nailStyles.map(s => `
     <div class="feed-card" onclick="openDetail(${s.id},'home')">
       <div class="feed-img" style="background:${s.bg}">
-        ${s.image_url ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:auto;display:block;border-radius:20px 20px 0 0" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:38px;width:100%;min-height:140px;align-items:center;justify-content:center">${s.emoji}</span>` : `<span style="font-size:38px;min-height:140px;display:flex;align-items:center;justify-content:center;width:100%">${s.emoji}</span>`}
+        ${s.image_url
+          ? `<img src="${staticUrl(s.image_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="feed-emoji-placeholder" style="display:none">${s.emoji}</div>`
+          : `<div class="feed-emoji-placeholder">${s.emoji}</div>`
+        }
         <div class="feed-tryon-label">立即试戴</div>
       </div>
       <div class="feed-card-bottom">
