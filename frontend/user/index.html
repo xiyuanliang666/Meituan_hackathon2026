@@ -15,7 +15,6 @@
     <header class="nav-bar">
       <span class="nav-title">美甲 AI 试戴</span>
       <div class="nav-right">
-        <i class="ti ti-search nav-icon" onclick="navigateTo('chat')"></i>
         <div class="hand-avatar" onclick="navigateTo('upload')">🤚</div>
       </div>
     </header>
@@ -65,7 +64,7 @@
     <div class="detail-row2">
       <div class="action-btn" id="multisel-btn" onclick="toggleMultiSelect()"><div class="multisel-circle" id="multisel-circle"></div><span id="multisel-label">多选对比</span></div>
       <div class="action-btn" onclick="navigateTo('home')"><i class="ti ti-layout-grid"></i><span>更多款式</span></div>
-      <div class="action-btn disabled"><i class="ti ti-wand"></i><span>AI 微调</span></div>
+      <div class="action-btn" onclick="openAiTunePanel()"><i class="ti ti-wand"></i><span>AI 微调</span></div>
     </div>
     <div class="thumb-row" id="thumb-row"></div>
     <div class="tryon-main" id="tryon-main"></div>

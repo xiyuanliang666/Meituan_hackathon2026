@@ -36,8 +36,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .feed-card{background:rgba(255,255,255,.68);border-radius:22px;overflow:hidden;border:1px solid rgba(160,128,96,.12);cursor:pointer;transition:transform .18s,box-shadow .22s,border-color .22s;box-shadow:0 8px 28px rgba(130,100,70,.08);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .feed-card:hover{box-shadow:0 14px 38px rgba(130,100,70,.12),0 0 0 1px rgba(141,121,184,.07);border-color:rgba(141,121,184,.16);transform:translateY(-3px)}
 .feed-card:active{transform:scale(.98)}
-.feed-img{width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;font-size:38px;position:relative;border-radius:20px 20px 0 0;overflow:hidden;background:#f7f4ef}
+.feed-img{width:100%;min-height:140px;display:flex;align-items:center;justify-content:center;font-size:38px;position:relative;border-radius:20px 20px 0 0;overflow:hidden;background:#f7f4ef}
+.feed-img img{width:100%;height:auto;display:block;border-radius:20px 20px 0 0}
 .feed-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:52px;background:linear-gradient(transparent,rgba(255,255,255,.86));pointer-events:none}
+/* 立即试戴悬浮标签 */
+.feed-tryon-label{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(184,165,216,.92),rgba(141,121,184,.92));color:#fff;font-size:11px;font-weight:500;padding:4px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(141,121,184,.3);opacity:0;transition:opacity .2s}
+.feed-card:hover .feed-tryon-label{opacity:1}
 .feed-card-bottom{padding:12px 12px 13px}
 .feed-name{font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text);letter-spacing:-.1px}
 .feed-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
@@ -164,13 +168,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .nail-book-btn:hover{transform:scale(1.02);box-shadow:0 4px 14px rgba(141,121,184,.3)}
 .nail-book-btn i{font-size:15px}
 
-/* 多选对比布局 */
-.grid-compare{width:100%;flex:1;display:grid;gap:5px;min-height:0;border-radius:14px;overflow:hidden}
-.grid-compare.g2{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
+/* 多选对比布局（最多4图） */
+.grid-compare{width:100%;flex:1;display:grid;gap:6px;min-height:0;overflow:hidden}
+/* 2图：上下各占全宽，每张图高度充足 */
+.grid-compare.g2v{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+/* 3~4图：四宫格 */
 .grid-compare.g4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
-.grid-compare.g6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr}
-.grid-compare.g9{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.grid-cell{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;font-size:28px;border:.5px solid #f0f0f0;border-radius:10px;min-height:0;position:relative}
+.grid-cell{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;font-size:28px;border:.5px solid #f0f0f0;border-radius:10px;min-height:0;position:relative;overflow:hidden}
+.grid-cell img{width:100%;height:100%;object-fit:cover;display:block}
 .grid-cell .cell-price{position:absolute;bottom:4px;right:6px;font-size:9px;color:#8d79b8;font-weight:600;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:4px}
 .grid-cell .cell-name{position:absolute;bottom:4px;left:6px;font-size:8px;color:#555;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:4px}
 .grid-cell.empty{background:#fbf8f2;border:1.5px dashed #d9cdea;font-size:20px;color:#ccc}
@@ -260,6 +265,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .rec-btn{width:22px;height:22px;border-radius:50%;border:.5px solid #e8e8e8;background:#f8f8f8;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .15s}
 .rec-btn:hover{background:#f0ebf7;transform:scale(1.1)}
 .rec-btn i{font-size:11px;color:#888}
+
+/* ===== 手图引导弹窗 / AI微调弹窗 ===== */
+#upload-guide-modal,#ai-tune-modal{position:absolute;inset:0;z-index:999;display:flex;align-items:flex-end}
+.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.36);backdrop-filter:blur(4px)}
+.modal-sheet{position:relative;z-index:1;width:100%;background:#fff;border-radius:24px 24px 0 0;padding:28px 20px 36px;display:flex;flex-direction:column;align-items:center;gap:10px;animation:slideUp .3s cubic-bezier(.16,1,.3,1)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-icon{font-size:48px;margin-bottom:4px}
+.modal-title{font-size:16px;font-weight:600;color:#1a1a1a}
+.modal-desc{font-size:13px;color:#888;text-align:center;line-height:1.6}
+.modal-btn-primary{width:100%;background:linear-gradient(135deg,#b8a5d8,#8d79b8);color:#fff;border:none;border-radius:14px;padding:14px 0;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:transform .15s}
+.modal-btn-primary:hover{transform:scale(1.02)}
+.modal-btn-secondary{width:100%;background:transparent;color:#888;border:none;padding:8px 0;font-size:13px;cursor:pointer;font-family:inherit}
+
+/* 试戴进度条 */
+#tryon-progress-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;border-radius:16px;overflow:hidden}
+.tryon-progress-bg{position:absolute;inset:0;background:rgba(247,244,239,.82);backdrop-filter:blur(6px)}
+.tryon-progress-box{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 28px;background:rgba(255,255,255,.72);border-radius:16px;border:.5px solid #d9cdea;min-width:180px}
+.tryon-progress-label{font-size:12px;color:#8d79b8;font-weight:500;display:flex;gap:6px;align-items:center}
+#tryon-pct{font-weight:600}
+.tryon-progress-bar{width:140px;height:6px;background:#ede9e2;border-radius:3px;overflow:hidden}
+.tryon-progress-fill{height:100%;background:linear-gradient(90deg,#b8a5d8,#8d79b8);border-radius:3px;width:0;transition:width .15s ease}
 
 /* ===== 空态/我的 ===== */
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:14px}
