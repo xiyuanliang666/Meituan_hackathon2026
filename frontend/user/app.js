@@ -118,19 +118,27 @@ function goBackFromDetail() { navigateTo(detailFrom); }
 // ===== 首页Feed =====
 function renderFeed() {
   const tagColors = {'法式':'feed-tag-style','简约':'feed-tag-style','可爱':'feed-tag-scene','ins风':'feed-tag-scene','炫彩':'feed-tag-default','高级感':'feed-tag-style','温柔':'feed-tag-scene','日系':'feed-tag-season','节日':'feed-tag-season','闪粉':'feed-tag-default','圣诞':'feed-tag-season','清新':'feed-tag-scene','秋冬':'feed-tag-season','冷淡':'feed-tag-style','夏日':'feed-tag-season','高级':'feed-tag-style','猫眼':'feed-tag-style','渐变':'feed-tag-default','镜面':'feed-tag-style','手绘':'feed-tag-scene'};
+  // 图片容器内联样式：固定宽高比3:4，cover居中，完全不依赖外部CSS
+  const imgBoxStyle = 'width:100%;aspect-ratio:3/4;position:relative;overflow:hidden;display:block;background:#f0ece8;border-radius:12px 12px 0 0';
+  const imgStyle    = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block';
+  const overlayStyle= 'position:absolute;bottom:0;left:0;right:0;height:56px;background:linear-gradient(transparent,rgba(0,0,0,.38));pointer-events:none;z-index:1';
+  const labelStyle  = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.93);color:#8d79b8;font-size:10px;font-weight:600;padding:3px 12px;border-radius:20px;white-space:nowrap;z-index:2;box-shadow:0 1px 5px rgba(141,121,184,.25)';
+  const nameStyle   = 'font-size:12px;font-weight:600;color:rgba(42,32,24,.88);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+
   document.getElementById('feed-container').innerHTML = nailStyles.map(s => `
     <div class="feed-card" onclick="openDetail(${s.id},'home')">
-      <div class="feed-img" style="background:${s.bg}">
+      <div style="${imgBoxStyle}">
         ${s.image_url
-          ? `<img src="${staticUrl(s.image_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="feed-emoji-placeholder" style="display:none">${s.emoji}</div>`
-          : `<div class="feed-emoji-placeholder">${s.emoji}</div>`
+          ? `<img src="${staticUrl(s.image_url)}" style="${imgStyle}" onerror="this.style.display='none'">`
+          : `<div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:40px">${s.emoji}</div>`
         }
-        <div class="feed-tryon-label">立即试戴</div>
+        <div style="${overlayStyle}"></div>
+        <div style="${labelStyle}">立即试戴</div>
       </div>
-      <div class="feed-card-bottom">
-        <div class="feed-img-name">${s.name}</div>
-        <div class="feed-tags">${s.tags.slice(0,3).map(t=>`<span class="feed-tag ${tagColors[t]||'feed-tag-default'}">${t}</span>`).join('')}</div>
-        <div class="feed-bottom-row">
+      <div style="padding:9px 11px 11px">
+        <div style="${nameStyle}">${s.name}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${s.tags.slice(0,3).map(t=>`<span class="feed-tag ${tagColors[t]||'feed-tag-default'}">${t}</span>`).join('')}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
           <div class="feed-price"><span class="feed-price-unit">¥</span>${s.price}</div>
           <button class="tryon-btn" onclick="event.stopPropagation();tryFromFeed(${s.id})">AI 试款</button>
         </div>
