@@ -7,28 +7,36 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="styles.css?v=20260602">
 <style>
-/* ── Feed 卡片：图片自适应原生比例，不裁切 ── */
-.feed-card { border-radius: 16px; overflow: hidden; background: rgba(255,255,255,.72); }
+/* ── Feed 卡片核心样式（内嵌，优先级最高，不受缓存影响）── */
+.feed-card {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  background: rgba(255,255,255,.72) !important;
+}
+/* 图片区：固定 4:3 比例，cover 居中裁切，美甲图居中清晰 */
 .feed-img {
-  width: 100%;
-  display: block;        /* 关键：block 才能被 img 撑开 */
-  position: relative;
-  overflow: hidden;
-  background: #f7f4ef;
+  width: 100% !important;
+  aspect-ratio: 4 / 3 !important;
+  position: relative !important;
+  overflow: hidden !important;
+  background: #f7f4ef !important;
+  display: block !important;
 }
 .feed-img img {
-  width: 100%;
-  height: auto;          /* 关键：跟随原图比例 */
-  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
 }
 /* emoji 无图占位 */
 .feed-emoji-placeholder {
-  width: 100%;
-  padding: 40px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40px;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 40px !important;
 }
 /* 图片底部暗渐变，让标签可读 */
 .feed-img::after {
@@ -36,35 +44,36 @@
   position: absolute;
   bottom: 0; left: 0; right: 0;
   height: 56px;
-  background: linear-gradient(transparent, rgba(0,0,0,.32));
+  background: linear-gradient(transparent, rgba(0,0,0,.38));
   pointer-events: none;
+  z-index: 1;
 }
 /* 立即试戴标签 — 常驻 */
 .feed-tryon-label {
-  position: absolute;
-  bottom: 9px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(255,255,255,.93);
-  color: #8d79b8;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 3px 11px;
-  border-radius: 20px;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: 0 1px 5px rgba(141,121,184,.22);
-  z-index: 2;
+  position: absolute !important;
+  bottom: 9px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(255,255,255,.93) !important;
+  color: #8d79b8 !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 3px 11px !important;
+  border-radius: 20px !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  box-shadow: 0 1px 5px rgba(141,121,184,.22) !important;
+  z-index: 2 !important;
 }
 /* 卡片底部信息区 */
-.feed-card-bottom { padding: 9px 11px 12px; }
+.feed-card-bottom { padding: 9px 11px 12px !important; }
 /* 款式名称 */
 .feed-img-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(42,32,24,.88);
-  margin-bottom: 5px;
-  white-space: nowrap;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: rgba(42,32,24,.88) !important;
+  margin-bottom: 5px !important;
+  white-space: nowrap !important;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -.1px;
@@ -204,7 +213,7 @@
   </div>
 
 </div>
-<script src="../api-config.js?v=20260602b"></script>
-<script src="app.js?v=20260602b"></script>
+<script src="../api-config.js?v=20260602c"></script>
+<script src="app.js?v=20260602c"></script>
 </body>
 </html>
