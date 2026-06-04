@@ -26,6 +26,8 @@ let conversationId = null;
 let uploadedHandImageUrl = null;
 // 每个款式的历史试戴结果图：Map<styleId, string[]>
 let tryonHistory = {};
+// 已尝试过试戴但 AI 模型未返回结果的款式 ID 集合（避免重复调用）
+let tryonAttempted = new Set();
 // 收藏集合（持久化到 localStorage）
 let favoritesSet = new Set(JSON.parse(localStorage.getItem('prism_favorites') || '[]'));
 
@@ -118,33 +120,27 @@ function goBackFromDetail() { navigateTo(detailFrom); }
 // ===== 首页Feed =====
 function renderFeed() {
   const tagColors = {'法式':'feed-tag-style','简约':'feed-tag-style','可爱':'feed-tag-scene','ins风':'feed-tag-scene','炫彩':'feed-tag-default','高级感':'feed-tag-style','温柔':'feed-tag-scene','日系':'feed-tag-season','节日':'feed-tag-season','闪粉':'feed-tag-default','圣诞':'feed-tag-season','清新':'feed-tag-scene','秋冬':'feed-tag-season','冷淡':'feed-tag-style','夏日':'feed-tag-season','高级':'feed-tag-style','猫眼':'feed-tag-style','渐变':'feed-tag-default','镜面':'feed-tag-style','手绘':'feed-tag-scene'};
-  // 图片容器内联样式：固定宽高比3:4，cover居中，完全不依赖外部CSS
-  const imgBoxStyle = 'width:100%;aspect-ratio:3/4;position:relative;overflow:hidden;display:block;background:#f0ece8;border-radius:12px 12px 0 0';
-  const imgStyle    = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block';
-  const overlayStyle= 'position:absolute;bottom:0;left:0;right:0;height:56px;background:linear-gradient(transparent,rgba(0,0,0,.38));pointer-events:none;z-index:1';
-  const labelStyle  = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.93);color:#8d79b8;font-size:10px;font-weight:600;padding:3px 12px;border-radius:20px;white-space:nowrap;z-index:2;box-shadow:0 1px 5px rgba(141,121,184,.25)';
-  const nameStyle   = 'font-size:12px;font-weight:600;color:rgba(42,32,24,.88);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
 
-  document.getElementById('feed-container').innerHTML = nailStyles.map(s => `
+  const makeCard = s => `
     <div class="feed-card" onclick="openDetail(${s.id},'home')">
-      <div style="${imgBoxStyle}">
+      <div class="feed-img">
         ${s.image_url
-          ? `<img src="${staticUrl(s.image_url)}" style="${imgStyle}" onerror="this.style.display='none'">`
-          : `<div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:40px">${s.emoji}</div>`
+          ? `<img src="${staticUrl(s.image_url)}" loading="lazy" onerror="this.style.display='none'">`
+          : `<div class="feed-emoji-placeholder">${s.emoji}</div>`
         }
-        <div style="${overlayStyle}"></div>
-        <div style="${labelStyle}">立即试戴</div>
+        <span class="feed-tryon-label">立即试戴</span>
       </div>
-      <div style="padding:9px 11px 11px">
-        <div style="${nameStyle}">${s.name}</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${s.tags.slice(0,3).map(t=>`<span class="feed-tag ${tagColors[t]||'feed-tag-default'}">${t}</span>`).join('')}</div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div class="feed-price"><span class="feed-price-unit">¥</span>${s.price}</div>
-          <button class="tryon-btn" onclick="event.stopPropagation();tryFromFeed(${s.id})">AI 试款</button>
-        </div>
+      <div class="feed-card-bottom">
+        <div class="feed-name">${s.name}</div>
+        <div class="feed-tags">${s.tags.slice(0,3).map(t=>`<span class="feed-tag ${tagColors[t]||'feed-tag-default'}">${t}</span>`).join('')}</div>
+        <div class="feed-price"><span class="feed-price-unit">¥</span>${s.price}</div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+
+  const left  = nailStyles.filter((_,i) => i % 2 === 0).map(makeCard).join('');
+  const right = nailStyles.filter((_,i) => i % 2 === 1).map(makeCard).join('');
+  document.getElementById('feed-container').innerHTML =
+    `<div class="feed-inner"><div class="feed-col">${left}</div><div class="feed-col">${right}</div></div>`;
 }
 
 
@@ -248,8 +244,8 @@ function renderDetailPage() {
       <button class="nail-book-btn" onclick="alert('正在跳转预约页面…\\n\\n¥${item.price} · ${item.name}\\n${item.shop}')"><i class="ti ti-calendar"></i> 立即预约 ¥${item.price}</button>
     `;
 
-    // 有手图时调用试戴 API，并展示进度条
-    if (uploadedHandImageUrl && item.image_url && !lastResult) {
+    // 有手图时调用试戴 API，并展示进度条（不重复调用已失败的）
+    if (uploadedHandImageUrl && item.image_url && !lastResult && !tryonAttempted.has(item.id)) {
       startTryOnWithProgress(item);
     }
   } else {
@@ -372,6 +368,22 @@ function startTryOnWithProgress(item) {
               <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:9px">
             </div>`).join('');
         }
+      } else {
+        // AI 模型未启用或调用失败，标记已尝试，显示友好提示
+        tryonAttempted.add(item.id);
+        const existingNotice = bigimg.querySelector('.tryon-fallback-notice');
+        if (!existingNotice) {
+          const notice = document.createElement('div');
+          notice.className = 'tryon-fallback-notice';
+          notice.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;text-align:center">
+              <i class="ti ti-photo-ai" style="font-size:32px;color:var(--accent,#8b5cf6);opacity:.7"></i>
+              <div style="font-size:13px;font-weight:500;color:var(--text,#1a1a1a)">AI 试戴效果生成中</div>
+              <div style="font-size:11px;color:var(--muted,#999);line-height:1.5">真实 AI 生图模型正在部署中<br>请稍后再试，或先浏览其他款式</div>
+            </div>`;
+          const actions = bigimg.querySelector('.tryon-actions');
+          bigimg.insertBefore(notice, actions);
+        }
       }
     }, 300);
   }
@@ -418,6 +430,11 @@ async function callTryOnAPI(item) {
       style_id: item.style_id || String(item.id),
     });
     if (result && result.result_image_url) {
+      // 如果后端返回的是 SVG 占位图（AI 模型未启用），不当作真实结果
+      if (result.generation_mode === 'local_svg_fallback' || result.result_image_url.endsWith('.svg')) {
+        console.warn('[试戴] AI 生图模型未启用，返回了占位图');
+        return null;
+      }
       return staticUrl(result.result_image_url);
     }
   } catch (e) {
@@ -426,35 +443,380 @@ async function callTryOnAPI(item) {
   return null;
 }
 
-// AI 微调面板
+// ===== AI 款式微调页 =====
+const TUNE_MOR = ['#b5a89a','#c4b5a5','#9aaa99','#b0b8a0','#a8a0b0','#b8a0a8','#c0b098','#a8b8c0','#b0a890','#c8b8a8'];
+const TUNE_MAC = ['#f7c5c5','#f7d9b0','#f5f0a0','#b8e8b8','#a8d8f0','#c8b8f0','#f0b8d8','#b8f0e0','#d0c8f0','#d0e8f8'];
+const TUNE_SHAPES = [
+  {l:'圆甲', p:'M6 34 Q6 2 16 2 Q26 2 26 34Z'},
+  {l:'方甲', p:'M5 2h22v30h-22z'},
+  {l:'尖甲', p:'M16 1L27 33 5 33Z'},
+  {l:'方圆甲', p:'M6 9 Q6 2 16 2 Q26 2 26 9L26 32 6 32Z'},
+  {l:'芭蕾甲', p:'M16 1L27 40 5 40Z'},
+  {l:'长梯甲', p:'M8 2L24 2 27 38 5 38Z'},
+  {l:'棺材甲', p:'M8 2L24 2 30 40 2 40Z'},
+  {l:'杏仁甲', p:'M16 2Q28 12 26 28Q24 38 16 38Q8 38 6 28Q4 12 16 2Z'},
+];
+const TUNE_FRENCH = [
+  {l:'经典', p:'M5 2h22v30h-22z', tp:'M5 2h22v8h-22z', tc:'#fff'},
+  {l:'彩色', p:'M5 2h22v30h-22z', tp:'M5 2Q16 0 27 2L27 10Q16 8 5 10Z', tc:'#f0b0c8'},
+  {l:'细线', p:'M5 2h22v30h-22z', ln:'M5 12 Q16 4 27 12', lc:'#fff'},
+  {l:'奶茶', p:'M5 2h22v30h-22z', ln:'M5 12 Q16 4 27 12', lc:'#d4a878'},
+];
+const TUNE_FNAMES = ['拇指','食指','中指','无名指','小指'];
+
+// 微调状态
+let tuneIsGenerating = false;
+let tuneSelFinger = null;
+let tuneCurFingerName = '';
+let tuneMode = 0; // 0=整体 1=单指
+let tuneStyleItem = null;
+// 当前选择的参数（用于组装 prompt）
+let tunePendingShape = null;   // 整体：甲型名
+let tunePendingColor = null;   // 整体/单指：颜色值或名称
+let tunePendingSingleFunc = null; // 单指：功能类型
+let tunePendingFrench = null;  // 单指法式款式名
+let tunePendingDeco = null;    // 单指装饰品名
+
 function openAiTunePanel() {
   const item = nailStyles.find(s => s.id === currentDetailId);
   if (!item) return;
-  const existing = document.getElementById('ai-tune-modal');
-  if (existing) { existing.remove(); return; }
-  const modal = document.createElement('div');
-  modal.id = 'ai-tune-modal';
-  modal.innerHTML = `
-    <div class="modal-backdrop" onclick="document.getElementById('ai-tune-modal').remove()"></div>
-    <div class="modal-sheet">
-      <div class="modal-icon">✨</div>
-      <div class="modal-title">AI 微调</div>
-      <div class="modal-desc" style="margin-bottom:12px">告诉 AI 你想如何调整效果</div>
-      <textarea id="ai-tune-input" style="width:100%;height:80px;border:.5px solid #d9cdea;border-radius:10px;padding:10px;font-size:13px;font-family:inherit;resize:none;outline:none;background:#faf8ff" placeholder="例如：颜色再深一点、指甲更长一点…"></textarea>
-      <button class="modal-btn-primary" style="margin-top:10px" onclick="submitAiTune(${item.id})">生成微调效果</button>
-      <button class="modal-btn-secondary" onclick="document.getElementById('ai-tune-modal').remove()">取消</button>
-    </div>`;
-  document.getElementById('app').appendChild(modal);
+  tuneStyleItem = item;
+  // 重置状态
+  tuneIsGenerating = false;
+  tuneSelFinger = null;
+  tuneCurFingerName = '';
+  tuneMode = 0;
+  tunePendingShape = null;
+  tunePendingColor = null;
+  tunePendingSingleFunc = null;
+  tunePendingFrench = null;
+  tunePendingDeco = null;
+
+  // 重置 UI
+  _tuneResetUI();
+  navigateTo('tune');
 }
 
-async function submitAiTune(styleId) {
-  const input = document.getElementById('ai-tune-input');
-  const desc = input ? input.value.trim() : '';
-  document.getElementById('ai-tune-modal')?.remove();
-  const item = nailStyles.find(s => s.id === styleId);
-  if (!item) return;
-  if (!uploadedHandImageUrl) { showUploadGuideModal(styleId); return; }
-  startTryOnWithProgress({ ...item, _tuneDesc: desc });
+function closeTunePage() {
+  navigateTo('detail');
+}
+
+function _tuneResetUI() {
+  // 重置 tab
+  document.getElementById('tuneTab0').classList.add('on');
+  document.getElementById('tuneTab1').classList.remove('on');
+  document.getElementById('tunePaneWhole').classList.add('on');
+  document.getElementById('tunePaneSingleIdle').classList.remove('on');
+  document.getElementById('tunePaneSingleSel').classList.remove('on');
+  document.getElementById('tuneFhint').classList.remove('show');
+
+  // 重置指甲高亮
+  document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
+
+  // 重置确认按钮
+  _tuneUpdateConfirmBtn();
+
+  // 构建色块和甲型网格
+  _tuneBuildSwatches('tuneSwWhole', TUNE_MOR);
+  _tuneBuildSwatches('tuneSwSingle', TUNE_MOR);
+  _tuneBuildShapeGrid('tuneSgWhole', TUNE_SHAPES);
+  _tuneBuildShapeGrid('tuneSgFrench', TUNE_FRENCH);
+
+  // 重置整体 ctab
+  document.querySelectorAll('#tuneCtWhole .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+  document.querySelectorAll('#tuneCtSingle .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+
+  // 隐藏单指子面板
+  ['Color','French','Deco'].forEach(f => {
+    const el = document.getElementById('tuneSub'+f);
+    if (el) el.style.display = 'none';
+  });
+  ['tuneFfColor','tuneFfFrench','tuneFfDeco'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('on');
+  });
+
+  // 恢复 tip 条
+  const tipBar = document.getElementById('tuneTipBar');
+  if (tipBar) tipBar.style.display = '';
+
+  // 显示款式图（背景色用款式 bg）
+  const bg = document.getElementById('tuneNailBg');
+  if (bg && tuneStyleItem) bg.style.background = tuneStyleItem.bg || '#a8b870';
+}
+
+function _tuneUpdateConfirmBtn() {
+  const btn = document.getElementById('tuneConfirmBtn');
+  if (!btn) return;
+  let ready = false;
+  if (tuneMode === 0) {
+    ready = !!(tunePendingShape || tunePendingColor);
+  } else {
+    if (tunePendingSingleFunc === 'color') ready = !!tunePendingColor;
+    else if (tunePendingSingleFunc === 'french') ready = !!tunePendingFrench;
+    else if (tunePendingSingleFunc === 'deco') ready = !!tunePendingDeco;
+    else if (tuneMode === 1) {
+      // 文本模式：有文字即可
+      const tf = document.getElementById('tuneTextField');
+      ready = !!(tf && tf.value.trim());
+    }
+  }
+  btn.disabled = !ready;
+}
+
+function _tuneBuildSwatches(containerId, colors) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = '';
+  colors.forEach(col => {
+    const s = document.createElement('div');
+    s.className = 'tune-sw';
+    s.style.background = col;
+    s.onclick = () => {
+      c.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
+      s.classList.add('on');
+      tunePendingColor = col;
+      _tuneUpdateConfirmBtn();
+    };
+    c.appendChild(s);
+  });
+  // 自定义按钮
+  const cu = document.createElement('div');
+  cu.className = 'tune-sw-c';
+  cu.innerHTML = '+';
+  cu.onclick = () => {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.style.cssText = 'position:absolute;opacity:0;width:0;height:0';
+    document.body.appendChild(input);
+    input.click();
+    input.oninput = () => {
+      tunePendingColor = input.value;
+      cu.style.background = input.value;
+      cu.innerHTML = '';
+      _tuneUpdateConfirmBtn();
+    };
+    input.onchange = () => input.remove();
+  };
+  c.appendChild(cu);
+}
+
+function _tuneBuildShapeGrid(containerId, shapes) {
+  const g = document.getElementById(containerId);
+  if (!g) return;
+  g.innerHTML = '';
+  const isFrench = containerId === 'tuneSgFrench';
+  shapes.forEach(sh => {
+    const d = document.createElement('div');
+    d.className = 'tune-si';
+    let inner = `<path d="${sh.p}" fill="#8a9a5b" opacity="0.85"/>`;
+    if (sh.tp) inner += `<path d="${sh.tp}" fill="${sh.tc || '#fff'}" opacity="0.9"/>`;
+    if (sh.ln) inner += `<path d="${sh.ln}" stroke="${sh.lc || '#fff'}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    d.innerHTML = `<svg viewBox="0 0 32 42">${inner}</svg><span>${sh.l}</span>`;
+    d.onclick = () => {
+      g.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
+      d.classList.add('on');
+      if (isFrench) { tunePendingFrench = sh.l; }
+      else { tunePendingShape = sh.l; }
+      _tuneUpdateConfirmBtn();
+    };
+    g.appendChild(d);
+  });
+}
+
+function tuneSetMode(m) {
+  if (tuneIsGenerating) return;
+  tuneMode = m;
+  // 重置单指相关 pending
+  tuneSelFinger = null;
+  tunePendingSingleFunc = null;
+  tunePendingFrench = null;
+  tunePendingDeco = null;
+  tunePendingColor = null;
+
+  document.getElementById('tuneTab0').classList.toggle('on', m === 0);
+  document.getElementById('tuneTab1').classList.toggle('on', m === 1);
+  document.getElementById('tunePaneWhole').classList.toggle('on', m === 0);
+  if (m === 1) {
+    document.getElementById('tuneFhint').classList.add('show');
+    document.getElementById('tunePaneSingleIdle').classList.add('on');
+    document.getElementById('tunePaneSingleSel').classList.remove('on');
+    document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
+  } else {
+    document.getElementById('tuneFhint').classList.remove('show');
+    document.getElementById('tunePaneSingleIdle').classList.remove('on');
+    document.getElementById('tunePaneSingleSel').classList.remove('on');
+    document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
+  }
+  _tuneUpdateConfirmBtn();
+}
+
+function tuneTapFinger(idx) {
+  if (tuneMode !== 1 || tuneIsGenerating) return;
+  tuneSelFinger = idx;
+  tuneCurFingerName = TUNE_FNAMES[idx];
+  tunePendingSingleFunc = null;
+  tunePendingColor = null;
+  tunePendingFrench = null;
+  tunePendingDeco = null;
+
+  document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
+  document.getElementById('tn' + idx).classList.add('sel');
+  document.getElementById('tuneFhint').textContent = '已选：' + TUNE_FNAMES[idx] + '，请选择调整方式';
+  document.getElementById('tuneFlbl').textContent = '已选：' + TUNE_FNAMES[idx];
+  document.getElementById('tunePaneSingleIdle').classList.remove('on');
+  document.getElementById('tunePaneSingleSel').classList.add('on');
+
+  // 重置功能选项
+  ['Color','French','Deco'].forEach(f => {
+    const el = document.getElementById('tuneSub' + f);
+    if (el) el.style.display = 'none';
+    const btn = document.getElementById('tuneFf' + f);
+    if (btn) btn.classList.remove('on');
+  });
+  _tuneUpdateConfirmBtn();
+}
+
+function tuneSetFunc(el, type) {
+  if (tuneIsGenerating) return;
+  tunePendingSingleFunc = type;
+  tunePendingColor = null;
+  tunePendingFrench = null;
+  tunePendingDeco = null;
+
+  ['Color','French','Deco'].forEach(f => {
+    document.getElementById('tuneSub' + f).style.display = 'none';
+    document.getElementById('tuneFf' + f).classList.remove('on');
+  });
+  el.classList.add('on');
+  const cap = type.charAt(0).toUpperCase() + type.slice(1);
+  document.getElementById('tuneSub' + cap).style.display = 'block';
+
+  if (type === 'color') {
+    _tuneBuildSwatches('tuneSwSingle', TUNE_MOR);
+    document.querySelectorAll('#tuneCtSingle .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+  }
+  _tuneUpdateConfirmBtn();
+}
+
+function tuneSetCTab(el, ctabId, swId, sys) {
+  if (tuneIsGenerating) return;
+  document.getElementById(ctabId).querySelectorAll('.tune-ctab').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+  tunePendingColor = null;
+  if (sys === 'custom') {
+    document.getElementById(swId).innerHTML = '';
+    const cu = document.createElement('div');
+    cu.className = 'tune-sw-c';
+    cu.innerHTML = '选色';
+    cu.style.cssText = 'width:auto;border-radius:12px;padding:0 10px;font-size:11px;';
+    cu.onclick = () => {
+      const input = document.createElement('input');
+      input.type = 'color';
+      input.style.cssText = 'position:absolute;opacity:0;width:0;height:0';
+      document.body.appendChild(input);
+      input.click();
+      input.oninput = () => { tunePendingColor = input.value; _tuneUpdateConfirmBtn(); };
+      input.onchange = () => input.remove();
+    };
+    document.getElementById(swId).appendChild(cu);
+  } else {
+    _tuneBuildSwatches(swId, sys === 'morandi' ? TUNE_MOR : TUNE_MAC);
+  }
+  _tuneUpdateConfirmBtn();
+}
+
+function tuneSelDeco(el) {
+  if (tuneIsGenerating) return;
+  document.getElementById('tuneEpDeco').querySelectorAll('.tune-pill').forEach(p => p.classList.remove('on'));
+  el.classList.add('on');
+  tunePendingDeco = el.textContent;
+  _tuneUpdateConfirmBtn();
+}
+
+function _tuneBuildLoadingDesc() {
+  if (tuneMode === 0) {
+    const parts = [];
+    if (tunePendingShape) parts.push('甲型调整为' + tunePendingShape);
+    if (tunePendingColor) parts.push('颜色调整为' + tunePendingColor);
+    return '正在将整体' + parts.join('、') + '…';
+  } else {
+    const fn = tuneCurFingerName;
+    if (tunePendingSingleFunc === 'color') return `正在调整${fn}颜色为 ${tunePendingColor}…`;
+    if (tunePendingSingleFunc === 'french') return `正在为${fn}添加${tunePendingFrench}法式…`;
+    if (tunePendingSingleFunc === 'deco') return `正在为${fn}添加${tunePendingDeco}装饰…`;
+    return '正在生成…';
+  }
+}
+
+function tuneConfirmGenerate() {
+  if (tuneIsGenerating) return;
+  const btn = document.getElementById('tuneConfirmBtn');
+  if (btn && btn.disabled) return;
+
+  const desc = _tuneBuildLoadingDesc();
+  tuneIsGenerating = true;
+  document.getElementById('tuneLdDesc').textContent = desc;
+  document.getElementById('tuneLdlay').classList.add('show');
+  document.getElementById('tuneSc').classList.add('tune-disabled');
+  document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = 'none');
+  if (btn) btn.disabled = true;
+
+  // TODO: 接入真实 AI 生图 API，目前模拟 2.5s 后完成
+  setTimeout(() => {
+    tuneIsGenerating = false;
+    document.getElementById('tuneLdlay').classList.remove('show');
+    document.getElementById('tuneSc').classList.remove('tune-disabled');
+    document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
+    // 重置 pending，等待下一次选择
+    tunePendingShape = null;
+    tunePendingColor = null;
+    tunePendingFrench = null;
+    tunePendingDeco = null;
+    tunePendingSingleFunc = null;
+    // 清除选中高亮，回到初始态
+    document.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.tune-pill').forEach(x => x.classList.remove('on'));
+    _tuneUpdateConfirmBtn();
+  }, 2500);
+}
+
+function tuneSubmitText() {
+  const tf = document.getElementById('tuneTextField');
+  const text = tf ? tf.value.trim() : '';
+  if (!text || tuneIsGenerating) return;
+  const desc = `正在根据描述生成：${text}…`;
+  tunePendingColor = text; // 用 color 字段临时承载，仅用于 confirm 检测
+  tuneIsGenerating = true;
+  document.getElementById('tuneLdDesc').textContent = desc;
+  document.getElementById('tuneLdlay').classList.add('show');
+  document.getElementById('tuneSc').classList.add('tune-disabled');
+  document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = 'none');
+  if (tf) tf.value = '';
+
+  // TODO: 接入真实 API
+  setTimeout(() => {
+    tuneIsGenerating = false;
+    tunePendingColor = null;
+    document.getElementById('tuneLdlay').classList.remove('show');
+    document.getElementById('tuneSc').classList.remove('tune-disabled');
+    document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
+    _tuneUpdateConfirmBtn();
+  }, 2500);
+}
+
+function submitTuneToTryon() {
+  // 将微调后款式图送入试戴流程
+  closeTunePage();
+  if (!uploadedHandImageUrl) { showUploadGuideModal(tuneStyleItem?.id); return; }
+  if (tuneStyleItem) {
+    // 只有在没有试戴历史（首次）时才触发试戴 API，避免重复调用
+    const historyImgs = tryonHistory[tuneStyleItem.id] || [];
+    if (historyImgs.length === 0) {
+      startTryOnWithProgress(tuneStyleItem);
+    }
+  }
 }
 
 function toggleMultiSelect() {
