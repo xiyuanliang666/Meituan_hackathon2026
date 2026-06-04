@@ -1,0 +1,11 @@
+{
+  "name": "nail-ai-backend-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "xhs:comments": "node scripts/fetch_xhs_comments_playwright.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.53.2"
+  }
+}

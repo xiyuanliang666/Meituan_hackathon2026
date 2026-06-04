@@ -49,6 +49,20 @@ def generate_text_json_with_gemini(system_prompt: str, user_prompt: str) -> dict
     )
 
 
+def generate_text_json_with_qwen(system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.has_qwen_credentials:
+        raise MultimodalModelError("QWEN_API_KEY is not configured")
+    return _generate_text_json_openai_compatible(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        base_url=settings.qwen_base_url,
+        api_key=settings.qwen_api_key,
+        model_name=settings.qwen_vl_model_name,
+        timeout_seconds=settings.model_timeout_seconds,
+    )
+
+
 def analyze_image_json_with_qwen_vl(image_url: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
     settings = get_settings()
     if not settings.has_qwen_credentials:
