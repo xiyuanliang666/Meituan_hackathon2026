@@ -34,9 +34,9 @@ class TrendRunResponse(BaseModel):
 
 class TrendPipelineRunCreateRequest(BaseModel):
     triggered_by: str = Field(default="manual")
-    input_json_path: str = Field(default="backend/mock_data/ugc_posts_from_links.json")
-    output_json_path: str = Field(default="backend/mock_data/ugc_posts_from_links.json")
-    raw_comments_file: str = Field(default="backend/mock_data/ugc_posts_from_links_raw_comments.json")
+    input_json_path: str = Field(default="backend/mock_data/ugc_posts_from_links_clean.json")
+    output_json_path: str = Field(default="backend/mock_data/ugc_posts_from_links_clean.json")
+    raw_comments_file: str = Field(default="backend/mock_data/ugc_posts_from_links_clean_raw_comments.json")
     posts: list[dict[str, Any]] | None = None
     seed_links: list[str] | None = None
     user_data_dir: str = Field(default="backend/.playwright-xhs-profile")
@@ -45,6 +45,7 @@ class TrendPipelineRunCreateRequest(BaseModel):
     refresh_ttl_hours: int = Field(default=72, ge=0, le=720)
     only_missing: bool = True
     force_refresh: bool = False
+    skip_comment_pipeline: bool = False
     comment_limit: int = Field(default=0, ge=0, le=1000)
     login_wait_seconds: int = Field(default=60, ge=0, le=600)
     min_support: int = Field(default=2, ge=1, le=20)
@@ -183,3 +184,9 @@ class TrendConvertToDraftResponse(BaseModel):
     source: str = "trend_agent"
     source_trend_id: str = ""
     tags: dict[str, Any] = Field(default_factory=dict)
+
+
+class TrendResolveCoverResponse(BaseModel):
+    trend_id: str
+    image_url: str = ""
+    resolved: bool = False

@@ -26,7 +26,10 @@ async function apiRequest(endpoint, options = {}) {
 
 // GET 请求
 async function apiGet(endpoint, params = {}) {
-  const query = new URLSearchParams(params).toString();
+  const filtered = Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+  );
+  const query = new URLSearchParams(filtered).toString();
   const url = query ? `${endpoint}?${query}` : endpoint;
   return apiRequest(url, { method: 'GET' });
 }

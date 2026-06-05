@@ -3,8 +3,8 @@
 
 Usage:
     python backend/scripts/run_xhs_comment_pipeline.py \
-      --input backend/mock_data/ugc_posts_from_links.json \
-      --output backend/mock_data/ugc_posts_from_links.json
+      --input backend/mock_data/ugc_posts_from_links_clean.json \
+      --output backend/mock_data/ugc_posts_from_links_clean.json
 """
 
 from __future__ import annotations

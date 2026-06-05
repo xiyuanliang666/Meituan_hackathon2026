@@ -1,3 +1,8 @@
+from hashlib import sha1
+from urllib.parse import urlparse
+import mimetypes
+
+import httpx
 from pathlib import Path
 from uuid import uuid4
 
@@ -63,3 +68,41 @@ def write_static_bytes(rel_path: str, content: bytes) -> str:
 
 def public_url(rel_path: str) -> str:
     return get_settings().public_base_url.rstrip("/") + "/" + rel_path.lstrip("/")
+
+
+def mirror_remote_image(url: str, folder: str = "ugc_posts") -> str:
+    if not url:
+        return ""
+
+    stripped = url.strip()
+    if not stripped or stripped.startswith("data:"):
+        return stripped
+
+    public_base = get_settings().public_base_url.rstrip("/")
+    if stripped.startswith(public_base):
+        return stripped
+
+    if not stripped.startswith("http"):
+        return stripped
+
+    digest = sha1(stripped.encode("utf-8")).hexdigest()
+    parsed = urlparse(stripped)
+    suffix = Path(parsed.path).suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}:
+        suffix = ""
+
+    try:
+        with httpx.Client(timeout=20, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            response = client.get(stripped)
+            response.raise_for_status()
+            content_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+            if not suffix:
+                suffix = ALLOWED_IMAGE_TYPES.get(content_type) or mimetypes.guess_extension(content_type or "") or ".jpg"
+            rel_path = f"{folder}/{digest}{suffix}"
+            target = storage_root() / rel_path
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(response.content)
+            return public_url(rel_path)
+    except Exception:
+        return stripped

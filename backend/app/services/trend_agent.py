@@ -8,7 +8,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -55,6 +55,7 @@ class PostSignal:
     purchase_intents: set[str] = field(default_factory=set)
     social_proofs: set[str] = field(default_factory=set)
     negative_feedbacks: set[str] = field(default_factory=set)
+    snapshots: list[dict[str, Any]] = field(default_factory=list)
     # computed
     hot_score: float = 0.0
     signal_quality: str = "active"
@@ -144,7 +145,7 @@ def build_post_signal(post: dict[str, Any], taxonomy_store: Any = None) -> PostS
     purchase_intents_list = normalize_string_list(comment_insights.get("purchase_intents"))
     social_proofs_list = normalize_string_list(comment_insights.get("social_proofs"))
     negative_list = normalize_string_list(comment_insights.get("negative_feedbacks"))
-    hot_score = compute_post_hot_score(post, comment_insights)
+    hot_score = compute_post_hot_score(post)
 
     # ---------- taxonomy normalization ----------
     raw_set = set(raw_tags_list)
@@ -156,10 +157,6 @@ def build_post_signal(post: dict[str, Any], taxonomy_store: Any = None) -> PostS
         # fallback: put all tags into a generic bucket
         for tag in raw_set:
             normalized.setdefault("style_tags", set()).add(tag)
-
-    # merge comment-derived style_tags into normalized
-    for tag in style_tags_list:
-        _merge_into_normalized(normalized, tag, taxonomy_store)
 
     signal = PostSignal(
         post_id=str(post.get("post_id") or ""),
@@ -183,6 +180,7 @@ def build_post_signal(post: dict[str, Any], taxonomy_store: Any = None) -> PostS
         purchase_intents=set(purchase_intents_list),
         social_proofs=set(social_proofs_list),
         negative_feedbacks=set(negative_list),
+        snapshots=normalize_snapshots(post.get("snapshots")),
         hot_score=hot_score,
         unmatched_raw_tags=unmatched,
     )
@@ -215,10 +213,17 @@ def normalize_raw_tags(
             continue
 
         matched = False
-        # exact match against approved values
+        candidates = [cleaned]
+        if cleaned.endswith("美甲") and len(cleaned) > 2:
+            trimmed = cleaned[:-2].strip()
+            if trimmed:
+                candidates.append(trimmed)
+
+        # exact match against approved values, with a light suffix normalization
         for field_key, approved_set in all_values.items():
-            if cleaned in approved_set:
-                normalized.setdefault(field_key, set()).add(cleaned)
+            matched_value = next((candidate for candidate in candidates if candidate in approved_set), "")
+            if matched_value:
+                normalized.setdefault(field_key, set()).add(matched_value)
                 matched = True
                 break
         if not matched:
@@ -460,7 +465,36 @@ def graph_cluster_signals(
         if len(comp) >= min_support:
             clusters.append([signals[idx] for idx in comp])
 
-    return clusters
+    return refine_clusters_by_primary_technique(clusters, min_support)
+
+
+def refine_clusters_by_primary_technique(
+    clusters: list[list[PostSignal]],
+    min_support: int,
+) -> list[list[PostSignal]]:
+    refined: list[list[PostSignal]] = []
+    for cluster in clusters:
+        technique_buckets: dict[str, list[PostSignal]] = {}
+        for item in cluster:
+            techniques = sorted(item.normalized_tags.get("nail_technique", set()))
+            if not techniques:
+                continue
+            technique_buckets.setdefault(techniques[0], []).append(item)
+
+        valid_buckets = [bucket for bucket in technique_buckets.values() if len(bucket) >= min_support]
+        if not valid_buckets:
+            refined.append(cluster)
+            continue
+
+        covered_ids = {item.post_id for bucket in valid_buckets for item in bucket}
+        for bucket in valid_buckets:
+            refined.append(bucket)
+
+        residual = [item for item in cluster if item.post_id not in covered_ids]
+        if len(residual) >= min_support:
+            refined.append(residual)
+
+    return refined
 
 
 # ---------------------------------------------------------------------------
@@ -476,9 +510,10 @@ def should_merge(a: PostSignal, b: PostSignal) -> bool:
     norm_tags_a = set().union(*a.normalized_tags.values()) if a.normalized_tags else set()
     norm_tags_b = set().union(*b.normalized_tags.values()) if b.normalized_tags else set()
     norm_overlap = norm_tags_a & norm_tags_b
+    technique_overlap = a.normalized_tags.get("nail_technique", set()) & b.normalized_tags.get("nail_technique", set())
 
     # --- hard constraint: at least 1 shared core style tag AND ≥2 dimension hits ---
-    core_fields = {"style_tags", "nail_technique", "color_system"}
+    core_fields = {"nail_technique", "color_system", "nail_length"}
     core_hit = any(
         bool(
             a.normalized_tags.get(f, set()) &
@@ -495,6 +530,18 @@ def should_merge(a: PostSignal, b: PostSignal) -> bool:
         )
     )
 
+    alias_technique_hit = any(
+        token and (
+            f"{token}美甲" in a.raw_tags
+            or f"{token}美甲" in b.raw_tags
+        )
+        for token in technique_overlap
+    )
+
+    # Shared canonical nail technique plus explicit alias evidence is enough to
+    # keep close variants together, e.g. 猫眼 and 猫眼美甲 after normalization.
+    if technique_overlap and (alias_technique_hit or raw_jaccard >= 0.12 or dim_hits >= 2):
+        return True
     if core_hit and dim_hits >= 2:
         return True
     if raw_jaccard >= 0.28 and len(norm_overlap) >= 2:
@@ -595,22 +642,17 @@ def infer_display_lifecycle(
 # ---------------------------------------------------------------------------
 def compute_post_hot_score(
     post: dict[str, Any],
-    comment_insights: dict[str, Any],
 ) -> float:
     like_count = int(post.get("like_count") or 0)
     favorite_count = int(post.get("favorite_count") or 0)
     comment_count = int(post.get("comment_count") or 0)
     trend_weight = clamp_float(post.get("trend_weight"), 1.0)
-    confidence_penalty = clamp_float(comment_insights.get("confidence_penalty"), 0.0)
-    coverage_rate = clamp_float(comment_insights.get("comment_coverage_rate"), 0.0)
     engagement = (
         math.log1p(max(0, like_count)) * 0.35
         + math.log1p(max(0, favorite_count)) * 0.4
         + math.log1p(max(0, comment_count)) * 0.25
     )
-    coverage_bonus = 0.85 + min(coverage_rate, 1.0) * 0.15
-    penalty_factor = max(0.35, 1.0 - confidence_penalty)
-    return round(engagement * trend_weight * coverage_bonus * penalty_factor, 4)
+    return round(engagement * trend_weight, 4)
 
 
 # ---------------------------------------------------------------------------
@@ -632,6 +674,7 @@ def build_trend(index: int, cluster: list[PostSignal]) -> dict[str, Any]:
         sum(item.confidence_penalty for item in cluster) / support_count, 4,
     )
     total_hot_score = sum(item.hot_score for item in cluster)
+    velocity_metrics = compute_velocity_metrics(cluster)
     trend_score = round(
         total_hot_score / max(1, support_count) * math.log1p(support_count + 1), 4,
     )
@@ -654,7 +697,12 @@ def build_trend(index: int, cluster: list[PostSignal]) -> dict[str, Any]:
     style_counter = Counter(
         token
         for item in cluster
-        for token in (item.style_tags | item.normalized_tags.get("style_tags", set()))
+        for token in item.normalized_tags.get("style_tags", set())
+    )
+    technique_counter = Counter(
+        token
+        for item in cluster
+        for token in item.normalized_tags.get("nail_technique", set())
     )
     demand_counter = Counter(token for item in cluster for token in item.demand_tags)
     pain_counter = Counter(token for item in cluster for token in item.pain_points)
@@ -678,6 +726,7 @@ def build_trend(index: int, cluster: list[PostSignal]) -> dict[str, Any]:
 
     reasoning_parts = [
         f"共有 {support_count} 条支撑帖子，核心关键词为 {', '.join(keywords[:5]) or '暂无'}。",
+        f"趋势热度分 {trend_score:.2f}，增长速度分 {velocity_metrics['velocity_score']:.2f}。",
         f"平均评论覆盖率 {avg_coverage:.2f}，平均置信度惩罚 {avg_confidence_penalty:.2f}。",
     ]
     if style_counter:
@@ -688,6 +737,10 @@ def build_trend(index: int, cluster: list[PostSignal]) -> dict[str, Any]:
         reasoning_parts.append(
             f"用户需求集中在 {', '.join(item for item, _ in demand_counter.most_common(3))}。",
         )
+    if velocity_metrics["velocity_score"] >= 3:
+        reasoning_parts.append(
+            f"最近窗口互动增幅约 {velocity_metrics['recent_growth_ratio']:.2f}，近 14 天新帖占比 {velocity_metrics['recent_post_ratio']:.2f}。",
+        )
 
     # ------ Fix 7: canonical trend_id ------
     canonical_id = canonical_trend_key(merged_tags)
@@ -697,11 +750,16 @@ def build_trend(index: int, cluster: list[PostSignal]) -> dict[str, Any]:
     for item in cluster:
         quality_dist[item.signal_quality] = quality_dist.get(item.signal_quality, 0) + 1
 
+    preferred_core_style = (
+        top_counter_items(technique_counter, limit=1)[0]
+        if technique_counter else top_counter_items(style_counter, limit=1)[0]
+        if style_counter else keywords[0]
+        if keywords else representative.title or f"趋势 {canonical_id[:8]}"
+    )
+
     return {
         "trend_id": canonical_id,
-        "core_style": keywords[0]
-        if keywords
-        else representative.title or f"趋势 {canonical_id[:8]}",
+        "core_style": preferred_core_style,
         "representative_image_url": representative.image_url,
         "style_source_image_url": "",
         "supporting_post_ids": [item.post_id for item in cluster_sorted],
@@ -744,6 +802,11 @@ def build_trend(index: int, cluster: list[PostSignal]) -> dict[str, Any]:
             ),
             "engagement_score": engagement_score,
             "support_score": support_score,
+            "velocity_score": velocity_metrics["velocity_score"],
+            "recent_growth_ratio": velocity_metrics["recent_growth_ratio"],
+            "recent_growth_slope": velocity_metrics["recent_growth_slope"],
+            "recent_post_ratio": velocity_metrics["recent_post_ratio"],
+            "high_growth_post_count": velocity_metrics["high_growth_post_count"],
             "comment_signal_score": comment_signal_score,
             "coverage_confidence_score": coverage_confidence_score,
             "signal_quality_distribution": quality_dist,
@@ -817,10 +880,17 @@ def recommend_trend_status(trend_score: float, support_count: int) -> str:
 def top_signal_keywords(signals: list[PostSignal], limit: int = 8) -> list[str]:
     counter: Counter[str] = Counter()
     for signal in signals:
+        normalized_core_tags = (
+            signal.normalized_tags.get("style_tags", set())
+            | signal.normalized_tags.get("nail_technique", set())
+        )
         for token in signal.raw_tags:
-            counter[token] += 1
-        for token in signal.style_tags:
-            counter[token] += 2
+            normalized_token = normalize_phrase(token)
+            if normalized_token.endswith("美甲") and len(normalized_token) > 2:
+                trimmed = normalized_token[:-2].strip()
+                if trimmed and trimmed in normalized_core_tags:
+                    normalized_token = trimmed
+            counter[normalized_token or token] += 1
         for token in signal.purchase_intents:
             counter[token] += 1
         for token in signal.social_proofs:
@@ -857,6 +927,112 @@ def clamp_float(value: Any, default: float) -> float:
     if math.isnan(number) or math.isinf(number):
         return default
     return number
+
+
+def normalize_snapshots(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    snapshots: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        captured_at = str(item.get("captured_at") or "")
+        snapshots.append(
+            {
+                "captured_at": captured_at,
+                "like_count": int(item.get("like_count") or 0),
+                "favorite_count": int(item.get("favorite_count") or 0),
+                "comment_count": int(item.get("comment_count") or 0),
+            }
+        )
+    return sorted(snapshots, key=lambda snap: snap["captured_at"])
+
+
+def snapshot_hot_score(snapshot: dict[str, Any]) -> float:
+    return (
+        math.log1p(max(0, int(snapshot.get("like_count") or 0))) * 0.35
+        + math.log1p(max(0, int(snapshot.get("favorite_count") or 0))) * 0.4
+        + math.log1p(max(0, int(snapshot.get("comment_count") or 0))) * 0.25
+    )
+
+
+def compute_velocity_metrics(cluster: list[PostSignal]) -> dict[str, float | int]:
+    if not cluster:
+        return {
+            "velocity_score": 0.0,
+            "recent_growth_ratio": 0.0,
+            "recent_growth_slope": 0.0,
+            "recent_post_ratio": 0.0,
+            "high_growth_post_count": 0,
+        }
+
+    growth_ratios: list[float] = []
+    daily_slopes: list[float] = []
+    high_growth_post_count = 0
+    now = datetime.now(UTC)
+    recent_post_ratio = (
+        sum(
+            1
+            for item in cluster
+            if (dt := parse_datetime(item.published_at))
+            and (now - dt.astimezone(UTC)) <= timedelta(days=14)
+        )
+        / len(cluster)
+    )
+
+    for item in cluster:
+        snapshots = item.snapshots
+        if len(snapshots) < 2:
+            continue
+        latest = snapshots[-1]
+        latest_dt = parse_datetime(latest.get("captured_at"))
+        if not latest_dt:
+            continue
+
+        target_dt = latest_dt - timedelta(days=7)
+        baseline = None
+        for snap in reversed(snapshots[:-1]):
+            snap_dt = parse_datetime(snap.get("captured_at"))
+            if snap_dt and snap_dt <= target_dt:
+                baseline = snap
+                break
+        if baseline is None:
+            baseline = snapshots[0]
+
+        baseline_dt = parse_datetime(baseline.get("captured_at"))
+        if not baseline_dt:
+            continue
+
+        latest_score = snapshot_hot_score(latest)
+        baseline_score = snapshot_hot_score(baseline)
+        delta_days = max((latest_dt - baseline_dt).total_seconds() / 86400, 1 / 24)
+        delta_score = max(0.0, latest_score - baseline_score)
+        growth_ratio = delta_score / max(baseline_score, 1.0)
+        daily_slope = delta_score / delta_days
+
+        growth_ratios.append(growth_ratio)
+        daily_slopes.append(daily_slope)
+        if growth_ratio >= 0.25:
+            high_growth_post_count += 1
+
+    avg_growth_ratio = round(sum(growth_ratios) / len(growth_ratios), 4) if growth_ratios else 0.0
+    avg_daily_slope = round(sum(daily_slopes) / len(daily_slopes), 4) if daily_slopes else 0.0
+    velocity_score = round(
+        min(
+            10.0,
+            avg_growth_ratio * 3.5
+            + math.log1p(max(avg_daily_slope, 0.0)) * 1.8
+            + recent_post_ratio * 2.0,
+        ),
+        4,
+    )
+    return {
+        "velocity_score": velocity_score,
+        "recent_growth_ratio": avg_growth_ratio,
+        "recent_growth_slope": avg_daily_slope,
+        "recent_post_ratio": round(recent_post_ratio, 4),
+        "high_growth_post_count": high_growth_post_count,
+    }
 
 
 def normalize_string_list(value: Any) -> list[str]:

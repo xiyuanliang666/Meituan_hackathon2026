@@ -4,9 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { createHash } from "node:crypto";
 
 const DEFAULT_COMMENT_LIMIT = 120;
 const DEFAULT_LOGIN_WAIT_SECONDS = 60;
+const DEFAULT_PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "http://127.0.0.1:8000/static";
 const COMMENT_CANDIDATE_SELECTOR =
   ".comment-item, [class*='commentItem'], .parent-comment, .sub-comment-item, [class*='subComment'], [class*='reply-item'], .comments-container > div, [class*='comment-list'] > div";
 
@@ -105,6 +107,30 @@ function loadRawCommentStore(rawCommentsFile) {
 
 function writeRawCommentStore(rawCommentsFile, store) {
   fs.writeFileSync(rawCommentsFile, JSON.stringify(store, null, 2), "utf-8");
+}
+
+function storageRootFromOutput(outputPath) {
+  return path.resolve(path.dirname(outputPath), "..", "storage");
+}
+
+function publicStaticUrl(relPath) {
+  return `${DEFAULT_PUBLIC_BASE_URL.replace(/\/$/, "")}/${String(relPath || "").replace(/^\//, "")}`;
+}
+
+async function capturePostFallbackScreenshot(page, outputPath, postId) {
+  const safePostId = String(postId || "").trim();
+  if (!safePostId) return "";
+  try {
+    const bytes = await page.screenshot({ fullPage: false, type: "jpeg", quality: 82 });
+    const digest = createHash("sha1").update(safePostId).digest("hex").slice(0, 12);
+    const relPath = path.join("trend_post_captures", `${safePostId}-${digest}.jpg`);
+    const absPath = path.join(storageRootFromOutput(outputPath), relPath);
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
+    fs.writeFileSync(absPath, bytes);
+    return publicStaticUrl(relPath);
+  } catch {
+    return "";
+  }
 }
 
 function hasFetchedComments(post) {
@@ -852,6 +878,12 @@ async function main() {
 
       await handlePossibleLogin(page, rl, args.loginWaitSeconds);
       await waitForNoteSurface(page);
+      if (!String(post.page_screenshot_url || "").trim()) {
+        const screenshotUrl = await capturePostFallbackScreenshot(page, args.output, post.post_id);
+        if (screenshotUrl) {
+          post.page_screenshot_url = screenshotUrl;
+        }
+      }
       const normalizedCommentLimit = normalizeCommentLimit(args.commentLimit);
       const expectedCommentCount = Number.isFinite(Number(post.comment_count)) ? Number(post.comment_count) : 0;
       const targetCount = Math.min(

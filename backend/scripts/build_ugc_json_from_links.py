@@ -107,8 +107,10 @@ def main() -> None:
             continue
         urls.append(line)
     posts: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
 
     for index, url in enumerate(urls, start=1):
+        seen_urls.add(url)
         existing = existing_posts.get(url)
         if existing and not should_refetch(
             existing,
@@ -138,6 +140,12 @@ def main() -> None:
             captured_at=args.captured_at,
         )
         posts.append(merged)
+
+    # Preserve previously captured posts that were not part of this seed batch.
+    for url, existing in existing_posts.items():
+        if url in seen_urls:
+            continue
+        posts.append(ensure_post_defaults(existing))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps({"posts": posts}, ensure_ascii=False, indent=2), encoding="utf-8")

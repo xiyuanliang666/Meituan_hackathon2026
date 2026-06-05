@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from app.config import get_settings
-from app.data.nail_taxonomy_v2_seed import STYLE_TAG_FIELD_KEYS
+from app.data.nail_taxonomy_v2_seed import STYLE_TAG_FIELD_KEYS, TAXONOMY_V2_OPTIONS
 from app.services.dataset_loader import load_evaluation_dataset
+from app.services.image_storage import mirror_remote_image
 
 
 @contextmanager
@@ -1074,6 +1075,17 @@ def import_ugc_posts(posts: list[dict[str, Any]]) -> dict[str, int]:
             post_id = str(post.get("post_id") or "")
             if not post_id:
                 continue
+            image_urls = [str(item).strip() for item in (post.get("image_urls") or []) if str(item).strip()]
+            page_screenshot_url = str(post.get("page_screenshot_url") or "").strip()
+            if image_urls:
+                original_first = image_urls[0]
+                mirrored_first = mirror_remote_image(original_first, folder="ugc_posts")
+                if mirrored_first == original_first and page_screenshot_url:
+                    image_urls[0] = page_screenshot_url
+                else:
+                    image_urls[0] = mirrored_first
+            elif page_screenshot_url:
+                image_urls = [page_screenshot_url]
             exists = conn.execute("SELECT 1 FROM ugc_posts WHERE post_id = ?", (post_id,)).fetchone()
             conn.execute(
                 """
@@ -1125,7 +1137,7 @@ def import_ugc_posts(posts: list[dict[str, Any]]) -> dict[str, int]:
                     str(post.get("author_name") or ""),
                     str(post.get("title") or ""),
                     str(post.get("content") or ""),
-                    json.dumps(post.get("image_urls") or [], ensure_ascii=False),
+                    json.dumps(image_urls, ensure_ascii=False),
                     str(post.get("published_at") or ""),
                     int(post.get("like_count") or 0),
                     int(post.get("favorite_count") or 0),
@@ -1615,12 +1627,24 @@ def list_trends(limit: int = 50, status: str | None = None, life_cycle: str | No
             SELECT *
             FROM trends
             WHERE {' AND '.join(clauses)}
-            ORDER BY trend_score DESC, identified_at DESC
-            LIMIT ?
+            ORDER BY updated_at DESC, trend_score DESC, identified_at DESC
             """,
-            params,
+            params[:-1] if params else [],
         ).fetchall()
-    return [_trend_payload(dict(row)) for row in rows]
+    deduped: list[dict[str, Any]] = []
+    seen_core_styles: set[str] = set()
+    for row in rows:
+        payload = _trend_payload(dict(row))
+        core_style = str(payload.get("core_style") or "").strip()
+        if core_style:
+            if core_style in seen_core_styles:
+                continue
+            seen_core_styles.add(core_style)
+        deduped.append(payload)
+        if len(deduped) >= limit:
+            break
+    deduped.sort(key=lambda item: (float(item.get("trend_score") or 0.0), str(item.get("identified_at") or "")), reverse=True)
+    return deduped
 
 
 def get_trend(trend_id: str) -> dict[str, Any] | None:
@@ -1628,6 +1652,28 @@ def get_trend(trend_id: str) -> dict[str, Any] | None:
         _create_tables(conn)
         row = conn.execute("SELECT * FROM trends WHERE trend_id = ?", (trend_id,)).fetchone()
     return _trend_payload(dict(row)) if row else None
+
+
+def update_trend_representative_image(trend_id: str, image_url: str) -> dict[str, Any] | None:
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        row = conn.execute("SELECT * FROM trends WHERE trend_id = ?", (trend_id,)).fetchone()
+        if not row:
+            return None
+        supporting_posts = _json_loads(row.get("supporting_posts_json"), [])
+        if supporting_posts and isinstance(supporting_posts[0], dict):
+            supporting_posts[0]["image_url"] = image_url
+        conn.execute(
+            """
+            UPDATE trends
+            SET representative_image_url = ?, supporting_posts_json = ?, updated_at = ?
+            WHERE trend_id = ?
+            """,
+            (image_url, json.dumps(supporting_posts, ensure_ascii=False), now, trend_id),
+        )
+        updated = conn.execute("SELECT * FROM trends WHERE trend_id = ?", (trend_id,)).fetchone()
+    return _trend_payload(dict(updated)) if updated else None
 
 
 def create_merchant_trend_action(
@@ -2251,9 +2297,10 @@ def _trend_pipeline_run_payload(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _trend_payload(row: dict[str, Any]) -> dict[str, Any]:
+    display_core_style = _normalize_trend_display_name(row["core_style"])
     return {
         "trend_id": row["trend_id"],
-        "core_style": row["core_style"],
+        "core_style": display_core_style,
         "representative_image_url": row["representative_image_url"],
         "style_source_image_url": row["style_source_image_url"],
         "supporting_post_ids": _json_loads(row.get("supporting_post_ids_json"), []),
@@ -2281,6 +2328,18 @@ def _trend_payload(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def _normalize_trend_display_name(core_style: str) -> str:
+    text = str(core_style or "").strip()
+    if not text:
+        return ""
+    approved_techniques = set(TAXONOMY_V2_OPTIONS.get("nail_technique", []))
+    if text.endswith("美甲") and len(text) > 2:
+        trimmed = text[:-2].strip()
+        if trimmed in approved_techniques:
+            return trimmed
+    return text
 
 
 def _seed_from_xlsx(conn: sqlite3.Connection) -> None:

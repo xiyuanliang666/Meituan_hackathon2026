@@ -13,6 +13,7 @@ from app.schemas.trends import (
     TrendActionResponse,
     TrendConvertToDraftRequest,
     TrendConvertToDraftResponse,
+    TrendResolveCoverResponse,
     TrendListItem,
     TrendPipelineRunCreateRequest,
     TrendPipelineRunResponse,
@@ -38,6 +39,7 @@ from app.services.business_db import (
 )
 from app.services.trend_jobs import execute_trend_run
 from app.services.trend_materialization import convert_trend_to_draft
+from app.services.trend_cover import resolve_trend_cover
 from app.services.trend_pipeline import execute_trend_pipeline
 
 
@@ -119,6 +121,7 @@ def create_trend_pipeline_run_endpoint(request: TrendPipelineRunCreateRequest) -
         refresh_ttl_hours=request.refresh_ttl_hours,
         only_missing=request.only_missing,
         force_refresh=request.force_refresh,
+        skip_comment_pipeline=request.skip_comment_pipeline,
         comment_limit=request.comment_limit,
         login_wait_seconds=request.login_wait_seconds,
         min_support=request.min_support,
@@ -163,6 +166,26 @@ def list_trends_endpoint(
     return TrendListResponse(trends=[TrendListItem(**item) for item in list_trends(limit=limit, status=status, life_cycle=life_cycle)])
 
 
+@router.get("/trends/data-health", response_model=DataHealthResponse)
+def get_data_health_endpoint() -> DataHealthResponse:
+    """Return pipeline data health for pre-flight validation."""
+    init_db(seed=True)
+    return DataHealthResponse(**get_data_health())
+
+
+@router.get("/trends/candidate-taxonomy", response_model=CandidateTaxonomyTermListResponse)
+def list_candidate_taxonomy_endpoint(
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> CandidateTaxonomyTermListResponse:
+    """List candidate taxonomy terms for ops review."""
+    init_db(seed=True)
+    terms = list_candidate_taxonomy_terms(status=status, limit=limit)
+    return CandidateTaxonomyTermListResponse(
+        terms=[CandidateTaxonomyTermItem(**item) for item in terms]
+    )
+
+
 @router.get("/trends/{trend_id}", response_model=TrendDetailResponse)
 def get_trend_endpoint(trend_id: str) -> TrendDetailResponse:
     init_db(seed=True)
@@ -185,26 +208,6 @@ def create_trend_action_endpoint(trend_id: str, request: TrendActionRequest) -> 
 
     created = create_merchant_trend_action(merchant_id=request.merchant_id.strip(), trend_id=trend_id, action=action, note=request.note.strip())
     return TrendActionResponse(**created)
-
-
-@router.get("/trends/data-health", response_model=DataHealthResponse)
-def get_data_health_endpoint() -> DataHealthResponse:
-    """Return pipeline data health for pre-flight validation."""
-    init_db(seed=True)
-    return DataHealthResponse(**get_data_health())
-
-
-@router.get("/trends/candidate-taxonomy", response_model=CandidateTaxonomyTermListResponse)
-def list_candidate_taxonomy_endpoint(
-    status: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-) -> CandidateTaxonomyTermListResponse:
-    """List candidate taxonomy terms for ops review."""
-    init_db(seed=True)
-    terms = list_candidate_taxonomy_terms(status=status, limit=limit)
-    return CandidateTaxonomyTermListResponse(
-        terms=[CandidateTaxonomyTermItem(**item) for item in terms]
-    )
 
 
 @router.put("/trends/candidate-taxonomy/{candidate_term}", response_model=CandidateTaxonomyTermItem)
@@ -252,4 +255,21 @@ def convert_trend_to_draft_endpoint(trend_id: str, request: TrendConvertToDraftR
         source=created.get("source", "trend_agent"),
         source_trend_id=created.get("source_trend_id") or trend_id,
         tags=created.get("tags", {}),
+    )
+
+
+@router.post("/trends/{trend_id}/resolve-cover", response_model=TrendResolveCoverResponse)
+def resolve_trend_cover_endpoint(trend_id: str) -> TrendResolveCoverResponse:
+    init_db(seed=True)
+    try:
+        result = resolve_trend_cover(trend_id)
+    except Exception as exc:
+        detail = str(exc)
+        status_code = 404 if "not found" in detail else 400
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return TrendResolveCoverResponse(
+        trend_id=result["trend_id"],
+        image_url=result.get("image_url") or "",
+        resolved=bool(result.get("resolved")),
     )

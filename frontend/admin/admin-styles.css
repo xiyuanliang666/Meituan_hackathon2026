@@ -536,7 +536,9 @@ a.push-source-card,a.push-source-card:visited{position:relative;display:block;fl
 /* ===== 趋势发现 ===== */
 .trend-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(340px,.8fr);gap:16px;align-items:start}
 .trend-main,.trend-side{min-width:0}
+.trend-side{display:flex;flex-direction:column;gap:12px;align-self:start}
 .trend-source-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.trend-source-summary{font-size:12px;color:#888;line-height:1.6;margin-bottom:12px}
 .trend-source-panel{display:flex;flex-direction:column;gap:12px}
 .trend-source-panel.active{display:flex}
 .trend-source-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -586,10 +588,14 @@ a.push-source-card,a.push-source-card:visited{position:relative;display:block;fl
 .trend-item-score{font-size:16px;font-weight:700;color:#8d79b8;flex-shrink:0}
 .trend-item-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11px;color:#888;margin-bottom:8px}
 .trend-item-summary{font-size:12px;color:#555;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.trend-detail-card{position:sticky;top:84px}
+.trend-detail-card{position:static}
+.trend-candidate-card{margin-top:0}
 .trend-detail-empty{padding:40px 18px;font-size:13px;color:#888;text-align:center}
-.trend-detail-cover{width:100%;aspect-ratio:16/10;border-radius:12px;background:#F7F6F2;border:.5px solid #E8E6E0;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.trend-detail-cover{width:100%;aspect-ratio:16/10;border-radius:12px;background:#F7F6F2;border:.5px solid #E8E6E0;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:14px;position:relative}
 .trend-detail-cover i{font-size:30px;color:#aaa}
+.trend-cover-fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#F7F6F2}
+.trend-detail-cover.is-fallback .trend-cover-fallback{display:flex}
+.trend-detail-cover.is-fallback img{display:none}
 .trend-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
 .trend-detail-title{font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px}
 .trend-detail-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -644,7 +650,7 @@ a.push-source-card,a.push-source-card:visited{position:relative;display:block;fl
 
 @media(max-width:900px){
   .trend-layout{grid-template-columns:1fr}
-  .trend-detail-card{position:static}
+  .trend-side{gap:12px}
 }
 
 @media(max-width:768px){

@@ -195,7 +195,7 @@ let styleSearchTimer = null;
 let styleDeleteMode = false;
 
 // ===== 趋势发现 =====
-let trendSourceMode = 'mock';
+let trendSourceMode = 'links';
 let trendListData = [];
 let selectedTrendId = '';
 let latestTrendPipelineRunId = localStorage.getItem('trend_latest_pipeline_run_id') || '';
@@ -1443,42 +1443,6 @@ function setTrendSourceStatus(id, text, isError = false) {
   el.style.color = isError ? '#CC2200' : '#888';
 }
 
-function handleTrendMockFile(event) {
-  const file = event?.target?.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const textarea = document.getElementById('trend-mock-json');
-    if (textarea) textarea.value = String(reader.result || '');
-    setTrendSourceStatus('trend-mock-status', `已载入 ${file.name}`);
-  };
-  reader.onerror = () => setTrendSourceStatus('trend-mock-status', '文件读取失败', true);
-  reader.readAsText(file);
-}
-
-async function importTrendMockJson() {
-  const textarea = document.getElementById('trend-mock-json');
-  const raw = (textarea?.value || '').trim();
-  if (!raw) {
-    setTrendSourceStatus('trend-mock-status', '请先粘贴或选择 JSON', true);
-    return;
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    setTrendSourceStatus('trend-mock-status', 'JSON 格式错误', true);
-    return;
-  }
-  const posts = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.posts) ? parsed.posts : null;
-  if (!Array.isArray(posts)) {
-    setTrendSourceStatus('trend-mock-status', '仅支持帖子数组或 { posts: [...] }', true);
-    return;
-  }
-  setTrendSourceStatus('trend-mock-status', `已装载 ${posts.length} 条帖子，点击“运行趋势识别”将统一触发后端任务。`);
-  showToast('Mock 数据已准备好');
-}
-
 function loadSampleXhsLinks() {
   const textarea = document.getElementById('trend-link-seeds');
   if (!textarea) return;
@@ -1499,29 +1463,12 @@ function saveTrendSeedLinks() {
   showToast('链接种子已保存');
 }
 
-function saveTrendAutoConfig() {
-  const payload = {
-    keywords: (document.getElementById('trend-auto-keywords')?.value || '').trim(),
-    frequency: document.getElementById('trend-auto-frequency')?.value || 'manual',
-  };
-  localStorage.setItem('trend_auto_config', JSON.stringify(payload));
-  setTrendSourceStatus('trend-auto-status', '实验配置已保存。当前不作为 demo 主路径。');
-  showToast('自动发现配置已保存');
-}
-
 function restoreTrendSourceConfig() {
   const savedLinks = localStorage.getItem('trend_seed_links');
   if (savedLinks) {
     const textarea = document.getElementById('trend-link-seeds');
     if (textarea && !textarea.value) textarea.value = savedLinks;
   }
-  try {
-    const savedAuto = JSON.parse(localStorage.getItem('trend_auto_config') || '{}');
-    const keywordsEl = document.getElementById('trend-auto-keywords');
-    const frequencyEl = document.getElementById('trend-auto-frequency');
-    if (keywordsEl && savedAuto.keywords) keywordsEl.value = savedAuto.keywords;
-    if (frequencyEl && savedAuto.frequency) frequencyEl.value = savedAuto.frequency;
-  } catch (e) {}
 }
 
 async function runTrendAgent() {
@@ -1584,7 +1531,7 @@ async function runTrendAgent() {
 
 async function loadTrendRunsAndList() {
   restoreTrendSourceConfig();
-  await Promise.all([loadLatestTrendRun(), loadTrendList()]);
+  await Promise.all([loadLatestTrendRun(), loadTrendList(), loadDataHealth(), loadCandidateTaxonomyTerms()]);
 }
 
 async function loadLatestTrendRun() {
@@ -1593,16 +1540,24 @@ async function loadLatestTrendRun() {
     return;
   }
   try {
-    let run = null;
-    if (latestTrendPipelineRunId) {
-      run = await apiGet(`/trend-agent/pipeline-runs/${latestTrendPipelineRunId}`);
-    } else {
-      const data = await apiGet('/trend-agent/pipeline-runs', { limit: 1 });
-      run = Array.isArray(data?.runs) && data.runs.length ? data.runs[0] : null;
-      if (run?.pipeline_run_id) {
-        latestTrendPipelineRunId = run.pipeline_run_id;
-        localStorage.setItem('trend_latest_pipeline_run_id', latestTrendPipelineRunId);
+    const data = await apiGet('/trend-agent/pipeline-runs', { limit: 1 });
+    const latestRun = Array.isArray(data?.runs) && data.runs.length ? data.runs[0] : null;
+    let run = latestRun;
+
+    if (latestTrendPipelineRunId && (!latestRun || latestRun.pipeline_run_id !== latestTrendPipelineRunId)) {
+      try {
+        const storedRun = await apiGet(`/trend-agent/pipeline-runs/${latestTrendPipelineRunId}`);
+        const storedUpdatedAt = new Date(storedRun?.updated_at || storedRun?.created_at || 0).getTime();
+        const latestUpdatedAt = new Date(latestRun?.updated_at || latestRun?.created_at || 0).getTime();
+        run = storedUpdatedAt > latestUpdatedAt ? storedRun : latestRun;
+      } catch (e) {
+        run = latestRun;
       }
+    }
+
+    if (run?.pipeline_run_id) {
+      latestTrendPipelineRunId = run.pipeline_run_id;
+      localStorage.setItem('trend_latest_pipeline_run_id', latestTrendPipelineRunId);
     }
     renderTrendRunCard(run);
     if (run && (run.status === 'pending' || run.status === 'running')) pollTrendRun(run.pipeline_run_id);
@@ -1620,7 +1575,11 @@ function pollTrendRun(runId) {
       if (run.status === 'succeeded' || run.status === 'failed') {
         clearInterval(trendRunPollTimer);
         if (run.status === 'succeeded') {
-          await loadTrendList();
+          await Promise.all([
+            loadTrendList(),
+            loadDataHealth(),
+            loadCandidateTaxonomyTerms(),
+          ]);
           showToast(`趋势任务完成，产出 ${run.generated_trends || 0} 条趋势`);
         }
       }
@@ -1647,6 +1606,7 @@ function renderTrendRunCard(run) {
   const stageText = {
     queued: '已排队',
     build_posts: '构建帖子',
+    classify_posts: '清洗与分类',
     comment_pipeline: '评论抓取与摘要',
     import_posts: '导入帖子',
     trend_discovery: '趋势识别',
@@ -1656,6 +1616,9 @@ function renderTrendRunCard(run) {
   }[run.stage] || run.stage || '处理中';
   const recentLogs = Array.isArray(run.logs) ? run.logs.slice(-4) : [];
   const sourceMode = run?.payload?.source_mode || '';
+  const nestedTrendRun = run?.payload?.trend_run || {};
+  const discoveredPostCount = nestedTrendRun.total_posts || 0;
+  const commentCompletedPosts = run.processed_posts || 0;
   const needsLoginHint = sourceMode === 'seed_links' && run.stage === 'comment_pipeline' && (run.status === 'pending' || run.status === 'running');
   el.innerHTML = `
     <div class="trend-run-head">
@@ -1666,13 +1629,16 @@ function renderTrendRunCard(run) {
       <span class="lc-pill lc-${statusClass}">${statusText}</span>
     </div>
     <div class="trend-run-stats">
-      <div class="trend-run-stat"><span>帖子总数</span><strong>${run.total_posts || 0}</strong></div>
-      <div class="trend-run-stat"><span>评论已完成</span><strong>${run.processed_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>本次接入帖子</span><strong>${run.total_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>评论链路完成帖子</span><strong>${commentCompletedPosts}</strong></div>
       <div class="trend-run-stat"><span>产出趋势</span><strong>${run.generated_trends || 0}</strong></div>
     </div>
     <div class="trend-run-stats trend-run-stats-secondary">
-      <div class="trend-run-stat"><span>导入新增</span><strong>${run.imported_posts || 0}</strong></div>
-      <div class="trend-run-stat"><span>导入更新</span><strong>${run.updated_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>新增入库帖子</span><strong>${run.imported_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>更新已有帖子</span><strong>${run.updated_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>参与本轮识别帖子</span><strong>${discoveredPostCount}</strong></div>
+    </div>
+    <div class="trend-run-stats trend-run-stats-secondary">
       <div class="trend-run-stat"><span>转草稿</span><strong>${run.converted_drafts || 0}</strong></div>
     </div>
     ${needsLoginHint ? `<div class="trend-run-login-hint"><i class="ti ti-user-check"></i><span>当前正在抓取链接评论，需要本机 Playwright 浏览器登录小红书并保持页面可继续执行。</span></div>` : ''}
@@ -1696,27 +1662,6 @@ function buildTrendPipelineRequest() {
     merchant_id: 'demo_shop',
     use_trend_tags: true,
   };
-  if (trendSourceMode === 'mock') {
-    const textarea = document.getElementById('trend-mock-json');
-    const raw = (textarea?.value || '').trim();
-    if (!raw) {
-      setTrendSourceStatus('trend-mock-status', '请先粘贴或选择 JSON', true);
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      const posts = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.posts) ? parsed.posts : null;
-      if (!Array.isArray(posts)) {
-        setTrendSourceStatus('trend-mock-status', '仅支持帖子数组或 { posts: [...] }', true);
-        return null;
-      }
-      setTrendSourceStatus('trend-mock-status', `准备提交 ${posts.length} 条 Mock 帖子到后端任务`);
-      return { ...base, posts };
-    } catch (e) {
-      setTrendSourceStatus('trend-mock-status', 'JSON 格式错误', true);
-      return null;
-    }
-  }
   if (trendSourceMode === 'links') {
     const textarea = document.getElementById('trend-link-seeds');
     const seedLinks = (textarea?.value || '')
@@ -1731,11 +1676,20 @@ function buildTrendPipelineRequest() {
     return {
       ...base,
       seed_links: seedLinks,
-      output_json_path: 'backend/mock_data/ugc_posts_from_links.json',
-      raw_comments_file: 'backend/mock_data/ugc_posts_from_links_raw_comments.json',
+      output_json_path: 'backend/mock_data/ugc_posts_from_links_clean.json',
+      raw_comments_file: 'backend/mock_data/ugc_posts_from_links_clean_raw_comments.json',
     };
   }
-  setTrendSourceStatus('trend-auto-status', 'Agent 自动发现仍为实验能力，当前前端暂不直接触发。', true);
+  if (trendSourceMode === 'clean') {
+    setTrendSourceStatus('trend-clean-status', '将直接复用现有 clean 文件，跳过评论抓取并重新运行趋势识别');
+    return {
+      ...base,
+      input_json_path: 'backend/mock_data/ugc_posts_from_links_clean.json',
+      output_json_path: 'backend/mock_data/ugc_posts_from_links_clean.json',
+      raw_comments_file: 'backend/mock_data/ugc_posts_from_links_clean_raw_comments.json',
+      skip_comment_pipeline: true,
+    };
+  }
   return null;
 }
 
@@ -1757,7 +1711,8 @@ async function loadTrendList() {
       status: status || undefined,
       life_cycle: lifeCycle || undefined,
     });
-    trendListData = Array.isArray(data?.trends) ? data.trends : [];
+    const incomingTrends = Array.isArray(data?.trends) ? data.trends : [];
+    trendListData = dedupeTrendItems(incomingTrends);
     renderTrendList();
     updateTrendCount();
     if (trendListData.length) {
@@ -1772,6 +1727,30 @@ async function loadTrendList() {
     trendListData = [];
     updateTrendCount();
   }
+}
+
+function dedupeTrendItems(items) {
+  const bestByCoreStyle = new Map();
+  for (const item of items || []) {
+    const key = String(item?.core_style || '').trim() || String(item?.trend_id || '').trim();
+    const existing = bestByCoreStyle.get(key);
+    if (!existing) {
+      bestByCoreStyle.set(key, item);
+      continue;
+    }
+    const itemScore = Number(item?.trend_score || 0);
+    const existingScore = Number(existing?.trend_score || 0);
+    const itemUpdated = new Date(item?.updated_at || item?.identified_at || 0).getTime();
+    const existingUpdated = new Date(existing?.updated_at || existing?.identified_at || 0).getTime();
+    if (itemScore > existingScore || (itemScore === existingScore && itemUpdated > existingUpdated)) {
+      bestByCoreStyle.set(key, item);
+    }
+  }
+  return Array.from(bestByCoreStyle.values()).sort((a, b) => {
+    const scoreDelta = Number(b?.trend_score || 0) - Number(a?.trend_score || 0);
+    if (scoreDelta !== 0) return scoreDelta;
+    return new Date(b?.identified_at || b?.updated_at || 0).getTime() - new Date(a?.identified_at || a?.updated_at || 0).getTime();
+  });
 }
 
 function updateTrendCount() {
@@ -1792,7 +1771,7 @@ function renderTrendList() {
     return `
       <button class="trend-item ${active}" onclick="openTrendDetail('${item.trend_id}')">
         <div class="trend-thumb">
-          ${item.representative_image_url ? `<img src="${staticUrl(item.representative_image_url)}" alt="${escapeHtml(item.core_style)}">` : '<i class="ti ti-photo"></i>'}
+          ${item.representative_image_url ? `<img src="${staticUrl(item.representative_image_url)}" alt="${escapeHtml(item.core_style)}" onerror="this.outerHTML='<i class=\\'ti ti-photo\\'></i>'">` : '<i class="ti ti-photo"></i>'}
         </div>
         <div class="trend-item-body">
           <div class="trend-item-head">
@@ -1857,7 +1836,8 @@ function renderTrendDetail(trend) {
 
   el.innerHTML = `
     <div class="trend-detail-cover">
-      ${trend.representative_image_url ? `<img src="${staticUrl(trend.representative_image_url)}" alt="${escapeHtml(trend.core_style)}">` : '<i class="ti ti-photo"></i>'}
+      <div class="trend-cover-fallback"><i class="ti ti-photo"></i></div>
+      ${trend.representative_image_url ? `<img src="${staticUrl(trend.representative_image_url)}" alt="${escapeHtml(trend.core_style)}" onload="this.parentElement.classList.remove('is-fallback')" onerror="handleTrendCoverError(this,'${trend.trend_id}')">` : '<i class="ti ti-photo"></i>'}
     </div>
     <div class="trend-detail-head">
       <div>
@@ -1903,6 +1883,27 @@ function renderTrendDetail(trend) {
       </div>
     </div>
   `;
+}
+
+async function handleTrendCoverError(img, trendId) {
+  if (!img || !trendId) return;
+  const container = img.closest('.trend-detail-cover');
+  if (container) container.classList.add('is-fallback');
+  if (img.dataset.coverResolveTried === '1') {
+    return;
+  }
+  img.dataset.coverResolveTried = '1';
+  if (!adminBackendAvailable) {
+    return;
+  }
+  try {
+    const result = await apiPost(`/trends/${trendId}/resolve-cover`, {});
+    const nextUrl = staticUrl(result?.image_url || '');
+    if (nextUrl && nextUrl !== img.src) {
+      img.src = nextUrl;
+      return;
+    }
+  } catch (e) {}
 }
 
 function renderSupportingPostCard(post) {
@@ -1963,7 +1964,17 @@ function chipGroup(values, type) {
 }
 
 function trendSignalLine(label, counts) {
-  const entries = Object.entries(counts || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0)).slice(0, 4);
+  let entries = [];
+  if (Array.isArray(counts)) {
+    entries = counts
+      .map(item => [String(item?.label || ''), Number(item?.count || 0)])
+      .filter(([key]) => key);
+  } else {
+    entries = Object.entries(counts || {}).map(([key, val]) => [key, Number(val || 0)]);
+  }
+  entries = entries
+    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+    .slice(0, 4);
   return `
     <div class="trend-signal-line">
       <span class="trend-signal-label">${label}</span>

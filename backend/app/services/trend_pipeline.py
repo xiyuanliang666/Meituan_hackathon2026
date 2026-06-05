@@ -34,6 +34,7 @@ def execute_trend_pipeline(
     refresh_ttl_hours: int,
     only_missing: bool,
     force_refresh: bool,
+    skip_comment_pipeline: bool,
     comment_limit: int,
     login_wait_seconds: int,
     min_support: int,
@@ -71,6 +72,7 @@ def execute_trend_pipeline(
         else:
             if seed_links:
                 normalized_links = [str(item).strip() for item in seed_links if str(item).strip()]
+                raw_posts_path = _derive_raw_posts_path(input_path, output_path)
                 update_trend_pipeline_run(
                     pipeline_run_id,
                     status="running",
@@ -84,49 +86,83 @@ def execute_trend_pipeline(
                     repo_root=repo_root,
                     backend_dir=backend_dir,
                     seed_links=normalized_links,
-                    output_path=output_path,
+                    output_path=raw_posts_path,
                     refresh_ttl_hours=refresh_ttl_hours,
                     only_missing=only_missing,
                     force_refresh=force_refresh,
                 )
+                update_trend_pipeline_run(
+                    pipeline_run_id,
+                    status="running",
+                    stage="classify_posts",
+                    total_posts=_count_posts(raw_posts_path),
+                    error_message="",
+                    payload={"source_mode": "seed_links"},
+                )
+                append_trend_pipeline_run_log(pipeline_run_id, f"Classify raw posts {raw_posts_path} into clean view {output_path}")
+                _run_classify_pipeline(
+                    repo_root=repo_root,
+                    backend_dir=backend_dir,
+                    input_path=raw_posts_path,
+                    output_path=output_path,
+                    provider=provider,
+                )
 
-            total_posts = _count_posts(input_path if seed_links else output_path if output_path.exists() else input_path)
-            update_trend_pipeline_run(
-                pipeline_run_id,
-                status="running",
-                stage="comment_pipeline",
-                total_posts=total_posts,
-                error_message="",
-                payload={"source_mode": "seed_links" if seed_links else "json_path"},
-            )
-            append_trend_pipeline_run_log(
-                pipeline_run_id,
-                f"Start comment pipeline: {(output_path if seed_links else input_path)}",
-            )
-            _run_comment_pipeline(
-                repo_root=repo_root,
-                backend_dir=backend_dir,
-                input_path=output_path if seed_links else input_path,
-                output_path=output_path,
-                raw_comments_path=raw_comments_path,
-                user_data_path=user_data_path,
-                provider=provider,
-                limit=limit,
-                comment_limit=comment_limit,
-                login_wait_seconds=login_wait_seconds,
-                resume=resume,
-                from_start=from_start,
-                force_summary=force_summary,
-                headless=headless,
-            )
-            processed_posts = _count_processed_posts(output_path)
-            update_trend_pipeline_run(
-                pipeline_run_id,
-                stage="import_posts",
-                processed_posts=processed_posts,
-            )
-            append_trend_pipeline_run_log(pipeline_run_id, f"Comment pipeline completed: processed_posts={processed_posts}")
-            posts = _load_posts(output_path)
+            working_path = output_path if (seed_links or output_path.exists()) else input_path
+            total_posts = _count_posts(working_path)
+            if skip_comment_pipeline:
+                processed_posts = _count_processed_posts(working_path)
+                update_trend_pipeline_run(
+                    pipeline_run_id,
+                    status="running",
+                    stage="import_posts",
+                    total_posts=total_posts,
+                    processed_posts=processed_posts,
+                    error_message="",
+                    payload={"source_mode": "clean_rerun" if not seed_links else "seed_links"},
+                )
+                append_trend_pipeline_run_log(
+                    pipeline_run_id,
+                    f"Skip comment pipeline and reuse cleaned posts: {working_path}",
+                )
+                posts = _load_posts(working_path)
+            else:
+                update_trend_pipeline_run(
+                    pipeline_run_id,
+                    status="running",
+                    stage="comment_pipeline",
+                    total_posts=total_posts,
+                    error_message="",
+                    payload={"source_mode": "seed_links" if seed_links else "json_path"},
+                )
+                append_trend_pipeline_run_log(
+                    pipeline_run_id,
+                    f"Start comment pipeline: {working_path}",
+                )
+                _run_comment_pipeline(
+                    repo_root=repo_root,
+                    backend_dir=backend_dir,
+                    input_path=working_path,
+                    output_path=output_path,
+                    raw_comments_path=raw_comments_path,
+                    user_data_path=user_data_path,
+                    provider=provider,
+                    limit=limit,
+                    comment_limit=comment_limit,
+                    login_wait_seconds=login_wait_seconds,
+                    resume=resume,
+                    from_start=from_start,
+                    force_summary=force_summary,
+                    headless=headless,
+                )
+                processed_posts = _count_processed_posts(output_path)
+                update_trend_pipeline_run(
+                    pipeline_run_id,
+                    stage="import_posts",
+                    processed_posts=processed_posts,
+                )
+                append_trend_pipeline_run_log(pipeline_run_id, f"Comment pipeline completed: processed_posts={processed_posts}")
+                posts = _load_posts(output_path)
 
         import_result = import_ugc_posts(posts)
         update_trend_pipeline_run(
@@ -208,6 +244,14 @@ def _resolve_repo_path(repo_root: Path, value: str) -> Path:
     if not path.is_absolute():
         path = (repo_root / path).resolve()
     return path
+
+
+def _derive_raw_posts_path(input_path: Path, output_path: Path) -> Path:
+    for candidate in (input_path, output_path):
+        name = candidate.name
+        if "_clean" in name:
+            return candidate.with_name(name.replace("_clean", "", 1))
+    return output_path
 
 
 def _count_posts(path: Path) -> int:
@@ -347,3 +391,35 @@ def _build_posts_from_seed_links(
             raise RuntimeError(detail)
     finally:
         temp_input.unlink(missing_ok=True)
+
+
+def _run_classify_pipeline(
+    *,
+    repo_root: Path,
+    backend_dir: Path,
+    input_path: Path,
+    output_path: Path,
+    provider: str,
+) -> None:
+    cmd = [
+        sys.executable,
+        str(backend_dir / "scripts" / "classify_ugc_posts.py"),
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+        "--provider",
+        provider,
+        "--force",
+    ]
+    completed = subprocess.run(
+        cmd,
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        stderr = (completed.stderr or "").strip()
+        stdout = (completed.stdout or "").strip()
+        detail = stderr or stdout or f"classify posts exited with code {completed.returncode}"
+        raise RuntimeError(detail)
