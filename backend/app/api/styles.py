@@ -62,6 +62,8 @@ class StyleResponse(BaseModel):
     status: str = "active"
     review_status: str = "merchant_confirmed"
     source: str = ""
+    material_status: str = "ready"
+    source_trend_id: str | None = None
     created_at: str = ""
 
 
@@ -121,6 +123,9 @@ def add_style(request: CreateStyleRequest) -> StyleResponse:
         tryon_enabled=result.get("tryon_enabled", True),
         status=result.get("status", "active"),
         review_status=result.get("review_status", "merchant_confirmed"),
+        source=result.get("source", ""),
+        material_status=result.get("material_status", "ready"),
+        source_trend_id=result.get("source_trend_id"),
         created_at=result["created_at"],
     )
 
@@ -139,6 +144,9 @@ def upload_style_draft(request: UploadDraftRequest, background_tasks: Background
         tryon_enabled=result.get("tryon_enabled", True),
         status=result["status"],
         review_status=result["review_status"],
+        source=result.get("source", ""),
+        material_status=result.get("material_status", "ready"),
+        source_trend_id=result.get("source_trend_id"),
         created_at=result["created_at"],
     )
 
@@ -162,6 +170,9 @@ def upload_style_drafts(request: BatchUploadDraftRequest, background_tasks: Back
                 tryon_enabled=result.get("tryon_enabled", True),
                 status=result["status"],
                 review_status=result["review_status"],
+                source=result.get("source", ""),
+                material_status=result.get("material_status", "ready"),
+                source_trend_id=result.get("source_trend_id"),
                 created_at=result["created_at"],
             )
         )
@@ -229,6 +240,8 @@ def modify_style(style_id: str, request: UpdateStyleRequest) -> StyleResponse:
         status=result.get("status", "active"),
         review_status=result.get("review_status", "merchant_confirmed"),
         source=result.get("source", ""),
+        material_status=result.get("material_status", "ready"),
+        source_trend_id=result.get("source_trend_id"),
         created_at=result.get("created_at", ""),
     )
 
@@ -248,6 +261,8 @@ def read_style(style_id: str) -> StyleResponse:
         status=result.get("status", "active"),
         review_status=result.get("review_status", "merchant_confirmed"),
         source=result.get("source", ""),
+        material_status=result.get("material_status", "ready"),
+        source_trend_id=result.get("source_trend_id"),
         created_at=result.get("created_at", ""),
     )
 
@@ -303,6 +318,8 @@ def confirm_style_tags(style_id: str) -> StyleResponse:
         status=result.get("status", "draft"),
         review_status=result.get("review_status", "merchant_confirmed"),
         source=result.get("source", ""),
+        material_status=result.get("material_status", "ready"),
+        source_trend_id=result.get("source_trend_id"),
         created_at=result.get("created_at", ""),
     )
 
@@ -390,6 +407,8 @@ def publish_style(style_id: str) -> StyleResponse:
         status=result.get("status", "active"),
         review_status=result.get("review_status", "published"),
         source=result.get("source", ""),
+        material_status=result.get("material_status", "ready"),
+        source_trend_id=result.get("source_trend_id"),
         created_at=result.get("created_at", ""),
     )
 

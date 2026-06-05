@@ -16,6 +16,7 @@
       <div class="nav-tab active" data-page="home" onclick="switchPage('home')"><i class="ti ti-home"></i> 首页</div>
       <div class="nav-tab" data-page="dashboard" onclick="switchPage('dashboard')"><i class="ti ti-chart-bar"></i> 数据看板</div>
       <div class="nav-tab" data-page="assets" onclick="switchPage('assets')"><i class="ti ti-photo"></i> 素材管理</div>
+      <div class="nav-tab" data-page="trend-agent" onclick="switchPage('trend-agent')"><i class="ti ti-sparkles"></i> 趋势发现</div>
       <div class="nav-tab" data-page="push" onclick="switchPage('push')"><i class="ti ti-rocket"></i> 爆款推送</div>
       <div class="nav-tab" data-page="boost" onclick="switchPage('boost')"><i class="ti ti-speakerphone"></i> 投流管理</div>
       <div class="nav-tab" data-page="report" onclick="switchPage('report')"><i class="ti ti-report-analytics"></i> 复盘报告</div>
@@ -41,6 +42,7 @@
   <div class="home-modules">
     <div class="home-module-card" onclick="switchPage('dashboard')"><div class="home-module-icon" style="background:#E2EFDA"><i class="ti ti-chart-bar" style="color:#375623"></i></div><div class="home-module-info"><div class="home-module-name">数据看板</div><div class="home-module-desc">转化漏斗、AI助手播报、款式热度趋势</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('assets')"><div class="home-module-icon" style="background:#FAEEDA"><i class="ti ti-photo" style="color:#BA7517"></i></div><div class="home-module-info"><div class="home-module-name">素材管理</div><div class="home-module-desc">款式图、裸手模板、上传新款式</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
+    <div class="home-module-card" onclick="switchPage('trend-agent')"><div class="home-module-icon" style="background:#F5F2FF"><i class="ti ti-sparkles" style="color:#8D79B8"></i></div><div class="home-module-info"><div class="home-module-name">趋势发现</div><div class="home-module-desc">数据源接入、趋势识别、爆款依据追踪</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('push')"><div class="home-module-icon" style="background:#FCE4D6"><i class="ti ti-rocket" style="color:#993C1D"></i></div><div class="home-module-info"><div class="home-module-name">爆款推送</div><div class="home-module-desc">今日推送、编辑推荐语、一键上架</div></div><span class="home-module-badge">1 条待处理</span><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('boost')"><div class="home-module-icon" style="background:#E3F2FD"><i class="ti ti-speakerphone" style="color:#1565C0"></i></div><div class="home-module-info"><div class="home-module-name">投流管理</div><div class="home-module-desc">投流帖子生成、预算管理、ROI追踪</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('report')"><div class="home-module-icon" style="background:#EEEDFE"><i class="ti ti-report-analytics" style="color:#534AB7"></i></div><div class="home-module-info"><div class="home-module-name">复盘报告</div><div class="home-module-desc">AI助手周报/日报、运营建议、一键采纳</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
@@ -155,6 +157,123 @@
       <button class="btn-danger-sm" onclick="confirmDeleteSelectedTemplates()"><i class="ti ti-trash"></i> 删除</button>
     </div>
     <div id="template-groups"></div>
+  </div>
+</div>
+
+<!-- ===== 趋势发现 ===== -->
+<div class="page-panel" id="panel-trend-agent">
+  <div class="page-top"><div><h2 class="page-title">趋势发现</h2><p class="page-sub">数据源接入、运行趋势识别、查看趋势证据与转草稿</p></div></div>
+  <div class="trend-layout">
+    <div class="trend-main">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-database-import"></i> 数据源接入</div>
+          <span class="card-sub">统一归一到 UGC posts 后进入同一条 Trend Agent Pipeline</span>
+        </div>
+        <div class="trend-source-tabs">
+          <button class="asset-tab active" data-source-mode="mock" onclick="switchTrendSourceMode('mock', this)">Mock JSON 导入</button>
+          <button class="asset-tab" data-source-mode="links" onclick="switchTrendSourceMode('links', this)">人工链接种子</button>
+          <button class="asset-tab" data-source-mode="auto" onclick="switchTrendSourceMode('auto', this)">Agent 自动发现</button>
+        </div>
+        <div class="trend-source-panel active" id="trend-source-mock">
+          <div class="trend-source-actions">
+            <button class="btn-ghost-sm" onclick="document.getElementById('trend-mock-file').click()"><i class="ti ti-file-upload"></i> 选择 JSON 文件</button>
+            <button class="btn-primary-sm" onclick="importTrendMockJson()"><i class="ti ti-upload"></i> 导入 Mock 数据</button>
+          </div>
+          <input type="file" id="trend-mock-file" accept=".json,application/json" style="display:none" onchange="handleTrendMockFile(event)">
+          <textarea class="trend-textarea" id="trend-mock-json" placeholder='粘贴 UGC JSON。支持 {"posts":[...]} 或直接粘贴帖子数组 [...]'></textarea>
+          <div class="trend-source-hint" id="trend-mock-status">演示阶段建议优先使用 Mock JSON，最稳定、最可控。</div>
+        </div>
+        <div class="trend-source-panel" id="trend-source-links" style="display:none">
+          <div class="trend-source-actions">
+            <button class="btn-ghost-sm" onclick="loadSampleXhsLinks()"><i class="ti ti-link"></i> 载入示例链接</button>
+            <button class="btn-primary-sm" onclick="saveTrendSeedLinks()"><i class="ti ti-device-floppy"></i> 保存链接种子</button>
+          </div>
+          <textarea class="trend-textarea" id="trend-link-seeds" placeholder="一行一个小红书链接，用于后续抓取正文、图片和评论。"></textarea>
+          <div class="trend-source-hint" id="trend-link-status">当前前端先保存 seed links；真实抓取链路继续复用已有本地脚本和后端任务。</div>
+        </div>
+        <div class="trend-source-panel" id="trend-source-auto" style="display:none">
+          <div class="trend-auto-grid">
+            <div class="trend-auto-field">
+              <label>搜索词 / 品类标签</label>
+              <input class="trend-inline-input" id="trend-auto-keywords" placeholder="如：猫眼美甲、冰透蓝、短甲" />
+            </div>
+            <div class="trend-auto-field">
+              <label>采样频率</label>
+              <select class="coupon-select" id="trend-auto-frequency">
+                <option value="manual">手动触发</option>
+                <option value="daily">每日</option>
+                <option value="twice_daily">每日两次</option>
+              </select>
+            </div>
+          </div>
+          <div class="trend-source-actions">
+            <button class="btn-ghost-sm" onclick="saveTrendAutoConfig()"><i class="ti ti-device-floppy"></i> 保存实验配置</button>
+          </div>
+          <div class="trend-source-hint" id="trend-auto-status">实验能力。演示阶段不作为主路径，当前仅保留配置入口。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-heartbeat"></i> 数据健康</div>
+          <button class="btn-ghost-sm" onclick="loadDataHealth()"><i class="ti ti-refresh"></i> 刷新</button>
+        </div>
+        <div class="trend-health-grid" id="trend-health-grid">
+          <div class="trend-run-empty">点击刷新查看数据健康状态</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-player-play"></i> 运行状态</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-ghost-sm" onclick="loadTrendRunsAndList()"><i class="ti ti-refresh"></i> 刷新</button>
+            <button class="btn-primary-sm" onclick="runTrendAgent()"><i class="ti ti-sparkles"></i> 运行趋势识别</button>
+          </div>
+        </div>
+        <div class="trend-run-card" id="trend-run-card">
+          <div class="trend-run-empty">尚未运行趋势识别任务</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-flame"></i> 趋势池 <span class="count-badge" id="trend-count">0 条</span></div>
+          <div class="trend-filter-row">
+            <select class="coupon-select trend-filter-select" id="trend-status-filter" onchange="loadTrendList()">
+              <option value="">全部状态</option>
+              <option value="promote">优先推广</option>
+              <option value="watch">观察中</option>
+              <option value="discard">放弃</option>
+            </select>
+            <select class="coupon-select trend-filter-select" id="trend-life-cycle-filter" onchange="loadTrendList()">
+              <option value="">全部周期</option>
+              <option value="观察期">观察期</option>
+              <option value="上升期">上升期</option>
+              <option value="峰值期">峰值期</option>
+              <option value="衰退期">衰退期</option>
+            </select>
+          </div>
+        </div>
+        <div class="trend-list" id="trend-list"></div>
+      </div>
+    </div>
+
+    <div class="trend-side">
+      <div class="card trend-detail-card" id="trend-detail-card">
+        <div class="trend-detail-empty">选择一条趋势查看详情、支撑帖子和转草稿入口</div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-tag-starred"></i> 候选标签词</div>
+          <button class="btn-ghost-sm" onclick="loadCandidateTaxonomyTerms()"><i class="ti ti-refresh"></i> 刷新</button>
+        </div>
+        <div class="candidate-taxonomy-list" id="candidate-taxonomy-list">
+          <div class="trend-run-empty">暂无候选新标签词</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

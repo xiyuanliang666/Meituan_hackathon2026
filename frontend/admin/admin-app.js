@@ -1,5 +1,5 @@
 // ===== 页面切换 =====
-const ADMIN_PAGES = new Set(['home', 'dashboard', 'assets', 'push', 'boost', 'report', 'notify', 'upload', 'confirm']);
+const ADMIN_PAGES = new Set(['home', 'dashboard', 'assets', 'trend-agent', 'push', 'boost', 'report', 'notify', 'upload', 'confirm']);
 const SPECIAL_PAGE_NAV_PARENT = { confirm: 'push', upload: 'assets', notify: 'home' };
 
 function pageFromHash() {
@@ -23,6 +23,7 @@ function switchPage(page, options = {}) {
   }
   // 页面加载时从后端拉取数据
   if (page === 'dashboard') loadDashboardData();
+  if (page === 'trend-agent') { loadTrendRunsAndList(); loadDataHealth(); loadCandidateTaxonomyTerms(); }
   if (page === 'push') loadPushData();
   if (page === 'report') loadReportData('week');
 }
@@ -102,6 +103,14 @@ let styleSearchQuery = '';
 const selectedStyleIds = new Set();
 let styleSearchTimer = null;
 let styleDeleteMode = false;
+
+// ===== 趋势发现 =====
+let trendSourceMode = 'mock';
+let trendListData = [];
+let selectedTrendId = '';
+let latestTrendPipelineRunId = localStorage.getItem('trend_latest_pipeline_run_id') || '';
+let trendRunPollTimer = null;
+let trendSeenIds = new Set();
 
 async function loadStylesData() {
   if (!adminBackendAvailable) {
@@ -1218,6 +1227,735 @@ async function finishUpload() {
   }
 }
 
+function switchTrendSourceMode(mode, btn) {
+  trendSourceMode = mode;
+  document.querySelectorAll('[data-source-mode]').forEach(el => el.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.trend-source-panel').forEach(panel => {
+    panel.classList.remove('active');
+    panel.style.display = 'none';
+  });
+  const activePanel = document.getElementById(`trend-source-${mode}`);
+  if (activePanel) {
+    activePanel.style.display = 'block';
+    activePanel.classList.add('active');
+  }
+}
+
+function setTrendSourceStatus(id, text, isError = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = isError ? '#CC2200' : '#888';
+}
+
+function handleTrendMockFile(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const textarea = document.getElementById('trend-mock-json');
+    if (textarea) textarea.value = String(reader.result || '');
+    setTrendSourceStatus('trend-mock-status', `已载入 ${file.name}`);
+  };
+  reader.onerror = () => setTrendSourceStatus('trend-mock-status', '文件读取失败', true);
+  reader.readAsText(file);
+}
+
+async function importTrendMockJson() {
+  const textarea = document.getElementById('trend-mock-json');
+  const raw = (textarea?.value || '').trim();
+  if (!raw) {
+    setTrendSourceStatus('trend-mock-status', '请先粘贴或选择 JSON', true);
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    setTrendSourceStatus('trend-mock-status', 'JSON 格式错误', true);
+    return;
+  }
+  const posts = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.posts) ? parsed.posts : null;
+  if (!Array.isArray(posts)) {
+    setTrendSourceStatus('trend-mock-status', '仅支持帖子数组或 { posts: [...] }', true);
+    return;
+  }
+  setTrendSourceStatus('trend-mock-status', `已装载 ${posts.length} 条帖子，点击“运行趋势识别”将统一触发后端任务。`);
+  showToast('Mock 数据已准备好');
+}
+
+function loadSampleXhsLinks() {
+  const textarea = document.getElementById('trend-link-seeds');
+  if (!textarea) return;
+  textarea.value = [
+    'http://xhslink.com/o/6eCHpoPK40Y',
+    'http://xhslink.com/o/1mP7vLmfX1y',
+    'http://xhslink.com/o/5UxZykb2cQK',
+  ].join('\n');
+  setTrendSourceStatus('trend-link-status', '已载入示例链接，可继续编辑后保存');
+}
+
+function saveTrendSeedLinks() {
+  const textarea = document.getElementById('trend-link-seeds');
+  const value = (textarea?.value || '').trim();
+  localStorage.setItem('trend_seed_links', value);
+  const count = value ? value.split('\n').map(s => s.trim()).filter(Boolean).length : 0;
+  setTrendSourceStatus('trend-link-status', `已保存 ${count} 条链接种子，点击“运行趋势识别”将由后端统一触发抓取和分析。`);
+  showToast('链接种子已保存');
+}
+
+function saveTrendAutoConfig() {
+  const payload = {
+    keywords: (document.getElementById('trend-auto-keywords')?.value || '').trim(),
+    frequency: document.getElementById('trend-auto-frequency')?.value || 'manual',
+  };
+  localStorage.setItem('trend_auto_config', JSON.stringify(payload));
+  setTrendSourceStatus('trend-auto-status', '实验配置已保存。当前不作为 demo 主路径。');
+  showToast('自动发现配置已保存');
+}
+
+function restoreTrendSourceConfig() {
+  const savedLinks = localStorage.getItem('trend_seed_links');
+  if (savedLinks) {
+    const textarea = document.getElementById('trend-link-seeds');
+    if (textarea && !textarea.value) textarea.value = savedLinks;
+  }
+  try {
+    const savedAuto = JSON.parse(localStorage.getItem('trend_auto_config') || '{}');
+    const keywordsEl = document.getElementById('trend-auto-keywords');
+    const frequencyEl = document.getElementById('trend-auto-frequency');
+    if (keywordsEl && savedAuto.keywords) keywordsEl.value = savedAuto.keywords;
+    if (frequencyEl && savedAuto.frequency) frequencyEl.value = savedAuto.frequency;
+  } catch (e) {}
+}
+
+async function runTrendAgent() {
+  if (!adminBackendAvailable) {
+    showToast('后端未连接，无法运行趋势识别');
+    return;
+  }
+  renderTrendRunCard({
+    pipeline_run_id: latestTrendPipelineRunId || '',
+    status: 'pending',
+    triggered_by: 'manual',
+    stage: 'queued',
+    total_posts: 0,
+    processed_posts: 0,
+    imported_posts: 0,
+    updated_posts: 0,
+    generated_trends: 0,
+    converted_drafts: 0,
+    linked_trend_run_id: '',
+    updated_at: '',
+    created_at: '',
+    error_message: '',
+    logs: [],
+    payload: {},
+  });
+  try {
+    const request = buildTrendPipelineRequest();
+    if (request == null) return;
+    const run = await apiPost('/trend-agent/pipeline-runs', {
+      triggered_by: 'manual',
+      ...request,
+    });
+    latestTrendPipelineRunId = run.pipeline_run_id;
+    localStorage.setItem('trend_latest_pipeline_run_id', latestTrendPipelineRunId);
+    renderTrendRunCard(run);
+    pollTrendRun(run.pipeline_run_id);
+    showToast('趋势任务已创建');
+  } catch (e) {
+    renderTrendRunCard({
+      status: 'failed',
+      stage: 'failed',
+      error_message: e.message,
+      pipeline_run_id: '',
+      triggered_by: 'manual',
+      total_posts: 0,
+      processed_posts: 0,
+      imported_posts: 0,
+      updated_posts: 0,
+      generated_trends: 0,
+      converted_drafts: 0,
+      linked_trend_run_id: '',
+      updated_at: '',
+      created_at: '',
+      logs: [],
+      payload: {},
+    });
+    showToast('趋势任务创建失败');
+  }
+}
+
+async function loadTrendRunsAndList() {
+  restoreTrendSourceConfig();
+  await Promise.all([loadLatestTrendRun(), loadTrendList()]);
+}
+
+async function loadLatestTrendRun() {
+  if (!adminBackendAvailable) {
+    renderTrendRunCard(null);
+    return;
+  }
+  try {
+    let run = null;
+    if (latestTrendPipelineRunId) {
+      run = await apiGet(`/trend-agent/pipeline-runs/${latestTrendPipelineRunId}`);
+    } else {
+      const data = await apiGet('/trend-agent/pipeline-runs', { limit: 1 });
+      run = Array.isArray(data?.runs) && data.runs.length ? data.runs[0] : null;
+      if (run?.pipeline_run_id) {
+        latestTrendPipelineRunId = run.pipeline_run_id;
+        localStorage.setItem('trend_latest_pipeline_run_id', latestTrendPipelineRunId);
+      }
+    }
+    renderTrendRunCard(run);
+    if (run && (run.status === 'pending' || run.status === 'running')) pollTrendRun(run.pipeline_run_id);
+  } catch (e) {
+    renderTrendRunCard(null);
+  }
+}
+
+function pollTrendRun(runId) {
+  clearInterval(trendRunPollTimer);
+  trendRunPollTimer = setInterval(async () => {
+    try {
+      const run = await apiGet(`/trend-agent/pipeline-runs/${runId}`);
+      renderTrendRunCard(run);
+      if (run.status === 'succeeded' || run.status === 'failed') {
+        clearInterval(trendRunPollTimer);
+        if (run.status === 'succeeded') {
+          await loadTrendList();
+          showToast(`趋势任务完成，产出 ${run.generated_trends || 0} 条趋势`);
+        }
+      }
+    } catch (e) {
+      clearInterval(trendRunPollTimer);
+    }
+  }, 1500);
+}
+
+function renderTrendRunCard(run) {
+  const el = document.getElementById('trend-run-card');
+  if (!el) return;
+  if (!run || !run.pipeline_run_id) {
+    el.innerHTML = '<div class="trend-run-empty">尚未运行趋势识别任务</div>';
+    return;
+  }
+  const statusText = {
+    pending: '等待执行',
+    running: '运行中',
+    succeeded: '已完成',
+    failed: '失败',
+  }[run.status] || run.status;
+  const statusClass = run.status === 'failed' ? 'down' : run.status === 'succeeded' ? 'up' : 'peak';
+  const stageText = {
+    queued: '已排队',
+    build_posts: '构建帖子',
+    comment_pipeline: '评论抓取与摘要',
+    import_posts: '导入帖子',
+    trend_discovery: '趋势识别',
+    convert_to_draft: '转草稿',
+    completed: '已完成',
+    failed: '失败',
+  }[run.stage] || run.stage || '处理中';
+  const recentLogs = Array.isArray(run.logs) ? run.logs.slice(-4) : [];
+  const sourceMode = run?.payload?.source_mode || '';
+  const needsLoginHint = sourceMode === 'seed_links' && run.stage === 'comment_pipeline' && (run.status === 'pending' || run.status === 'running');
+  el.innerHTML = `
+    <div class="trend-run-head">
+      <div>
+        <div class="trend-run-title">Pipeline ${run.pipeline_run_id}</div>
+        <div class="trend-run-meta">触发方式：${run.triggered_by || 'manual'} · 当前阶段：${stageText} · 更新时间：${formatDateTime(run.updated_at || run.created_at)}</div>
+      </div>
+      <span class="lc-pill lc-${statusClass}">${statusText}</span>
+    </div>
+    <div class="trend-run-stats">
+      <div class="trend-run-stat"><span>帖子总数</span><strong>${run.total_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>评论已完成</span><strong>${run.processed_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>产出趋势</span><strong>${run.generated_trends || 0}</strong></div>
+    </div>
+    <div class="trend-run-stats trend-run-stats-secondary">
+      <div class="trend-run-stat"><span>导入新增</span><strong>${run.imported_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>导入更新</span><strong>${run.updated_posts || 0}</strong></div>
+      <div class="trend-run-stat"><span>转草稿</span><strong>${run.converted_drafts || 0}</strong></div>
+    </div>
+    ${needsLoginHint ? `<div class="trend-run-login-hint"><i class="ti ti-user-check"></i><span>当前正在抓取链接评论，需要本机 Playwright 浏览器登录小红书并保持页面可继续执行。</span></div>` : ''}
+    ${recentLogs.length ? `<div class="trend-run-logs">${recentLogs.map(item => `<div class="trend-run-log-line">${escapeHtml(item.message || '')}</div>`).join('')}</div>` : ''}
+    ${run.error_message ? `<div class="trend-run-error">${run.error_message}</div>` : ''}
+  `;
+}
+
+function buildTrendPipelineRequest() {
+  const base = {
+    provider: 'auto',
+    comment_limit: 0,
+    min_support: 2,
+    max_trends: 20,
+    resume: true,
+    from_start: false,
+    force_summary: false,
+    headless: false,
+    auto_convert_to_draft: false,
+    convert_limit: 3,
+    merchant_id: 'demo_shop',
+    use_trend_tags: true,
+  };
+  if (trendSourceMode === 'mock') {
+    const textarea = document.getElementById('trend-mock-json');
+    const raw = (textarea?.value || '').trim();
+    if (!raw) {
+      setTrendSourceStatus('trend-mock-status', '请先粘贴或选择 JSON', true);
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      const posts = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.posts) ? parsed.posts : null;
+      if (!Array.isArray(posts)) {
+        setTrendSourceStatus('trend-mock-status', '仅支持帖子数组或 { posts: [...] }', true);
+        return null;
+      }
+      setTrendSourceStatus('trend-mock-status', `准备提交 ${posts.length} 条 Mock 帖子到后端任务`);
+      return { ...base, posts };
+    } catch (e) {
+      setTrendSourceStatus('trend-mock-status', 'JSON 格式错误', true);
+      return null;
+    }
+  }
+  if (trendSourceMode === 'links') {
+    const textarea = document.getElementById('trend-link-seeds');
+    const seedLinks = (textarea?.value || '')
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (!seedLinks.length) {
+      setTrendSourceStatus('trend-link-status', '请先粘贴至少 1 条链接', true);
+      return null;
+    }
+    setTrendSourceStatus('trend-link-status', `准备提交 ${seedLinks.length} 条链接种子到后端任务`);
+    return {
+      ...base,
+      seed_links: seedLinks,
+      output_json_path: 'backend/mock_data/ugc_posts_from_links.json',
+      raw_comments_file: 'backend/mock_data/ugc_posts_from_links_raw_comments.json',
+    };
+  }
+  setTrendSourceStatus('trend-auto-status', 'Agent 自动发现仍为实验能力，当前前端暂不直接触发。', true);
+  return null;
+}
+
+async function loadTrendList() {
+  const listEl = document.getElementById('trend-list');
+  if (!listEl) return;
+  if (!adminBackendAvailable) {
+    trendListData = [];
+    listEl.innerHTML = '<div class="trend-run-empty">后端未连接，趋势池不可用</div>';
+    updateTrendCount();
+    return;
+  }
+  const status = document.getElementById('trend-status-filter')?.value || '';
+  const lifeCycle = document.getElementById('trend-life-cycle-filter')?.value || '';
+  listEl.innerHTML = '<div class="trend-run-empty">趋势池加载中...</div>';
+  try {
+    const data = await apiGet('/trends', {
+      limit: 100,
+      status: status || undefined,
+      life_cycle: lifeCycle || undefined,
+    });
+    trendListData = Array.isArray(data?.trends) ? data.trends : [];
+    renderTrendList();
+    updateTrendCount();
+    if (trendListData.length) {
+      const nextId = trendListData.some(item => item.trend_id === selectedTrendId) ? selectedTrendId : trendListData[0].trend_id;
+      await openTrendDetail(nextId);
+    } else {
+      selectedTrendId = '';
+      renderTrendDetail(null);
+    }
+  } catch (e) {
+    listEl.innerHTML = `<div class="trend-run-empty">趋势池加载失败：${e.message}</div>`;
+    trendListData = [];
+    updateTrendCount();
+  }
+}
+
+function updateTrendCount() {
+  const el = document.getElementById('trend-count');
+  if (el) el.textContent = `${trendListData.length} 条`;
+}
+
+function renderTrendList() {
+  const listEl = document.getElementById('trend-list');
+  if (!listEl) return;
+  if (!trendListData.length) {
+    listEl.innerHTML = '<div class="trend-run-empty">暂无趋势结果，先运行趋势识别。</div>';
+    return;
+  }
+  listEl.innerHTML = trendListData.map(item => {
+    const metrics = item.metrics || {};
+    const active = item.trend_id === selectedTrendId ? 'is-active' : '';
+    return `
+      <button class="trend-item ${active}" onclick="openTrendDetail('${item.trend_id}')">
+        <div class="trend-thumb">
+          ${item.representative_image_url ? `<img src="${staticUrl(item.representative_image_url)}" alt="${escapeHtml(item.core_style)}">` : '<i class="ti ti-photo"></i>'}
+        </div>
+        <div class="trend-item-body">
+          <div class="trend-item-head">
+            <div class="trend-item-title">${escapeHtml(item.core_style || '未命名趋势')}</div>
+            <div class="trend-item-score">${formatScore(item.trend_score)}</div>
+          </div>
+          <div class="trend-item-meta">
+            ${trendBadge(item.life_cycle, item.memory_status)}
+            <span>${metrics.support_post_count || 0} 篇支撑帖子</span>
+            <span>置信度 ${formatPercent(item.confidence)}</span>
+          </div>
+          <div class="trend-item-summary">${escapeHtml(item.reasoning_summary || '暂无解释')}</div>
+        </div>
+      </button>
+    `;
+  }).join('');
+}
+
+async function openTrendDetail(trendId) {
+  selectedTrendId = trendId;
+  renderTrendList();
+  if (!adminBackendAvailable) {
+    renderTrendDetail(null);
+    return;
+  }
+  const el = document.getElementById('trend-detail-card');
+  if (el) el.innerHTML = '<div class="trend-detail-empty">详情加载中...</div>';
+  try {
+    const trend = await apiGet(`/trends/${trendId}`);
+    renderTrendDetail(trend);
+    if (!trendSeenIds.has(trendId)) {
+      trendSeenIds.add(trendId);
+      recordTrendAction(trendId, 'viewed').catch(() => {});
+    }
+  } catch (e) {
+    renderTrendDetailError(e.message);
+  }
+}
+
+function renderTrendDetailError(message) {
+  const el = document.getElementById('trend-detail-card');
+  if (!el) return;
+  el.innerHTML = `<div class="trend-detail-empty">趋势详情加载失败：${escapeHtml(message)}</div>`;
+}
+
+function renderTrendDetail(trend) {
+  const el = document.getElementById('trend-detail-card');
+  if (!el) return;
+  if (!trend) {
+    el.innerHTML = '<div class="trend-detail-empty">选择一条趋势查看详情、支撑帖子和转草稿入口</div>';
+    return;
+  }
+  const metrics = trend.metrics || {};
+  const signals = trend.comment_signal_summary || {};
+  const supportPosts = Array.isArray(trend.supporting_posts) ? trend.supporting_posts : [];
+  const evidenceChips = [
+    ...chipGroup((metrics.core_style_tags || []).slice(0, 6), 'style'),
+    ...chipGroup((signals.user_demands || []).slice(0, 4), 'demand'),
+    ...chipGroup((signals.social_proofs || []).slice(0, 4), 'social'),
+    ...chipGroup((signals.negative_feedbacks || []).slice(0, 4), 'negative'),
+  ].join('');
+
+  el.innerHTML = `
+    <div class="trend-detail-cover">
+      ${trend.representative_image_url ? `<img src="${staticUrl(trend.representative_image_url)}" alt="${escapeHtml(trend.core_style)}">` : '<i class="ti ti-photo"></i>'}
+    </div>
+    <div class="trend-detail-head">
+      <div>
+        <div class="trend-detail-title">${escapeHtml(trend.core_style || '未命名趋势')}</div>
+        <div class="trend-detail-meta">${trendBadge(trend.life_cycle, trend.memory_status)}<span class="trend-score-pill">趋势分 ${formatScore(trend.trend_score)}</span><span class="trend-score-pill">置信度 ${formatPercent(trend.confidence)}</span></div>
+        <div class="trend-detail-meta" style="margin-top:4px">
+          <span class="trend-score-pill">数据: ${lifecycleLabelText(trend.data_lifecycle)}</span>
+          <span class="trend-score-pill">趋势: ${lifecycleLabelText(trend.trend_lifecycle)}</span>
+          ${signalQualitySummary(trend.signal_quality_distribution)}
+        </div>
+      </div>
+    </div>
+    <div class="trend-detail-summary">${escapeHtml(trend.reasoning_summary || '暂无趋势解释')}</div>
+    <div class="trend-metrics-grid">
+      ${trendMetric('支撑帖子', metrics.support_post_count || 0)}
+      ${trendMetric('评论覆盖率', formatPercent(metrics.average_comment_coverage_rate))}
+      ${trendMetric('需求信号分', formatScore(metrics.comment_signal_score))}
+      ${trendMetric('覆盖率置信度', formatScore(metrics.coverage_confidence_score))}
+    </div>
+    <div class="trend-signal-section">
+      <div class="trend-section-title">趋势证据画像</div>
+      <div class="trend-signal-tags">${evidenceChips || '<span class="trend-empty-inline">暂无结构化评论信号</span>'}</div>
+    </div>
+    <div class="trend-signal-section">
+      <div class="trend-section-title">跨帖聚合信号</div>
+      <div class="trend-compact-list">
+        ${trendSignalLine('需求信号', signals.demand_signal_counts)}
+        ${trendSignalLine('社会证明', signals.social_proof_counts)}
+        ${trendSignalLine('购买意图', signals.purchase_intent_counts)}
+        ${trendSignalLine('负向反馈', signals.negative_signal_counts)}
+      </div>
+    </div>
+    <div class="trend-detail-actions">
+      <button class="btn-ghost-sm" onclick="recordTrendAction('${trend.trend_id}','watching').then(()=>showToast('已标记为观察中'))"><i class="ti ti-eye"></i> 观察中</button>
+      <button class="btn-ghost-sm" onclick="recordTrendAction('${trend.trend_id}','ignored').then(()=>showToast('已忽略该趋势'))"><i class="ti ti-x"></i> 忽略</button>
+      <button class="btn-primary-sm" onclick="recordTrendAction('${trend.trend_id}','accepted').then(()=>showToast('已采纳趋势'))"><i class="ti ti-circle-check"></i> 采纳</button>
+      <button class="btn-primary-sm" onclick="convertTrendToDraft('${trend.trend_id}')"><i class="ti ti-wand"></i> 转为草稿</button>
+    </div>
+    <div class="trend-signal-section">
+      <div class="trend-section-title">查看爆款依据</div>
+      <div class="support-post-list">
+        ${supportPosts.length ? supportPosts.map(renderSupportingPostCard).join('') : '<div class="trend-empty-inline">暂无支撑帖子</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderSupportingPostCard(post) {
+  const evidence = Array.isArray(post.evidence_signals) ? post.evidence_signals : [];
+  const title = post.title || post.post_id || '支撑帖子';
+  const cover = post.representative_image_url || post.cover_image_url || (Array.isArray(post.image_urls) ? post.image_urls[0] : '');
+  return `
+    <div class="support-post-item">
+      <div class="support-post-cover">${cover ? `<img src="${staticUrl(cover)}" alt="${escapeHtml(title)}">` : '<i class="ti ti-photo"></i>'}</div>
+      <div class="support-post-body">
+        <div class="support-post-title">${escapeHtml(title)}</div>
+        <div class="support-post-meta">
+          <span>赞 ${formatCompact(post.like_count)}</span>
+          <span>藏 ${formatCompact(post.favorite_count)}</span>
+          <span>评 ${formatCompact(post.comment_count)}</span>
+          <span>覆盖率 ${formatPercent(post.comment_coverage_rate)}</span>
+        </div>
+        <div class="support-post-summary">${escapeHtml(post.comment_summary || post.content || '暂无摘要')}</div>
+        <div class="support-post-evidence">${evidence.length ? evidence.map(signal => `<span class="trend-chip trend-chip-style">${escapeHtml(signal)}</span>`).join('') : ''}</div>
+        ${post.source_url ? `<a class="support-post-link" href="${escapeHtml(post.source_url)}" target="_blank" rel="noreferrer">查看原帖</a>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+async function recordTrendAction(trendId, action, note = '') {
+  if (!adminBackendAvailable) return null;
+  return apiPost(`/trends/${trendId}/actions`, {
+    merchant_id: 'demo_shop',
+    action,
+    note,
+  });
+}
+
+async function convertTrendToDraft(trendId) {
+  if (!adminBackendAvailable) {
+    showToast('后端未连接，无法转草稿');
+    return;
+  }
+  try {
+    const result = await apiPost(`/trends/${trendId}/convert-to-draft`, {
+      merchant_id: 'demo_shop',
+      use_trend_tags: true,
+    });
+    showToast('趋势已转为素材草稿');
+    if (result?.style_id) {
+      await continueDraft(result.style_id);
+    } else {
+      switchPage('assets');
+    }
+  } catch (e) {
+    showToast(`转草稿失败：${e.message}`);
+  }
+}
+
+function chipGroup(values, type) {
+  return values.map(value => `<span class="trend-chip trend-chip-${type}">${escapeHtml(value)}</span>`);
+}
+
+function trendSignalLine(label, counts) {
+  const entries = Object.entries(counts || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0)).slice(0, 4);
+  return `
+    <div class="trend-signal-line">
+      <span class="trend-signal-label">${label}</span>
+      <span class="trend-signal-values">${entries.length ? entries.map(([key, val]) => `${escapeHtml(key)} · ${val}`).join(' / ') : '暂无'}</span>
+    </div>
+  `;
+}
+
+function trendMetric(label, value) {
+  return `<div class="trend-metric"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function trendBadge(lifeCycle, memoryStatus) {
+  return `
+    <span class="lc-pill lc-${lifeCycleClass(lifeCycle || '观察期')}"><i class="ti ti-${lifeCycleIcon(lifeCycle || '观察期')}"></i>${lifeCycle || '观察期'}</span>
+    <span class="trend-memory-pill">${escapeHtml(memoryStatusText(memoryStatus))}</span>
+  `;
+}
+
+function memoryStatusText(status) {
+  return {
+    active: '持续活跃',
+    watching: '持续观察',
+    declining: '记忆衰退',
+    archived: '已归档',
+  }[status] || (status || '持续观察');
+}
+
+function lifecycleLabelText(lc) {
+  return {
+    recent: '近期数据',
+    mid_term: '中期数据',
+    long_tail: '长期数据',
+    rising: '上升中',
+    declining: '下降中',
+    stable: '稳定',
+    insufficient_history: '数据不足',
+  }[lc] || lc || '未知';
+}
+
+function signalQualitySummary(dist) {
+  if (!dist || !Object.keys(dist).length) return '';
+  const parts = [];
+  if (dist.active) parts.push(`高信号 ${dist.active}`);
+  if (dist.cold_start) parts.push(`冷启动 ${dist.cold_start}`);
+  if (dist.low_content) parts.push(`低内容 ${dist.low_content}`);
+  if (!parts.length) return '';
+  return `<span class="trend-score-pill">信号: ${parts.join(' / ')}</span>`;
+}
+
+// ===== 数据健康 (Fix 2) =====
+async function loadDataHealth() {
+  const grid = document.getElementById('trend-health-grid');
+  if (!grid) return;
+  if (!adminBackendAvailable) {
+    grid.innerHTML = '<div class="trend-run-empty">后端未连接</div>';
+    return;
+  }
+  try {
+    const health = await apiGet('/trends/data-health');
+    const ready = health.ready_for_trend_discovery;
+    const healthText = {
+      good: '良好',
+      needs_attention: '需关注',
+    }[health.health] || health.health;
+    const healthColor = health.health === 'good' ? '#375623' : '#CC2200';
+    grid.innerHTML = `
+      <div class="trend-health-stat"><span>总帖子</span><strong>${health.total_posts}</strong></div>
+      <div class="trend-health-stat"><span>已分类</span><strong>${health.classified}</strong></div>
+      <div class="trend-health-stat"><span>评论已完成</span><strong>${health.comments_done}</strong></div>
+      <div class="trend-health-stat"><span>抓取失败</span><strong style="color:${health.fetch_failed > 0 ? '#CC2200' : '#888'}">${health.fetch_failed}</strong></div>
+      <div class="trend-health-stat"><span>已过滤</span><strong>${health.filtered_out}</strong></div>
+      <div class="trend-health-stat"><span>空内容</span><strong style="color:${health.empty_content > 0 ? '#CC2200' : '#888'}">${health.empty_content}</strong></div>
+      <div class="trend-health-stat"><span>零互动</span><strong>${health.zero_interaction}</strong></div>
+      <div class="trend-health-stat" style="grid-column:span 2"><span>就绪可发现</span><strong style="color:${ready ? '#375623' : '#CC2200'}">${ready ? '是' : '否'}</strong></div>
+      <div class="trend-health-stat" style="grid-column:span 2"><span>健康状态</span><strong style="color:${healthColor}">${healthText}</strong></div>
+    `;
+  } catch (e) {
+    grid.innerHTML = `<div class="trend-run-empty">健康检查失败：${e.message}</div>`;
+  }
+}
+
+// ===== 候选标签词 (Fix 5) =====
+let candidateTaxonomyTerms = [];
+
+async function loadCandidateTaxonomyTerms() {
+  const list = document.getElementById('candidate-taxonomy-list');
+  if (!list) return;
+  if (!adminBackendAvailable) {
+    list.innerHTML = '<div class="trend-run-empty">后端未连接</div>';
+    return;
+  }
+  try {
+    const data = await apiGet('/trends/candidate-taxonomy', { status: 'pending', limit: 50 });
+    candidateTaxonomyTerms = Array.isArray(data?.terms) ? data.terms : [];
+    renderCandidateTaxonomyList();
+  } catch (e) {
+    list.innerHTML = `<div class="trend-run-empty">加载失败：${e.message}</div>`;
+  }
+}
+
+function renderCandidateTaxonomyList() {
+  const list = document.getElementById('candidate-taxonomy-list');
+  if (!list) return;
+  if (!candidateTaxonomyTerms.length) {
+    list.innerHTML = '<div class="trend-run-empty">暂无候选新标签词</div>';
+    return;
+  }
+  list.innerHTML = candidateTaxonomyTerms.map(item => `
+    <div class="candidate-term-item">
+      <div class="candidate-term-head">
+        <span class="candidate-term-name">${escapeHtml(item.candidate_term)}</span>
+        <span class="candidate-term-field">${escapeHtml(item.target_field)}</span>
+      </div>
+      <div class="candidate-term-meta">
+        <span>频次 ${item.frequency}</span>
+        ${item.variant_forms.length ? `<span>变体: ${escapeHtml(item.variant_forms.slice(0,3).join(', '))}</span>` : ''}
+      </div>
+      <div class="candidate-term-actions">
+        <button class="btn-ghost-sm" onclick="approveCandidateTerm('${escapeHtml(item.candidate_term)}', '${escapeHtml(item.target_field)}')"><i class="ti ti-check"></i> 通过</button>
+        <button class="btn-ghost-sm" onclick="rejectCandidateTerm('${escapeHtml(item.candidate_term)}', '${escapeHtml(item.target_field)}')"><i class="ti ti-x"></i> 拒绝</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function approveCandidateTerm(term, field) {
+  try {
+    await apiRequest(`/trends/candidate-taxonomy/${encodeURIComponent(term)}?target_field=${encodeURIComponent(field)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'approved' }),
+    });
+    showToast('候选标签已通过');
+    loadCandidateTaxonomyTerms();
+  } catch (e) {
+    showToast('操作失败：' + e.message);
+  }
+}
+
+async function rejectCandidateTerm(term, field) {
+  try {
+    await apiRequest(`/trends/candidate-taxonomy/${encodeURIComponent(term)}?target_field=${encodeURIComponent(field)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    showToast('候选标签已拒绝');
+    loadCandidateTaxonomyTerms();
+  } catch (e) {
+    showToast('操作失败：' + e.message);
+  }
+}
+
+function formatPercent(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return '0%';
+  return `${Math.round(num * 100)}%`;
+}
+
+function formatScore(value) {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num.toFixed(1) : '0.0';
+}
+
+function formatCompact(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return '0';
+  if (num >= 10000) return `${(num / 10000).toFixed(1)}万`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+  return String(Math.round(num));
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const text = String(value).replace('T', ' ');
+  return text.length > 19 ? text.slice(0, 19) : text;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 // ===== 爆款推送（联调 /api/push-cards） =====
 let pushCardsData = [];
 
@@ -1706,11 +2444,15 @@ function init() {
   renderStyleList();
   updateStyleDeleteUI();
   renderTemplates();
+  restoreTrendSourceConfig();
   switchPage(pageFromHash(), { updateHash: false });
   initAdminBackend().then(() => {
     if (adminBackendAvailable) {
       loadStylesData();
       renderTemplates();
+      if (pageFromHash() === 'trend-agent') {
+        loadTrendRunsAndList();
+      }
       if (pageFromHash() === 'upload' && currentUploadStyleId) {
         restoreUploadDraft(currentUploadStyleId);
       }

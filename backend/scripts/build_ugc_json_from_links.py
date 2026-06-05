@@ -69,6 +69,22 @@ def main() -> None:
     parser.add_argument("--cookie", default="", help="Optional Cookie header for fetching pages")
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT, help="Optional User-Agent")
     parser.add_argument(
+        "--refresh-ttl-hours",
+        type=int,
+        default=72,
+        help="Skip re-fetch for healthy posts fetched within the last N hours; use 0 to disable TTL cache",
+    )
+    parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Only fetch posts whose existing content is incomplete or previously failed",
+    )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Force re-fetch every link and ignore local TTL/missing heuristics",
+    )
+    parser.add_argument(
         "--published-at-fallback",
         default=_now_iso(),
         help="Fallback ISO datetime when publish time cannot be extracted",
@@ -93,17 +109,31 @@ def main() -> None:
     posts: list[dict[str, Any]] = []
 
     for index, url in enumerate(urls, start=1):
+        existing = existing_posts.get(url)
+        if existing and not should_refetch(
+            existing,
+            force_refresh=args.force_refresh,
+            only_missing=args.only_missing,
+            refresh_ttl_hours=args.refresh_ttl_hours,
+        ):
+            reused = ensure_post_defaults(existing)
+            posts.append(reused)
+            print(f"[{index}/{len(urls)}] cached {url}")
+            continue
+
         try:
             html = fetch_html(url, cookie=args.cookie, user_agent=args.user_agent)
             extracted = extract_from_html(url, html, fallback_published_at=args.published_at_fallback)
+            extracted["last_fetched_at"] = args.captured_at
             print(f"[{index}/{len(urls)}] fetched {url}")
         except Exception as exc:
             extracted = build_skeleton(url, fallback_published_at=args.published_at_fallback)
             extracted["title"] = extracted["title"] or f"待补标题 {index}"
             extracted["content"] = extracted["content"] or ""
+            extracted["last_fetched_at"] = args.captured_at
             print(f"[{index}/{len(urls)}] fallback {url}: {exc}")
         merged = merge_with_existing(
-            existing_posts.get(extracted["source_url"]),
+            existing,
             extracted,
             captured_at=args.captured_at,
         )
@@ -162,6 +192,22 @@ def extract_from_html(url: str, html: str, fallback_published_at: str) -> dict[s
         item["raw_tags"] = dedupe_keep_order(item["raw_tags"] + final_tags)
     item["raw_tags"] = dedupe_keep_order(item["raw_tags"])
     item["image_urls"] = dedupe_keep_order(item["image_urls"])
+
+    # Fix 1: Assess fetch quality. Mark as ok only if we got real content.
+    has_title = bool(item["title"] and item["title"] != "待补标题")
+    has_content = bool(item["content"] and item["content"] != "待补标题")
+    has_images = bool(item["image_urls"])
+    if has_title and has_content and has_images:
+        item["fetch_status"] = "ok"
+    elif has_content and has_title:
+        item["fetch_status"] = "ok"
+    elif has_content:
+        item["fetch_status"] = "ok"
+    elif has_title:
+        # Only title, no content — likely a restricted page
+        item["fetch_status"] = "title_only"
+    # else: keep the default "failed_or_login_wall" from build_skeleton
+
     return item
 
 
@@ -181,6 +227,8 @@ def build_skeleton(url: str, fallback_published_at: str) -> dict[str, Any]:
         "comment_count": 0,
         "raw_tags": [],
         "snapshots": [],
+        # Fix 1: default fetch status; overridden on success
+        "fetch_status": "failed_or_login_wall",
     }
     return ensure_post_defaults(item)
 
@@ -190,6 +238,8 @@ def ensure_post_defaults(item: dict[str, Any]) -> dict[str, Any]:
     for key, default_value in _UGC_METADATA_DEFAULTS.items():
         if key not in normalized:
             normalized[key] = copy.deepcopy(default_value)
+    if "last_fetched_at" not in normalized:
+        normalized["last_fetched_at"] = ""
     normalized["snapshots"] = normalize_snapshots(normalized.get("snapshots"))
     return normalized
 
@@ -277,6 +327,60 @@ def merge_with_existing(existing: dict[str, Any] | None, fresh: dict[str, Any], 
         )
 
     return merged
+
+
+def should_refetch(
+    existing: dict[str, Any],
+    *,
+    force_refresh: bool,
+    only_missing: bool,
+    refresh_ttl_hours: int,
+) -> bool:
+    if force_refresh:
+        return True
+
+    normalized = ensure_post_defaults(existing)
+    if only_missing:
+        return is_incomplete_post(normalized)
+
+    if is_incomplete_post(normalized):
+        return True
+
+    if refresh_ttl_hours <= 0:
+        return True
+
+    fetched_at = parse_iso_datetime(str(normalized.get("last_fetched_at") or ""))
+    if fetched_at is None:
+        return True
+
+    age_hours = (_now_datetime() - fetched_at).total_seconds() / 3600
+    return age_hours >= refresh_ttl_hours
+
+
+def is_incomplete_post(post: dict[str, Any]) -> bool:
+    fetch_status = str(post.get("fetch_status") or "")
+    title = str(post.get("title") or "").strip()
+    content = str(post.get("content") or "").strip()
+    images = post.get("image_urls") or []
+    if fetch_status not in {"ok", "title_only"}:
+        return True
+    if not title or title == "待补标题":
+        return True
+    if not content:
+        return True
+    if not isinstance(images, list) or not images:
+        return True
+    return False
+
+
+def parse_iso_datetime(value: str) -> datetime | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def fill_from_json(item: dict[str, Any], obj: Any) -> None:
@@ -862,6 +966,10 @@ def dedupe_keep_order(values: list[str]) -> list[str]:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def _now_datetime() -> datetime:
+    return datetime.now(timezone.utc).astimezone()
 
 
 if __name__ == "__main__":

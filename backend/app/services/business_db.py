@@ -52,6 +52,11 @@ def get_db_summary(conn: sqlite3.Connection | None = None) -> dict[str, int]:
         "push_audits",
         "report_snapshots",
         "user_tryon_history",
+        "ugc_posts",
+        "trend_runs",
+        "trends",
+        "merchant_trend_actions",
+        "candidate_taxonomy_terms",
         "taxonomy_fields",
         "taxonomy_options",
         "taxonomy_submissions",
@@ -75,7 +80,7 @@ def list_styles(limit: int = 50, status: str | None = None, q: str | None = None
             f"""
             SELECT style_id, original_style_image_url, enhanced_style_image_url,
                    style_name, tags_json, hot_score, life_cycle, tryon_enabled,
-                   status, review_status, source, created_at
+                   status, review_status, source, material_status, source_trend_id, created_at
             FROM styles
             WHERE {' AND '.join(clauses)}
             ORDER BY style_id
@@ -388,7 +393,7 @@ def get_style(style_id: str) -> dict[str, Any] | None:
             """
             SELECT style_id, original_style_image_url, enhanced_style_image_url,
                    style_name, tags_json, hot_score, life_cycle, tryon_enabled,
-                   status, review_status, source, created_at
+                   status, review_status, source, material_status, source_trend_id, created_at
             FROM styles
             WHERE style_id = ? AND COALESCE(status, 'active') != 'deleted'
             """,
@@ -409,6 +414,9 @@ def create_style(
     tags: dict[str, Any] | None = None,
     status: str = "active",
     review_status: str = "merchant_confirmed",
+    source: str = "merchant_upload",
+    material_status: str = "ready",
+    source_trend_id: str | None = None,
 ) -> dict[str, Any]:
     """创建新款式并入库"""
     from app.services.taxonomy_store import style_tags_to_storage_dict, validate_style_tags
@@ -422,10 +430,10 @@ def create_style(
         conn.execute(
             """
             INSERT INTO styles
-            (style_id, enhanced_style_image_url, style_name, tags_json, source, status, review_status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (style_id, enhanced_style_image_url, style_name, tags_json, source, status, review_status, material_status, source_trend_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (style_id, image_url, style_name, tags_json, "merchant_upload", status, review_status, now),
+            (style_id, image_url, style_name, tags_json, source, status, review_status, material_status, source_trend_id, now),
         )
         for tag_type, values in style_tags_to_storage_dict(normalized_tags).items():
             for value in values:
@@ -435,7 +443,7 @@ def create_style(
                     (style_id, tag_type, tag_value, source, created_at)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (style_id, tag_type, value, "merchant_upload", now),
+                    (style_id, tag_type, value, source, now),
                 )
     return {
         "style_id": style_id,
@@ -445,6 +453,9 @@ def create_style(
         "tryon_enabled": True,
         "status": status,
         "review_status": review_status,
+        "source": source,
+        "material_status": material_status,
+        "source_trend_id": source_trend_id,
         "created_at": now,
     }
 
@@ -507,6 +518,15 @@ def update_style(style_id: str, updates: dict[str, Any]) -> dict[str, Any] | Non
         if "review_status" in updates:
             sets.append("review_status = ?")
             params.append(updates["review_status"])
+        if "source" in updates:
+            sets.append("source = ?")
+            params.append(updates["source"])
+        if "material_status" in updates:
+            sets.append("material_status = ?")
+            params.append(updates["material_status"])
+        if "source_trend_id" in updates:
+            sets.append("source_trend_id = ?")
+            params.append(updates["source_trend_id"])
         if sets:
             params.append(style_id)
             conn.execute(f"UPDATE styles SET {', '.join(sets)} WHERE style_id = ?", params)
@@ -523,6 +543,24 @@ def update_style(style_id: str, updates: dict[str, Any]) -> dict[str, Any] | Non
                         (style_id, tag_type, value, "style_update", _now()),
                     )
     return get_style(style_id) if found else None
+
+
+def get_style_by_source_trend_id(source_trend_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT style_id
+            FROM styles
+            WHERE source_trend_id = ? AND COALESCE(status, 'active') != 'deleted'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (source_trend_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return get_style(row["style_id"])
 
 
 # ===== 模板 CRUD (B5/B6/B7/B8) =====
@@ -919,7 +957,754 @@ def list_report_snapshots(limit: int = 20) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-# ===== Taxonomy 模糊搜索 (B9) =====
+def import_ugc_posts(posts: list[dict[str, Any]]) -> dict[str, int]:
+    imported_count = 0
+    updated_count = 0
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        for post in posts:
+            post_id = str(post.get("post_id") or "")
+            if not post_id:
+                continue
+            exists = conn.execute("SELECT 1 FROM ugc_posts WHERE post_id = ?", (post_id,)).fetchone()
+            conn.execute(
+                """
+                INSERT INTO ugc_posts (
+                    post_id, source, source_url, author_name, title, content,
+                    image_urls_json, published_at, like_count, favorite_count, comment_count,
+                    raw_tags_json, classification_status, classification_model, classified_at,
+                    classification_confidence, is_nail_related, category_guess, is_promotional,
+                    promotion_type, promotion_confidence, clean_status, clean_reason, trend_weight,
+                    comment_insights_json, comment_sample_count, comment_fetch_status,
+                    fetch_status,
+                    snapshots_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(post_id) DO UPDATE SET
+                    source = excluded.source,
+                    source_url = excluded.source_url,
+                    author_name = excluded.author_name,
+                    title = excluded.title,
+                    content = excluded.content,
+                    image_urls_json = excluded.image_urls_json,
+                    published_at = excluded.published_at,
+                    like_count = excluded.like_count,
+                    favorite_count = excluded.favorite_count,
+                    comment_count = excluded.comment_count,
+                    raw_tags_json = excluded.raw_tags_json,
+                    classification_status = excluded.classification_status,
+                    classification_model = excluded.classification_model,
+                    classified_at = excluded.classified_at,
+                    classification_confidence = excluded.classification_confidence,
+                    is_nail_related = excluded.is_nail_related,
+                    category_guess = excluded.category_guess,
+                    is_promotional = excluded.is_promotional,
+                    promotion_type = excluded.promotion_type,
+                    promotion_confidence = excluded.promotion_confidence,
+                    clean_status = excluded.clean_status,
+                    clean_reason = excluded.clean_reason,
+                    trend_weight = excluded.trend_weight,
+                    comment_insights_json = excluded.comment_insights_json,
+                    comment_sample_count = excluded.comment_sample_count,
+                    comment_fetch_status = excluded.comment_fetch_status,
+                    fetch_status = excluded.fetch_status,
+                    snapshots_json = excluded.snapshots_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    post_id,
+                    str(post.get("source") or "xiaohongshu"),
+                    str(post.get("source_url") or ""),
+                    str(post.get("author_name") or ""),
+                    str(post.get("title") or ""),
+                    str(post.get("content") or ""),
+                    json.dumps(post.get("image_urls") or [], ensure_ascii=False),
+                    str(post.get("published_at") or ""),
+                    int(post.get("like_count") or 0),
+                    int(post.get("favorite_count") or 0),
+                    int(post.get("comment_count") or 0),
+                    json.dumps(post.get("raw_tags") or [], ensure_ascii=False),
+                    str(post.get("classification_status") or "pending"),
+                    str(post.get("classification_model") or ""),
+                    str(post.get("classified_at") or ""),
+                    float(post.get("classification_confidence") or 0.0),
+                    _bool_to_int(post.get("is_nail_related")),
+                    str(post.get("category_guess") or "unknown"),
+                    _bool_to_int(post.get("is_promotional")),
+                    str(post.get("promotion_type") or "unknown"),
+                    float(post.get("promotion_confidence") or 0.0),
+                    str(post.get("clean_status") or "pending"),
+                    str(post.get("clean_reason") or ""),
+                    float(post.get("trend_weight") or 1.0),
+                    json.dumps(post.get("comment_insights") or {}, ensure_ascii=False),
+                    int(post.get("comment_sample_count") or 0),
+                    str(post.get("comment_fetch_status") or "pending"),
+                    str(post.get("fetch_status") or "ok"),
+                    json.dumps(post.get("snapshots") or [], ensure_ascii=False),
+                    now,
+                    now,
+                ),
+            )
+            if exists:
+                updated_count += 1
+            else:
+                imported_count += 1
+    return {"imported_count": imported_count, "updated_count": updated_count, "total_count": imported_count + updated_count}
+
+
+def list_ugc_posts(limit: int = 500, clean_status_exclude: str | None = "filtered") -> list[dict[str, Any]]:
+    with connect_db() as conn:
+        _create_tables(conn)
+        if clean_status_exclude:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM ugc_posts
+                WHERE COALESCE(clean_status, 'pending') != ?
+                ORDER BY published_at DESC, like_count DESC
+                LIMIT ?
+                """,
+                (clean_status_exclude, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM ugc_posts
+                ORDER BY published_at DESC, like_count DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [_ugc_post_payload(dict(row)) for row in rows]
+
+
+def create_trend_run(triggered_by: str = "manual", total_posts: int = 0, status: str = "pending") -> dict[str, Any]:
+    run_id = f"trend-run-{uuid4().hex[:12]}"
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            """
+            INSERT INTO trend_runs
+            (run_id, triggered_by, status, total_posts, processed_posts, created_trends,
+             error_message, payload_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 0, 0, '', '{}', ?, ?)
+            """,
+            (run_id, triggered_by, status, total_posts, now, now),
+        )
+    return get_trend_run(run_id) or {
+        "run_id": run_id,
+        "triggered_by": triggered_by,
+        "status": status,
+        "total_posts": total_posts,
+        "processed_posts": 0,
+        "created_trends": 0,
+        "error_message": "",
+        "payload": {},
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def create_trend_pipeline_run(
+    *,
+    triggered_by: str = "manual",
+    input_json_path: str,
+    output_json_path: str,
+    raw_comments_file: str,
+    provider: str = "auto",
+    total_posts: int = 0,
+    auto_convert_to_draft: bool = False,
+    status: str = "pending",
+    stage: str = "queued",
+) -> dict[str, Any]:
+    pipeline_run_id = f"trend-pipeline-{uuid4().hex[:12]}"
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            """
+            INSERT INTO trend_pipeline_runs
+            (pipeline_run_id, triggered_by, status, stage, input_json_path, output_json_path,
+             raw_comments_file, provider, total_posts, processed_posts, imported_posts,
+             updated_posts, generated_trends, converted_drafts, linked_trend_run_id,
+             auto_convert_to_draft, error_message, logs_json, payload_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, '', ?, '', '[]', '{}', ?, ?)
+            """,
+            (
+                pipeline_run_id,
+                triggered_by,
+                status,
+                stage,
+                input_json_path,
+                output_json_path,
+                raw_comments_file,
+                provider,
+                total_posts,
+                1 if auto_convert_to_draft else 0,
+                now,
+                now,
+            ),
+        )
+    return get_trend_pipeline_run(pipeline_run_id) or {
+        "pipeline_run_id": pipeline_run_id,
+        "triggered_by": triggered_by,
+        "status": status,
+        "stage": stage,
+        "input_json_path": input_json_path,
+        "output_json_path": output_json_path,
+        "raw_comments_file": raw_comments_file,
+        "provider": provider,
+        "total_posts": total_posts,
+        "processed_posts": 0,
+        "imported_posts": 0,
+        "updated_posts": 0,
+        "generated_trends": 0,
+        "converted_drafts": 0,
+        "linked_trend_run_id": "",
+        "auto_convert_to_draft": auto_convert_to_draft,
+        "error_message": "",
+        "logs": [],
+        "payload": {},
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def update_trend_pipeline_run(
+    pipeline_run_id: str,
+    *,
+    status: str | None = None,
+    stage: str | None = None,
+    total_posts: int | None = None,
+    processed_posts: int | None = None,
+    imported_posts: int | None = None,
+    updated_posts: int | None = None,
+    generated_trends: int | None = None,
+    converted_drafts: int | None = None,
+    linked_trend_run_id: str | None = None,
+    error_message: str | None = None,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    assignments: list[str] = []
+    params: list[Any] = []
+    if status is not None:
+        assignments.append("status = ?")
+        params.append(status)
+    if stage is not None:
+        assignments.append("stage = ?")
+        params.append(stage)
+    if total_posts is not None:
+        assignments.append("total_posts = ?")
+        params.append(total_posts)
+    if processed_posts is not None:
+        assignments.append("processed_posts = ?")
+        params.append(processed_posts)
+    if imported_posts is not None:
+        assignments.append("imported_posts = ?")
+        params.append(imported_posts)
+    if updated_posts is not None:
+        assignments.append("updated_posts = ?")
+        params.append(updated_posts)
+    if generated_trends is not None:
+        assignments.append("generated_trends = ?")
+        params.append(generated_trends)
+    if converted_drafts is not None:
+        assignments.append("converted_drafts = ?")
+        params.append(converted_drafts)
+    if linked_trend_run_id is not None:
+        assignments.append("linked_trend_run_id = ?")
+        params.append(linked_trend_run_id)
+    if error_message is not None:
+        assignments.append("error_message = ?")
+        params.append(error_message)
+    if payload is not None:
+        assignments.append("payload_json = ?")
+        params.append(json.dumps(payload, ensure_ascii=False))
+    assignments.append("updated_at = ?")
+    params.append(_now())
+    params.append(pipeline_run_id)
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(f"UPDATE trend_pipeline_runs SET {', '.join(assignments)} WHERE pipeline_run_id = ?", params)
+    return get_trend_pipeline_run(pipeline_run_id)
+
+
+def append_trend_pipeline_run_log(pipeline_run_id: str, message: str) -> dict[str, Any] | None:
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        row = conn.execute(
+            "SELECT logs_json FROM trend_pipeline_runs WHERE pipeline_run_id = ?",
+            (pipeline_run_id,),
+        ).fetchone()
+        if not row:
+            return None
+        logs = _json_loads(row["logs_json"], [])
+        if not isinstance(logs, list):
+            logs = []
+        logs.append({"timestamp": now, "message": message})
+        logs = logs[-200:]
+        conn.execute(
+            "UPDATE trend_pipeline_runs SET logs_json = ?, updated_at = ? WHERE pipeline_run_id = ?",
+            (json.dumps(logs, ensure_ascii=False), now, pipeline_run_id),
+        )
+    return get_trend_pipeline_run(pipeline_run_id)
+
+
+def get_trend_pipeline_run(pipeline_run_id: str) -> dict[str, Any] | None:
+    with connect_db() as conn:
+        _create_tables(conn)
+        row = conn.execute(
+            "SELECT * FROM trend_pipeline_runs WHERE pipeline_run_id = ?",
+            (pipeline_run_id,),
+        ).fetchone()
+    return _trend_pipeline_run_payload(dict(row)) if row else None
+
+
+def list_trend_pipeline_runs(limit: int = 20) -> list[dict[str, Any]]:
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM trend_pipeline_runs
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [_trend_pipeline_run_payload(dict(row)) for row in rows]
+
+
+def update_trend_run(
+    run_id: str,
+    *,
+    status: str | None = None,
+    total_posts: int | None = None,
+    processed_posts: int | None = None,
+    created_trends: int | None = None,
+    error_message: str | None = None,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    assignments: list[str] = []
+    params: list[Any] = []
+    if status is not None:
+        assignments.append("status = ?")
+        params.append(status)
+    if total_posts is not None:
+        assignments.append("total_posts = ?")
+        params.append(total_posts)
+    if processed_posts is not None:
+        assignments.append("processed_posts = ?")
+        params.append(processed_posts)
+    if created_trends is not None:
+        assignments.append("created_trends = ?")
+        params.append(created_trends)
+    if error_message is not None:
+        assignments.append("error_message = ?")
+        params.append(error_message)
+    if payload is not None:
+        assignments.append("payload_json = ?")
+        params.append(json.dumps(payload, ensure_ascii=False))
+    assignments.append("updated_at = ?")
+    params.append(_now())
+    params.append(run_id)
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(f"UPDATE trend_runs SET {', '.join(assignments)} WHERE run_id = ?", params)
+    return get_trend_run(run_id)
+
+
+def get_trend_run(run_id: str) -> dict[str, Any] | None:
+    with connect_db() as conn:
+        _create_tables(conn)
+        row = conn.execute("SELECT * FROM trend_runs WHERE run_id = ?", (run_id,)).fetchone()
+    return _trend_run_payload(dict(row)) if row else None
+
+
+def _infer_trend_memory_status(status: str, life_cycle: str) -> str:
+    if status == "discard":
+        return "archived"
+    if life_cycle == "衰退期":
+        return "declining"
+    if status == "promote":
+        return "active"
+    return "watching"
+
+
+def _append_score_history(existing_json: Any, *, run_id: str, trend_score: float, confidence: float, life_cycle: str, observed_at: str) -> str:
+    history = _json_loads(existing_json, [])
+    if not isinstance(history, list):
+        history = []
+    history.append(
+        {
+            "run_id": run_id,
+            "trend_score": trend_score,
+            "confidence": confidence,
+            "life_cycle": life_cycle,
+            "observed_at": observed_at,
+        }
+    )
+    history = history[-20:]
+    return json.dumps(history, ensure_ascii=False)
+
+
+def replace_trends(trends: list[dict[str, Any]], run_id: str | None = None) -> int:
+    """Persist discovered trends with hierarchical matching.
+
+    Matching strategy (most specific first):
+    1. Exact trend_id match (canonical SHA256 hash of taxonomy tags)
+    2. Core_style name match (current behaviour, catches taxonomy drift)
+    3. No match → new trend
+
+    When a match is found via core_style but the canonical trend_id differs
+    (e.g. because taxonomy tags evolved), the old ID is recorded in
+    ``merged_from_json`` so the lineage is auditable.
+    """
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        existing_rows = conn.execute("SELECT * FROM trends").fetchall()
+
+        # Build dual indices
+        existing_by_trend_id: dict[str, dict[str, Any]] = {}
+        existing_by_core_style: dict[str, dict[str, Any]] = {}
+        for row in existing_rows:
+            d = dict(row)
+            tid = str(d.get("trend_id") or "").strip()
+            cs = str(d.get("core_style") or "").strip()
+            if tid:
+                existing_by_trend_id[tid] = d
+            if cs:
+                existing_by_core_style[cs] = d
+
+        seen_ids: set[str] = set()
+        for trend in trends:
+            current_trend_id = str(trend.get("trend_id") or "").strip()
+            core_style = str(trend.get("core_style") or "").strip()
+            if not core_style and not current_trend_id:
+                continue
+
+            # ---------- step 1: exact trend_id match ----------
+            existing = existing_by_trend_id.get(current_trend_id) if current_trend_id else None
+
+            # ---------- step 2: core_style fallback ----------
+            merged_from: list[str] = []
+            if not existing and core_style:
+                existing = existing_by_core_style.get(core_style)
+                if existing:
+                    old_id = str(existing.get("trend_id") or "")
+                    if old_id and old_id != current_trend_id:
+                        # Taxonomy drift detected — record the lineage
+                        prev_merged = _json_loads(existing.get("merged_from_json"), [])
+                        merged_from = prev_merged if isinstance(prev_merged, list) else []
+                        if old_id not in merged_from:
+                            merged_from.append(old_id)
+
+            # ---------- determine final trend_id and lifecycle ----------
+            if existing:
+                trend_id = str(existing["trend_id"])
+                identified_at = str(existing.get("identified_at") or now)
+                first_seen_at = str(existing.get("first_seen_at") or now)
+            else:
+                trend_id = current_trend_id
+                identified_at = str(trend.get("identified_at") or now)
+                first_seen_at = now
+
+            seen_ids.add(trend_id)
+
+            score_history_json = _append_score_history(
+                existing.get("score_history_json") if existing else "[]",
+                run_id=run_id or "",
+                trend_score=float(trend.get("trend_score") or 0.0),
+                confidence=float(trend.get("confidence") or 0.0),
+                life_cycle=str(trend.get("life_cycle") or "观察期"),
+                observed_at=now,
+            )
+            memory_status = _infer_trend_memory_status(
+                str(trend.get("status") or "watch"),
+                str(trend.get("life_cycle") or "观察期"),
+            )
+
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO trends (
+                    trend_id, core_style, representative_image_url, style_source_image_url,
+                    supporting_post_ids_json, supporting_posts_json, keywords_json,
+                    trend_score, confidence, life_cycle, reasoning_summary, status,
+                    push_status, metrics_json, comment_signal_summary_json,
+                    identified_at, expires_at, created_at, updated_at,
+                    first_seen_at, last_seen_at, last_run_id, memory_status, score_history_json,
+                    data_lifecycle, trend_lifecycle, signal_quality_json, merged_from_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trend_id,
+                    core_style,
+                    str(trend.get("representative_image_url") or ""),
+                    str(trend.get("style_source_image_url") or ""),
+                    json.dumps(trend.get("supporting_post_ids") or [], ensure_ascii=False),
+                    json.dumps(trend.get("supporting_posts") or [], ensure_ascii=False),
+                    json.dumps(trend.get("keywords") or [], ensure_ascii=False),
+                    float(trend.get("trend_score") or 0.0),
+                    float(trend.get("confidence") or 0.0),
+                    str(trend.get("life_cycle") or "观察期"),
+                    str(trend.get("reasoning_summary") or ""),
+                    str(trend.get("status") or "watch"),
+                    str(trend.get("push_status") or "not_pushed"),
+                    json.dumps(trend.get("metrics") or {}, ensure_ascii=False),
+                    json.dumps(trend.get("comment_signal_summary") or {}, ensure_ascii=False),
+                    identified_at,
+                    str(trend.get("expires_at") or ""),
+                    str(existing["created_at"]) if existing and existing.get("created_at") else now,
+                    now,
+                    first_seen_at,
+                    now,
+                    run_id or "",
+                    memory_status,
+                    score_history_json,
+                    str(trend.get("data_lifecycle") or "recent"),
+                    str(trend.get("trend_lifecycle") or "insufficient_history"),
+                    json.dumps(trend.get("signal_quality_distribution") or trend.get("metrics", {}).get("signal_quality_distribution") or {}, ensure_ascii=False),
+                    json.dumps(merged_from, ensure_ascii=False),
+                ),
+            )
+
+        # ---------- decay: trends not seen this run → watching ----------
+        if run_id:
+            for eid, existing in existing_by_trend_id.items():
+                if eid in seen_ids:
+                    continue
+                if str(existing.get("memory_status") or "watching") == "archived":
+                    continue
+                conn.execute(
+                    """
+                    UPDATE trends
+                    SET memory_status = ?, updated_at = ?
+                    WHERE trend_id = ?
+                    """,
+                    ("watching", now, eid),
+                )
+
+    return len(trends)
+
+
+def list_trends(limit: int = 50, status: str | None = None, life_cycle: str | None = None) -> list[dict[str, Any]]:
+    with connect_db() as conn:
+        _create_tables(conn)
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if life_cycle:
+            clauses.append("life_cycle = ?")
+            params.append(life_cycle)
+        params.append(limit)
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM trends
+            WHERE {' AND '.join(clauses)}
+            ORDER BY trend_score DESC, identified_at DESC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+    return [_trend_payload(dict(row)) for row in rows]
+
+
+def get_trend(trend_id: str) -> dict[str, Any] | None:
+    with connect_db() as conn:
+        _create_tables(conn)
+        row = conn.execute("SELECT * FROM trends WHERE trend_id = ?", (trend_id,)).fetchone()
+    return _trend_payload(dict(row)) if row else None
+
+
+def create_merchant_trend_action(
+    merchant_id: str,
+    trend_id: str,
+    action: str,
+    note: str = "",
+    draft_style_id: str = "",
+) -> dict[str, Any]:
+    action_id = f"trend-action-{uuid4().hex[:12]}"
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            """
+            INSERT INTO merchant_trend_actions
+            (action_id, merchant_id, trend_id, action, note, draft_style_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (action_id, merchant_id, trend_id, action, note, draft_style_id, now),
+        )
+    return {
+        "action_id": action_id,
+        "merchant_id": merchant_id,
+        "trend_id": trend_id,
+        "action": action,
+        "note": note,
+        "draft_style_id": draft_style_id,
+        "created_at": now,
+    }
+
+
+# ===== Data Health (Fix 2: mandatory pipeline stage validation) =====
+
+def get_data_health() -> dict[str, Any]:
+    """Return pipeline data health summary for pre-flight checks."""
+    with connect_db() as conn:
+        _create_tables(conn)
+        total_posts = conn.execute("SELECT COUNT(*) AS count FROM ugc_posts").fetchone()["count"]
+        classified = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE classification_status = 'done'"
+        ).fetchone()["count"]
+        comments_done = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE comment_fetch_status IN ('done', 'unavailable')"
+        ).fetchone()["count"]
+        fetch_failed = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE fetch_status != 'ok'"
+        ).fetchone()["count"]
+        filtered_out = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE clean_status = 'filtered'"
+        ).fetchone()["count"]
+        pending_classification = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE classification_status = 'pending'"
+        ).fetchone()["count"]
+        empty_content = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE (content = '' OR content IS NULL) AND (title = '' OR title IS NULL)"
+        ).fetchone()["count"]
+        zero_interaction = conn.execute(
+            "SELECT COUNT(*) AS count FROM ugc_posts WHERE like_count = 0 AND favorite_count = 0 AND comment_count = 0"
+        ).fetchone()["count"]
+    return {
+        "total_posts": total_posts,
+        "classified": classified,
+        "comments_done": comments_done,
+        "fetch_failed": fetch_failed,
+        "filtered_out": filtered_out,
+        "pending_classification": pending_classification,
+        "empty_content": empty_content,
+        "zero_interaction": zero_interaction,
+        "ready_for_trend_discovery": classified > 0 and classified >= (total_posts - pending_classification) * 0.8 if total_posts > 0 else False,
+        "health": "good" if total_posts > 0 and classified > 0 and classified >= total_posts * 0.5 else "needs_attention",
+    }
+
+
+# ===== Candidate Taxonomy Terms (Fix 5: ops reviewable candidate pool) =====
+
+def upsert_candidate_taxonomy_terms(terms: list[dict[str, Any]], run_id: str = "") -> int:
+    """Insert or update candidate taxonomy terms from trend discovery."""
+    now = _now()
+    upserted = 0
+    with connect_db() as conn:
+        _create_tables(conn)
+        for term in terms:
+            candidate_term = str(term.get("candidate_term") or term.get("normalized_form") or "").strip()
+            target_field = str(term.get("target_field") or "style_tags").strip()
+            if not candidate_term:
+                continue
+            conn.execute(
+                """
+                INSERT INTO candidate_taxonomy_terms (
+                    candidate_term, normalized_form, target_field, frequency,
+                    variant_forms_json, related_official_json, support_post_ids_json,
+                    growth_rate_7d, discovered_run_id, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                ON CONFLICT(candidate_term, target_field) DO UPDATE SET
+                    frequency = excluded.frequency,
+                    variant_forms_json = excluded.variant_forms_json,
+                    related_official_json = excluded.related_official_json,
+                    support_post_ids_json = excluded.support_post_ids_json,
+                    growth_rate_7d = excluded.growth_rate_7d,
+                    discovered_run_id = excluded.discovered_run_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    candidate_term,
+                    str(term.get("normalized_form") or candidate_term),
+                    target_field,
+                    int(term.get("frequency") or 0),
+                    json.dumps(term.get("variant_forms") or [], ensure_ascii=False),
+                    json.dumps(term.get("related_official_tags") or [], ensure_ascii=False),
+                    json.dumps(term.get("support_post_ids") or [], ensure_ascii=False),
+                    float(term.get("growth_rate_7d") or 0.0),
+                    run_id,
+                    now,
+                    now,
+                ),
+            )
+            upserted += 1
+    return upserted
+
+
+def list_candidate_taxonomy_terms(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    """List candidate taxonomy terms for ops review."""
+    with connect_db() as conn:
+        _create_tables(conn)
+        if status:
+            rows = conn.execute(
+                """
+                SELECT * FROM candidate_taxonomy_terms
+                WHERE status = ?
+                ORDER BY frequency DESC, updated_at DESC
+                LIMIT ?
+                """,
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM candidate_taxonomy_terms
+                ORDER BY frequency DESC, updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [_candidate_taxonomy_term_payload(dict(row)) for row in rows]
+
+
+def update_candidate_taxonomy_term_status(
+    candidate_term: str, target_field: str, status: str
+) -> dict[str, Any] | None:
+    """Approve or reject a candidate taxonomy term."""
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            """
+            UPDATE candidate_taxonomy_terms
+            SET status = ?, updated_at = ?
+            WHERE candidate_term = ? AND target_field = ?
+            """,
+            (status, now, candidate_term, target_field),
+        )
+        row = conn.execute(
+            "SELECT * FROM candidate_taxonomy_terms WHERE candidate_term = ? AND target_field = ?",
+            (candidate_term, target_field),
+        ).fetchone()
+    return _candidate_taxonomy_term_payload(dict(row)) if row else None
+
+
+def _candidate_taxonomy_term_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "candidate_term": row["candidate_term"],
+        "normalized_form": row["normalized_form"],
+        "target_field": row["target_field"],
+        "frequency": row["frequency"],
+        "variant_forms": _json_loads(row.get("variant_forms_json"), []),
+        "related_official_tags": _json_loads(row.get("related_official_json"), []),
+        "support_post_ids": _json_loads(row.get("support_post_ids_json"), []),
+        "growth_rate_7d": row["growth_rate_7d"],
+        "discovered_run_id": row["discovered_run_id"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
 
 def search_taxonomy_options(field_key: str, query: str, limit: int = 20) -> list[dict[str, Any]]:
     """按字段+关键词模糊搜索已审批标签值"""
@@ -967,6 +1752,8 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             source TEXT NOT NULL DEFAULT 'seed_xlsx',
             status TEXT NOT NULL DEFAULT 'active',
             review_status TEXT NOT NULL DEFAULT 'merchant_confirmed',
+            material_status TEXT NOT NULL DEFAULT 'ready',
+            source_trend_id TEXT,
             deleted_at TEXT,
             created_at TEXT NOT NULL
         );
@@ -1073,6 +1860,135 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             result_image_url TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS ugc_posts (
+            post_id TEXT PRIMARY KEY,
+            source TEXT NOT NULL DEFAULT 'xiaohongshu',
+            source_url TEXT NOT NULL DEFAULT '',
+            author_name TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            image_urls_json TEXT NOT NULL DEFAULT '[]',
+            published_at TEXT NOT NULL DEFAULT '',
+            like_count INTEGER NOT NULL DEFAULT 0,
+            favorite_count INTEGER NOT NULL DEFAULT 0,
+            comment_count INTEGER NOT NULL DEFAULT 0,
+            raw_tags_json TEXT NOT NULL DEFAULT '[]',
+            classification_status TEXT NOT NULL DEFAULT 'pending',
+            classification_model TEXT NOT NULL DEFAULT '',
+            classified_at TEXT NOT NULL DEFAULT '',
+            classification_confidence REAL NOT NULL DEFAULT 0,
+            is_nail_related INTEGER,
+            category_guess TEXT NOT NULL DEFAULT 'unknown',
+            is_promotional INTEGER,
+            promotion_type TEXT NOT NULL DEFAULT 'unknown',
+            promotion_confidence REAL NOT NULL DEFAULT 0,
+            clean_status TEXT NOT NULL DEFAULT 'pending',
+            clean_reason TEXT NOT NULL DEFAULT '',
+            trend_weight REAL NOT NULL DEFAULT 1,
+            comment_insights_json TEXT NOT NULL DEFAULT '{}',
+            comment_sample_count INTEGER NOT NULL DEFAULT 0,
+            comment_fetch_status TEXT NOT NULL DEFAULT 'pending',
+            fetch_status TEXT NOT NULL DEFAULT 'ok',
+            snapshots_json TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS trend_runs (
+            run_id TEXT PRIMARY KEY,
+            triggered_by TEXT NOT NULL DEFAULT 'manual',
+            status TEXT NOT NULL DEFAULT 'pending',
+            total_posts INTEGER NOT NULL DEFAULT 0,
+            processed_posts INTEGER NOT NULL DEFAULT 0,
+            created_trends INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT NOT NULL DEFAULT '',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS trends (
+            trend_id TEXT PRIMARY KEY,
+            core_style TEXT NOT NULL DEFAULT '',
+            representative_image_url TEXT NOT NULL DEFAULT '',
+            style_source_image_url TEXT NOT NULL DEFAULT '',
+            supporting_post_ids_json TEXT NOT NULL DEFAULT '[]',
+            supporting_posts_json TEXT NOT NULL DEFAULT '[]',
+            keywords_json TEXT NOT NULL DEFAULT '[]',
+            trend_score REAL NOT NULL DEFAULT 0,
+            confidence REAL NOT NULL DEFAULT 0,
+            life_cycle TEXT NOT NULL DEFAULT '观察期',
+            reasoning_summary TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'watch',
+            push_status TEXT NOT NULL DEFAULT 'not_pushed',
+            metrics_json TEXT NOT NULL DEFAULT '{}',
+            comment_signal_summary_json TEXT NOT NULL DEFAULT '{}',
+            identified_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            first_seen_at TEXT NOT NULL DEFAULT '',
+            last_seen_at TEXT NOT NULL DEFAULT '',
+            last_run_id TEXT NOT NULL DEFAULT '',
+            memory_status TEXT NOT NULL DEFAULT 'watching',
+            score_history_json TEXT NOT NULL DEFAULT '[]',
+            data_lifecycle TEXT NOT NULL DEFAULT 'recent',
+            trend_lifecycle TEXT NOT NULL DEFAULT 'insufficient_history',
+            signal_quality_json TEXT NOT NULL DEFAULT '{}',
+            merged_from_json TEXT NOT NULL DEFAULT '[]'
+        );
+
+        CREATE TABLE IF NOT EXISTS merchant_trend_actions (
+            action_id TEXT PRIMARY KEY,
+            merchant_id TEXT NOT NULL,
+            trend_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            draft_style_id TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(trend_id) REFERENCES trends(trend_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS trend_pipeline_runs (
+            pipeline_run_id TEXT PRIMARY KEY,
+            triggered_by TEXT NOT NULL DEFAULT 'manual',
+            status TEXT NOT NULL DEFAULT 'pending',
+            stage TEXT NOT NULL DEFAULT 'queued',
+            input_json_path TEXT NOT NULL DEFAULT '',
+            output_json_path TEXT NOT NULL DEFAULT '',
+            raw_comments_file TEXT NOT NULL DEFAULT '',
+            provider TEXT NOT NULL DEFAULT 'auto',
+            total_posts INTEGER NOT NULL DEFAULT 0,
+            processed_posts INTEGER NOT NULL DEFAULT 0,
+            imported_posts INTEGER NOT NULL DEFAULT 0,
+            updated_posts INTEGER NOT NULL DEFAULT 0,
+            generated_trends INTEGER NOT NULL DEFAULT 0,
+            converted_drafts INTEGER NOT NULL DEFAULT 0,
+            linked_trend_run_id TEXT NOT NULL DEFAULT '',
+            auto_convert_to_draft INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT NOT NULL DEFAULT '',
+            logs_json TEXT NOT NULL DEFAULT '[]',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS candidate_taxonomy_terms (
+            candidate_term TEXT NOT NULL,
+            normalized_form TEXT NOT NULL,
+            target_field TEXT NOT NULL,
+            frequency INTEGER NOT NULL DEFAULT 0,
+            variant_forms_json TEXT NOT NULL DEFAULT '[]',
+            related_official_json TEXT NOT NULL DEFAULT '[]',
+            support_post_ids_json TEXT NOT NULL DEFAULT '[]',
+            growth_rate_7d REAL NOT NULL DEFAULT 0.0,
+            discovered_run_id TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (candidate_term, target_field)
+        );
         """
     )
     _ensure_schema_upgrades(conn)
@@ -1090,7 +2006,19 @@ def _ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "styles", "tryon_enabled", "INTEGER NOT NULL DEFAULT 1")
     _ensure_column(conn, "styles", "status", "TEXT NOT NULL DEFAULT 'active'")
     _ensure_column(conn, "styles", "review_status", "TEXT NOT NULL DEFAULT 'merchant_confirmed'")
+    _ensure_column(conn, "styles", "material_status", "TEXT NOT NULL DEFAULT 'ready'")
+    _ensure_column(conn, "styles", "source_trend_id", "TEXT")
     _ensure_column(conn, "styles", "deleted_at", "TEXT")
+    _ensure_column(conn, "trends", "first_seen_at", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "trends", "last_seen_at", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "trends", "last_run_id", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "trends", "memory_status", "TEXT NOT NULL DEFAULT 'watching'")
+    _ensure_column(conn, "trends", "score_history_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "ugc_posts", "fetch_status", "TEXT NOT NULL DEFAULT 'ok'")
+    _ensure_column(conn, "trends", "data_lifecycle", "TEXT NOT NULL DEFAULT 'recent'")
+    _ensure_column(conn, "trends", "trend_lifecycle", "TEXT NOT NULL DEFAULT 'insufficient_history'")
+    _ensure_column(conn, "trends", "signal_quality_json", "TEXT NOT NULL DEFAULT '{}'")
+    _ensure_column(conn, "trends", "merged_from_json", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "push_audits", "selected_image_url", "TEXT")
     _ensure_column(conn, "push_audits", "selected_coupon_url", "TEXT")
     _ensure_column(conn, "push_audits", "final_tagline", "TEXT")
@@ -1102,6 +2030,131 @@ def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, 
     if any(row["name"] == column_name for row in rows):
         return
     conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+
+
+def _bool_to_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return 1 if bool(value) else 0
+
+
+def _json_loads(value: Any, default: Any) -> Any:
+    try:
+        if value is None or value == "":
+            return default
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return default
+
+
+def _ugc_post_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "post_id": row["post_id"],
+        "source": row["source"],
+        "source_url": row["source_url"],
+        "author_name": row["author_name"],
+        "title": row["title"],
+        "content": row["content"],
+        "image_urls": _json_loads(row.get("image_urls_json"), []),
+        "published_at": row["published_at"],
+        "like_count": row["like_count"],
+        "favorite_count": row["favorite_count"],
+        "comment_count": row["comment_count"],
+        "raw_tags": _json_loads(row.get("raw_tags_json"), []),
+        "classification_status": row["classification_status"],
+        "classification_model": row["classification_model"],
+        "classified_at": row["classified_at"],
+        "classification_confidence": row["classification_confidence"],
+        "is_nail_related": None if row["is_nail_related"] is None else bool(row["is_nail_related"]),
+        "category_guess": row["category_guess"],
+        "is_promotional": None if row["is_promotional"] is None else bool(row["is_promotional"]),
+        "promotion_type": row["promotion_type"],
+        "promotion_confidence": row["promotion_confidence"],
+        "clean_status": row["clean_status"],
+        "clean_reason": row["clean_reason"],
+        "trend_weight": row["trend_weight"],
+        "comment_insights": _json_loads(row.get("comment_insights_json"), {}),
+        "comment_sample_count": row["comment_sample_count"],
+        "comment_fetch_status": row["comment_fetch_status"],
+        "fetch_status": row.get("fetch_status") or "ok",
+        "snapshots": _json_loads(row.get("snapshots_json"), []),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _trend_run_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_id": row["run_id"],
+        "triggered_by": row["triggered_by"],
+        "status": row["status"],
+        "total_posts": row["total_posts"],
+        "processed_posts": row["processed_posts"],
+        "created_trends": row["created_trends"],
+        "error_message": row["error_message"],
+        "payload": _json_loads(row.get("payload_json"), {}),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _trend_pipeline_run_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "pipeline_run_id": row["pipeline_run_id"],
+        "triggered_by": row["triggered_by"],
+        "status": row["status"],
+        "stage": row["stage"],
+        "input_json_path": row["input_json_path"],
+        "output_json_path": row["output_json_path"],
+        "raw_comments_file": row["raw_comments_file"],
+        "provider": row["provider"],
+        "total_posts": row["total_posts"],
+        "processed_posts": row["processed_posts"],
+        "imported_posts": row["imported_posts"],
+        "updated_posts": row["updated_posts"],
+        "generated_trends": row["generated_trends"],
+        "converted_drafts": row["converted_drafts"],
+        "linked_trend_run_id": row["linked_trend_run_id"],
+        "auto_convert_to_draft": bool(row["auto_convert_to_draft"]),
+        "error_message": row["error_message"],
+        "logs": _json_loads(row.get("logs_json"), []),
+        "payload": _json_loads(row.get("payload_json"), {}),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _trend_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "trend_id": row["trend_id"],
+        "core_style": row["core_style"],
+        "representative_image_url": row["representative_image_url"],
+        "style_source_image_url": row["style_source_image_url"],
+        "supporting_post_ids": _json_loads(row.get("supporting_post_ids_json"), []),
+        "supporting_posts": _json_loads(row.get("supporting_posts_json"), []),
+        "keywords": _json_loads(row.get("keywords_json"), []),
+        "trend_score": row["trend_score"],
+        "confidence": row["confidence"],
+        "life_cycle": row["life_cycle"],
+        "reasoning_summary": row["reasoning_summary"],
+        "status": row["status"],
+        "push_status": row["push_status"],
+        "metrics": _json_loads(row.get("metrics_json"), {}),
+        "comment_signal_summary": _json_loads(row.get("comment_signal_summary_json"), {}),
+        "identified_at": row["identified_at"],
+        "expires_at": row["expires_at"],
+        "first_seen_at": row.get("first_seen_at") or row["identified_at"],
+        "last_seen_at": row.get("last_seen_at") or row["updated_at"],
+        "last_run_id": row.get("last_run_id") or "",
+        "memory_status": row.get("memory_status") or "watching",
+        "score_history": _json_loads(row.get("score_history_json"), []),
+        "data_lifecycle": row.get("data_lifecycle") or "recent",
+        "trend_lifecycle": row.get("trend_lifecycle") or "insufficient_history",
+        "signal_quality_distribution": _json_loads(row.get("signal_quality_json"), {}),
+        "merged_from": _json_loads(row.get("merged_from_json"), []),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
 
 
 def _seed_from_xlsx(conn: sqlite3.Connection) -> None:

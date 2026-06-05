@@ -847,7 +847,7 @@ async function main() {
       if (!sourceUrl) continue;
 
       output.write(`\n打开帖子：${sourceUrl}\n`);
-      await page.goto(sourceUrl, { waitUntil: "domcontentloaded" });
+      await page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.waitForTimeout(2500);
 
       await handlePossibleLogin(page, rl, args.loginWaitSeconds);
