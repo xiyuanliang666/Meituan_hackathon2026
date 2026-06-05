@@ -421,6 +421,50 @@
 <!-- Signal Tooltip (全局) -->
 <div class="sig-tooltip-box" id="sig-tooltip-box"></div>
 
+<!-- 候选标签审批弹框 -->
+<div class="modal-overlay" id="candidate-approve-modal">
+  <div class="modal-content" style="text-align:left;max-width:440px">
+    <h3 style="margin-bottom:16px"><i class="ti ti-tag" style="color:#8D79B8"></i> 审核候选标签词</h3>
+    <div class="pref-form-group">
+      <label>候选词</label>
+      <input type="text" id="candidate-edit-term" style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+    </div>
+    <div class="pref-form-group">
+      <label>规范形式（正式入库名称）</label>
+      <input type="text" id="candidate-edit-normalized" style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+    </div>
+    <div class="pref-form-group">
+      <label>归属维度</label>
+      <select id="candidate-edit-field" class="coupon-select" style="width:100%">
+        <option value="style_tags">风格标签</option>
+        <option value="nail_technique">美甲技法</option>
+        <option value="color_system">色系</option>
+        <option value="nail_shape">甲型</option>
+        <option value="nail_length">甲长</option>
+        <option value="nail_decoration">装饰</option>
+        <option value="nail_finish">甲面质感</option>
+        <option value="scene_tags">场景</option>
+        <option value="season_tags">季节</option>
+        <option value="skin_tone_suitability">肤色适配</option>
+        <option value="finger_shape">指型</option>
+        <option value="nail_bed_shape">甲床型</option>
+      </select>
+    </div>
+    <div class="pref-form-group">
+      <label>变体形式（只读）</label>
+      <div id="candidate-edit-variants" style="font-size:12px;color:#888;padding:6px 0"></div>
+    </div>
+    <div class="pref-form-group">
+      <label>关联官方标签（只读）</label>
+      <div id="candidate-edit-related" style="font-size:12px;color:#888;padding:6px 0"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn-primary-sm" onclick="confirmApproveCandidate()"><i class="ti ti-check"></i> 确认通过并入库</button>
+      <button class="btn-ghost" onclick="hideCandidateApproveModal()">取消</button>
+    </div>
+  </div>
+</div>
+
 <script src="../api-config.js"></script>
 <script src="admin-app.js?v=push-source-cards-20260605-10"></script>
 </body>

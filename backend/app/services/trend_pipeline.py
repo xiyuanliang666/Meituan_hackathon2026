@@ -17,7 +17,6 @@ from app.services.business_db import (
     update_trend_pipeline_run,
 )
 from app.services.trend_jobs import execute_trend_run
-from app.services.trend_materialization import convert_trend_to_draft
 
 
 def execute_trend_pipeline(
@@ -200,24 +199,7 @@ def execute_trend_pipeline(
         )
         append_trend_pipeline_run_log(pipeline_run_id, f"Trend discovery completed: generated_trends={generated_trends}")
 
-        converted_results: list[dict[str, Any]] = []
-        if auto_convert_to_draft:
-            update_trend_pipeline_run(pipeline_run_id, stage="convert_to_draft")
-            append_trend_pipeline_run_log(pipeline_run_id, "Start converting trends to drafts")
-            for trend in list_trends(limit=max(1, convert_limit), status="promote"):
-                converted_results.append(
-                    convert_trend_to_draft(
-                        trend_id=trend["trend_id"],
-                        merchant_id=merchant_id,
-                        use_trend_tags=use_trend_tags,
-                    )
-                )
-            update_trend_pipeline_run(
-                pipeline_run_id,
-                converted_drafts=len(converted_results),
-            )
-            append_trend_pipeline_run_log(pipeline_run_id, f"Converted drafts: {len(converted_results)}")
-
+        # 趋势已通过 trend_jobs 自动进入爆款推送队列（待上架），无需再转草稿
         update_trend_pipeline_run(
             pipeline_run_id,
             status="succeeded",
@@ -225,7 +207,6 @@ def execute_trend_pipeline(
             payload={
                 "import_result": import_result,
                 "trend_run": finished_trend_run,
-                "converted_drafts": converted_results,
             },
         )
         append_trend_pipeline_run_log(pipeline_run_id, "Pipeline completed successfully")

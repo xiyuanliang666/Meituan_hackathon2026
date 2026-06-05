@@ -1610,7 +1610,7 @@ function renderTrendRunCard(run) {
     comment_pipeline: '评论抓取与摘要',
     import_posts: '导入帖子',
     trend_discovery: '趋势识别',
-    convert_to_draft: '转草稿',
+    convert_to_draft: '推送队列',
     completed: '已完成',
     failed: '失败',
   }[run.stage] || run.stage || '处理中';
@@ -1639,7 +1639,7 @@ function renderTrendRunCard(run) {
       <div class="trend-run-stat"><span>参与本轮识别帖子</span><strong>${discoveredPostCount}</strong></div>
     </div>
     <div class="trend-run-stats trend-run-stats-secondary">
-      <div class="trend-run-stat"><span>转草稿</span><strong>${run.converted_drafts || 0}</strong></div>
+      <div class="trend-run-stat"><span>推送队列</span><strong>${run.converted_drafts || 0}</strong></div>
     </div>
     ${needsLoginHint ? `<div class="trend-run-login-hint"><i class="ti ti-user-check"></i><span>当前正在抓取链接评论，需要本机 Playwright 浏览器登录小红书并保持页面可继续执行。</span></div>` : ''}
     ${recentLogs.length ? `<div class="trend-run-logs">${recentLogs.map(item => `<div class="trend-run-log-line">${escapeHtml(item.message || '')}</div>`).join('')}</div>` : ''}
@@ -1837,7 +1837,7 @@ function renderTrendDetail(trend) {
   el.innerHTML = `
     <div class="trend-detail-cover">
       <div class="trend-cover-fallback"><i class="ti ti-photo"></i></div>
-      ${trend.representative_image_url ? `<img src="${staticUrl(trend.representative_image_url)}" alt="${escapeHtml(trend.core_style)}" onload="this.parentElement.classList.remove('is-fallback')" onerror="handleTrendCoverError(this,'${trend.trend_id}')">` : '<i class="ti ti-photo"></i>'}
+      ${trend.representative_image_url ? `<img src="${staticUrl(trend.representative_image_url)}" alt="${escapeHtml(trend.core_style)}" onload="this.parentElement.classList.remove('is-fallback')">` : '<i class="ti ti-photo"></i>'}
     </div>
     <div class="trend-detail-head">
       <div>
@@ -1874,7 +1874,7 @@ function renderTrendDetail(trend) {
       <button class="btn-ghost-sm" onclick="recordTrendAction('${trend.trend_id}','watching').then(()=>showToast('已标记为观察中'))"><i class="ti ti-eye"></i> 观察中</button>
       <button class="btn-ghost-sm" onclick="recordTrendAction('${trend.trend_id}','ignored').then(()=>showToast('已忽略该趋势'))"><i class="ti ti-x"></i> 忽略</button>
       <button class="btn-primary-sm" onclick="recordTrendAction('${trend.trend_id}','accepted').then(()=>showToast('已采纳趋势'))"><i class="ti ti-circle-check"></i> 采纳</button>
-      <button class="btn-primary-sm" onclick="convertTrendToDraft('${trend.trend_id}')"><i class="ti ti-wand"></i> 转为草稿</button>
+      <button class="btn-primary-sm" onclick="pushTrendToQueue('${trend.trend_id}')"><i class="ti ti-rocket"></i> 爆款推送</button>
     </div>
     <div class="trend-signal-section">
       <div class="trend-section-title">查看爆款依据</div>
@@ -1883,27 +1883,6 @@ function renderTrendDetail(trend) {
       </div>
     </div>
   `;
-}
-
-async function handleTrendCoverError(img, trendId) {
-  if (!img || !trendId) return;
-  const container = img.closest('.trend-detail-cover');
-  if (container) container.classList.add('is-fallback');
-  if (img.dataset.coverResolveTried === '1') {
-    return;
-  }
-  img.dataset.coverResolveTried = '1';
-  if (!adminBackendAvailable) {
-    return;
-  }
-  try {
-    const result = await apiPost(`/trends/${trendId}/resolve-cover`, {});
-    const nextUrl = staticUrl(result?.image_url || '');
-    if (nextUrl && nextUrl !== img.src) {
-      img.src = nextUrl;
-      return;
-    }
-  } catch (e) {}
 }
 
 function renderSupportingPostCard(post) {
@@ -1938,24 +1917,23 @@ async function recordTrendAction(trendId, action, note = '') {
   });
 }
 
-async function convertTrendToDraft(trendId) {
+async function pushTrendToQueue(trendId) {
   if (!adminBackendAvailable) {
-    showToast('后端未连接，无法转草稿');
+    showToast('后端未连接，无法推送到爆款队列');
     return;
   }
   try {
-    const result = await apiPost(`/trends/${trendId}/convert-to-draft`, {
+    const result = await apiPost(`/trends/${trendId}/push-to-queue`, {
       merchant_id: 'demo_shop',
-      use_trend_tags: true,
     });
-    showToast('趋势已转为素材草稿');
-    if (result?.style_id) {
-      await continueDraft(result.style_id);
+    if (result?.pushed) {
+      showToast(result.message || '已加入爆款推送队列');
+      switchPage('push');
     } else {
-      switchPage('assets');
+      showToast(result?.message || '推送失败');
     }
   } catch (e) {
-    showToast(`转草稿失败：${e.message}`);
+    showToast(`爆款推送失败：${e.message}`);
   }
 }
 
@@ -2101,17 +2079,61 @@ function renderCandidateTaxonomyList() {
   `).join('');
 }
 
-async function approveCandidateTerm(term, field) {
+let pendingApproveCandidate = null;
+
+function showCandidateApproveModal(term, field, normalizedForm, variants, related) {
+  pendingApproveCandidate = { term, field };
+  document.getElementById('candidate-edit-term').value = normalizedForm || term;
+  document.getElementById('candidate-edit-normalized').value = normalizedForm || term;
+  document.getElementById('candidate-edit-field').value = field;
+  document.getElementById('candidate-edit-variants').textContent = (variants || []).join(', ') || '无';
+  document.getElementById('candidate-edit-related').textContent = (related || []).join(', ') || '无';
+  document.getElementById('candidate-approve-modal').classList.add('show');
+}
+
+function hideCandidateApproveModal() {
+  document.getElementById('candidate-approve-modal').classList.remove('show');
+  pendingApproveCandidate = null;
+}
+
+async function confirmApproveCandidate() {
+  if (!pendingApproveCandidate) return;
+  const editedTerm = document.getElementById('candidate-edit-term').value.trim();
+  const normalizedForm = document.getElementById('candidate-edit-normalized').value.trim();
+  const targetField = document.getElementById('candidate-edit-field').value;
+  if (!editedTerm || !targetField) {
+    showToast('候选词和归属维度不能为空');
+    return;
+  }
   try {
-    await apiRequest(`/trends/candidate-taxonomy/${encodeURIComponent(term)}?target_field=${encodeURIComponent(field)}`, {
+    await apiRequest(`/trends/candidate-taxonomy/${encodeURIComponent(pendingApproveCandidate.term)}?target_field=${encodeURIComponent(pendingApproveCandidate.field)}`, {
       method: 'PUT',
-      body: JSON.stringify({ status: 'approved' }),
+      body: JSON.stringify({
+        status: 'approved',
+        candidate_term: editedTerm,
+        normalized_form: normalizedForm || editedTerm,
+        target_field: targetField,
+      }),
     });
-    showToast('候选标签已通过');
+    showToast('候选标签已通过并入库');
+    hideCandidateApproveModal();
     loadCandidateTaxonomyTerms();
   } catch (e) {
     showToast('操作失败：' + e.message);
   }
+}
+
+async function approveCandidateTerm(term, field) {
+  const item = candidateTaxonomyTerms.find(
+    t => t.candidate_term === term && t.target_field === field
+  );
+  showCandidateApproveModal(
+    term,
+    field,
+    item?.normalized_form || term,
+    item?.variant_forms || [],
+    item?.related_official_tags || []
+  );
 }
 
 async function rejectCandidateTerm(term, field) {

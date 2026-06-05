@@ -13,7 +13,8 @@ from app.schemas.trends import (
     TrendActionResponse,
     TrendConvertToDraftRequest,
     TrendConvertToDraftResponse,
-    TrendResolveCoverResponse,
+    TrendPushToQueueRequest,
+    TrendPushToQueueResponse,
     TrendListItem,
     TrendPipelineRunCreateRequest,
     TrendPipelineRunResponse,
@@ -34,12 +35,12 @@ from app.services.business_db import (
     list_candidate_taxonomy_terms,
     list_trend_pipeline_runs,
     list_trends,
+    set_pending_push_trends,
     update_candidate_taxonomy_term_status,
     update_trend_run,
 )
 from app.services.trend_jobs import execute_trend_run
 from app.services.trend_materialization import convert_trend_to_draft
-from app.services.trend_cover import resolve_trend_cover
 from app.services.trend_pipeline import execute_trend_pipeline
 
 
@@ -216,15 +217,42 @@ def update_candidate_taxonomy_endpoint(
     request: CandidateTaxonomyTermUpdateRequest,
     target_field: str = Query(default="style_tags"),
 ) -> CandidateTaxonomyTermItem:
-    """Approve or reject a candidate taxonomy term."""
+    """Approve or reject a candidate taxonomy term. When approved, the term is added to the live taxonomy."""
     init_db(seed=True)
+
+    # Resolve edited values (fall back to originals)
+    final_term = (request.candidate_term or candidate_term).strip()
+    final_normalized = (request.normalized_form or request.candidate_term or candidate_term).strip()
+    final_field = (request.target_field or target_field).strip()
+
     updated = update_candidate_taxonomy_term_status(
         candidate_term=candidate_term,
         target_field=target_field,
         status=request.status,
+        new_candidate_term=final_term,
+        new_normalized_form=final_normalized,
+        new_target_field=final_field,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="candidate term not found")
+
+    # When approved, add the term to the live taxonomy_options table
+    if request.status == "approved":
+        from uuid import uuid4
+        from app.services.business_db import connect_db, _now
+        with connect_db() as conn:
+            import app.services.taxonomy_store as taxonomy_store
+            taxonomy_store._ensure_tables(conn)
+            taxonomy_store.ensure_taxonomy_seeded(conn)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO taxonomy_options
+                (option_id, field_key, value, is_approved, source, created_at)
+                VALUES (?, ?, ?, 1, 'trend_candidate', ?)
+                """,
+                (f"opt-{uuid4().hex[:12]}", final_field, final_normalized, _now()),
+            )
+
     return CandidateTaxonomyTermItem(**updated)
 
 
@@ -256,6 +284,27 @@ def convert_trend_to_draft_endpoint(trend_id: str, request: TrendConvertToDraftR
         source_trend_id=created.get("source_trend_id") or trend_id,
         tags=created.get("tags", {}),
     )
+
+
+@router.post("/trends/{trend_id}/push-to-queue", response_model=TrendPushToQueueResponse)
+def push_trend_to_queue_endpoint(trend_id: str, request: TrendPushToQueueRequest) -> TrendPushToQueueResponse:
+    init_db(seed=True)
+    trend = get_trend(trend_id)
+    if not trend:
+        raise HTTPException(status_code=404, detail="trend not found")
+    try:
+        result = set_pending_push_trends([trend_id], merchant_id=request.merchant_id.strip())
+        pushed = len(result.get("requested_trend_ids", [])) > 0 and len(result.get("missing_trend_ids", [])) == 0
+        from app.services.business_db import _push_id_for_trend
+        push_id = _push_id_for_trend(trend_id) if pushed else ""
+        return TrendPushToQueueResponse(
+            trend_id=trend_id,
+            push_id=push_id,
+            pushed=pushed,
+            message=f"趋势「{trend.get('core_style') or trend_id}」已加入爆款推送队列" if pushed else "加入推送队列失败",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/trends/{trend_id}/resolve-cover", response_model=TrendResolveCoverResponse)

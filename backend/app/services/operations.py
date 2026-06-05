@@ -90,22 +90,38 @@ def audit_push_card(push_id: str, request: AuditPushCardRequest) -> AuditPushCar
             message="推送卡片不存在",
         )
 
+    # 趋势推送卡片 accept 时，自动创建 draft style
+    is_trend_card = str(push_id).startswith("trend-")
+    style_id = candidate.get("style_id") or ""
+    if is_trend_card and request.action == "accepted":
+        trend_id = "trend_" + str(push_id).replace("trend-", "")
+        try:
+            from app.services.trend_materialization import convert_trend_to_draft
+            converted = convert_trend_to_draft(
+                trend_id=trend_id,
+                merchant_id=request.merchant_id,
+                use_trend_tags=True,
+            )
+            style_id = converted.get("style_id") or style_id
+        except Exception:
+            pass  # 如果趋势已转草稿或不存在，继续使用原有逻辑
+
     status = "published" if request.action == "accepted" else "rejected"
     audit_record = upsert_push_audit(
         push_id=push_id,
-        style_id=candidate["style_id"],
+        style_id=style_id,
         merchant_id=request.merchant_id,
         status=status,
-        selected_image_url=request.selected_image_url or candidate["enhanced_style_image_url"],
-        selected_coupon_url=request.selected_coupon_url or f"https://i.meituan.com/coupon/{candidate['style_id']}",
-        final_tagline=request.final_tagline or _tagline(candidate["style_name"], _flatten_tags(candidate["tags"])),
-        final_price=request.final_price if request.final_price is not None else _coupon_price(candidate["style_id"]),
+        selected_image_url=request.selected_image_url or candidate.get("enhanced_style_image_url") or "",
+        selected_coupon_url=request.selected_coupon_url or (f"https://i.meituan.com/coupon/{style_id}" if style_id else ""),
+        final_tagline=request.final_tagline or _tagline(candidate.get("style_name") or "", _flatten_tags(candidate.get("tags") or {})),
+        final_price=request.final_price if request.final_price is not None else (_coupon_price(style_id) if style_id else 0),
     )
     message = "已模拟上架并开通 AI 试戴入口" if status == "published" else "已归档该爆款推送"
     return AuditPushCardResponse(
         success=True,
         push_id=push_id,
-        style_id=candidate["style_id"],
+        style_id=style_id,
         status=status,
         message=message,
         selected_image_url=audit_record.get("selected_image_url"),
@@ -291,25 +307,27 @@ def _push_card_from_candidate(candidate: dict) -> dict:
             "life_cycle": override["life_cycle"],
             "signals": override["signals"],
         }
+    is_trend_card = str(candidate.get("push_id") or "").startswith("trend-")
     style_tags = _flatten_tags(candidate["tags"])
     event_stats = candidate.get("event_stats", {})
     signal_sources = _signal_sources_with_events(candidate["signals"], event_stats)
     hot_score = _hot_score(candidate, signal_sources)
     push_id = candidate["push_id"]
+    style_id = candidate.get("style_id") or ""
     style_image_urls = [candidate["enhanced_style_image_url"], *_load_demo_composite_urls(push_id)]
     return {
         "push_id": push_id,
-        "style_id": candidate["style_id"],
+        "style_id": style_id,
         "style_name": candidate["style_name"],
         "style_tags": style_tags,
         "style_image_urls": style_image_urls,
-        "source_posts": _load_demo_source_posts(push_id),
+        "source_posts": _load_demo_source_posts(push_id) if not is_trend_card else [],
         "signal_sources": signal_sources,
         "hot_score": hot_score,
         "life_cycle": _life_cycle(candidate["life_cycle"], hot_score, event_stats),
         "life_cycle_trend": _mock_trend(hot_score),
-        "coupon_url": f"https://i.meituan.com/coupon/{candidate['style_id']}",
-        "coupon_price": _coupon_price(candidate["style_id"]),
+        "coupon_url": f"https://i.meituan.com/coupon/{style_id}" if style_id else "",
+        "coupon_price": _coupon_price(style_id) if style_id else 0,
         "tagline": _tagline(candidate["style_name"], style_tags),
         "status": candidate.get("status", "pending"),
         "audit_details": candidate.get("audit_details", {}),

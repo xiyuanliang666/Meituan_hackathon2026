@@ -4,6 +4,7 @@ from app.services.business_db import (
     get_data_health,
     list_ugc_posts,
     replace_trends,
+    set_pending_push_trends,
     update_trend_run,
     upsert_candidate_taxonomy_terms,
 )
@@ -56,6 +57,14 @@ def execute_trend_run(run_id: str, min_support: int, max_trends: int) -> None:
             upsert_candidate_taxonomy_terms(candidate_terms, run_id=run_id)
 
         replace_trends(payload["trends"], run_id=run_id)
+
+        # 将 promote 趋势写入爆款推送队列（待上架）
+        promote_trend_ids = [
+            t["trend_id"] for t in payload["trends"]
+            if t.get("status") == "promote"
+        ]
+        push_result = set_pending_push_trends(promote_trend_ids) if promote_trend_ids else {"pending": []}
+
         update_trend_run(
             run_id,
             status="succeeded",
@@ -66,6 +75,8 @@ def execute_trend_run(run_id: str, min_support: int, max_trends: int) -> None:
             payload={
                 **payload,
                 "candidate_taxonomy_terms_stored": len(candidate_terms),
+                "pushed_to_queue": len(promote_trend_ids),
+                "push_result": push_result,
             },
         )
     except Exception as exc:

@@ -278,7 +278,7 @@ def list_hot_push_candidates(limit: int = 10) -> list[dict[str, Any]]:
                     "life_cycle": snapshot["life_cycle"],
                     "tags": snapshot["tags"],
                     "signals": snapshot["signals"],
-                    "event_stats": _event_stats_for_style(conn, audit["style_id"]),
+                    "event_stats": _event_stats_for_style(conn, audit["style_id"]) if audit["style_id"] else {},
                     "status": audit["status"],
                     "audit_details": audit,
                 }
@@ -367,6 +367,83 @@ def set_pending_push_styles(
     return {
         "requested_style_ids": unique_style_ids,
         "missing_style_ids": missing,
+        "pending": [dict(row) for row in pending_rows],
+    }
+
+
+def set_pending_push_trends(
+    trend_ids: list[str],
+    merchant_id: str = "demo_shop",
+) -> dict[str, Any]:
+    """将趋势发现中 promote 的趋势写入 push_audits，进入待上架队列。"""
+    unique_trend_ids = list(dict.fromkeys(trend_ids))
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        found: dict[str, dict[str, Any]] = {}
+        missing: list[str] = []
+        for trend_id in unique_trend_ids:
+            row = conn.execute(
+                "SELECT * FROM trends WHERE trend_id = ?",
+                (trend_id,),
+            ).fetchone()
+            if row:
+                found[trend_id] = _trend_payload(dict(row))
+            else:
+                missing.append(trend_id)
+
+        for trend_id, trend in found.items():
+            push_id = _push_id_for_trend(trend_id)
+            keywords = trend.get("keywords") or []
+            tags = {"style_tags": list(keywords)[:8]} if keywords else {}
+            signals: list[dict[str, Any]] = []
+            metrics = trend.get("metrics") or {}
+            for key in ("engagement_score", "support_score", "comment_signal_score", "coverage_confidence_score"):
+                if key in metrics:
+                    signals.append({"signal": key, "value": float(metrics[key]), "delta": 0.0, "weight": 0.25})
+            conn.execute(
+                """
+                INSERT INTO push_audits
+                (push_id, style_id, merchant_id, status, selected_image_url, selected_coupon_url,
+                 final_tagline, final_price, updated_at, snapshot_style_name, snapshot_image_url,
+                 snapshot_tags_json, snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json)
+                VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(push_id) DO UPDATE SET
+                    merchant_id = excluded.merchant_id,
+                    status = CASE WHEN push_audits.status IN ('rejected') THEN 'pending' ELSE push_audits.status END,
+                    updated_at = excluded.updated_at,
+                    snapshot_style_name = excluded.snapshot_style_name,
+                    snapshot_image_url = excluded.snapshot_image_url,
+                    snapshot_tags_json = excluded.snapshot_tags_json,
+                    snapshot_hot_score = excluded.snapshot_hot_score,
+                    snapshot_life_cycle = excluded.snapshot_life_cycle,
+                    snapshot_signals_json = excluded.snapshot_signals_json
+                """,
+                (
+                    push_id,
+                    "",
+                    merchant_id,
+                    now,
+                    trend.get("core_style") or "",
+                    trend.get("representative_image_url") or "",
+                    json.dumps(tags, ensure_ascii=False),
+                    trend.get("trend_score") or 0,
+                    trend.get("life_cycle") or "观察期",
+                    json.dumps(signals, ensure_ascii=False),
+                ),
+            )
+
+        pending_rows = conn.execute(
+            """
+            SELECT push_id, style_id, status
+            FROM push_audits
+            WHERE status = 'pending'
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    return {
+        "requested_trend_ids": unique_trend_ids,
+        "missing_trend_ids": missing,
         "pending": [dict(row) for row in pending_rows],
     }
 
@@ -1822,23 +1899,35 @@ def list_candidate_taxonomy_terms(status: str | None = None, limit: int = 100) -
 
 
 def update_candidate_taxonomy_term_status(
-    candidate_term: str, target_field: str, status: str
+    candidate_term: str,
+    target_field: str,
+    status: str,
+    new_candidate_term: str | None = None,
+    new_normalized_form: str | None = None,
+    new_target_field: str | None = None,
 ) -> dict[str, Any] | None:
-    """Approve or reject a candidate taxonomy term."""
+    """Approve or reject a candidate taxonomy term, with optional field edits."""
     now = _now()
+    final_term = (new_candidate_term or candidate_term).strip()
+    final_normalized = (new_normalized_form or candidate_term).strip()
+    final_field = (new_target_field or target_field).strip()
     with connect_db() as conn:
         _create_tables(conn)
         conn.execute(
             """
             UPDATE candidate_taxonomy_terms
-            SET status = ?, updated_at = ?
+            SET status = ?,
+                candidate_term = ?,
+                normalized_form = ?,
+                target_field = ?,
+                updated_at = ?
             WHERE candidate_term = ? AND target_field = ?
             """,
-            (status, now, candidate_term, target_field),
+            (status, final_term, final_normalized, final_field, now, candidate_term, target_field),
         )
         row = conn.execute(
             "SELECT * FROM candidate_taxonomy_terms WHERE candidate_term = ? AND target_field = ?",
-            (candidate_term, target_field),
+            (final_term, final_field),
         ).fetchone()
     return _candidate_taxonomy_term_payload(dict(row)) if row else None
 
@@ -2580,6 +2669,10 @@ def _event_stats_for_style(conn: sqlite3.Connection, style_id: str) -> dict[str,
 
 def _push_id_for_style(style_id: str) -> str:
     return "push-" + style_id.replace("style-", "")
+
+
+def _push_id_for_trend(trend_id: str) -> str:
+    return "trend-" + trend_id.replace("trend_", "")
 
 
 def _build_push_snapshot(

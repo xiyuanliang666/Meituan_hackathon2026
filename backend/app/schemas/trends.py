@@ -171,6 +171,9 @@ class CandidateTaxonomyTermListResponse(BaseModel):
 
 class CandidateTaxonomyTermUpdateRequest(BaseModel):
     status: str = Field(min_length=1)
+    candidate_term: str | None = None
+    normalized_form: str | None = None
+    target_field: str | None = None
 
 
 class TrendConvertToDraftResponse(BaseModel):
@@ -190,3 +193,14 @@ class TrendResolveCoverResponse(BaseModel):
     trend_id: str
     image_url: str = ""
     resolved: bool = False
+
+
+class TrendPushToQueueRequest(BaseModel):
+    merchant_id: str = "demo_shop"
+
+
+class TrendPushToQueueResponse(BaseModel):
+    trend_id: str
+    push_id: str = ""
+    pushed: bool = False
+    message: str = ""
