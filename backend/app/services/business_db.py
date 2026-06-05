@@ -19,7 +19,8 @@ def connect_db() -> Iterator[sqlite3.Connection]:
     connection.row_factory = sqlite3.Row
     try:
         yield connection
-        connection.commit()
+        if connection.in_transaction:
+            connection.commit()
     finally:
         connection.close()
 
@@ -42,6 +43,7 @@ def get_db_summary(conn: sqlite3.Connection | None = None) -> dict[str, int]:
 
     tables = [
         "hand_templates",
+        "merchant_template_selections",
         "styles",
         "evaluation_pairs",
         "style_composites",
@@ -246,15 +248,16 @@ def list_event_stats(limit: int = 50) -> list[dict[str, Any]]:
 
 
 def list_hot_push_candidates(limit: int = 10) -> list[dict[str, Any]]:
-    init_db(seed=True)
     with connect_db() as conn:
         rows = conn.execute(
             """
-            SELECT style_id, style_name, enhanced_style_image_url,
-                   tags_json, hot_score, life_cycle
-            FROM styles
-            WHERE COALESCE(status, 'active') != 'deleted'
-            ORDER BY hot_score DESC
+            SELECT push_id, style_id, merchant_id, status, selected_image_url,
+                   selected_coupon_url, final_tagline, final_price, updated_at,
+                   snapshot_style_name, snapshot_image_url, snapshot_tags_json,
+                   snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json
+            FROM push_audits
+            WHERE status != 'rejected'
+            ORDER BY updated_at DESC
             LIMIT ?
             """,
             (limit,),
@@ -262,38 +265,109 @@ def list_hot_push_candidates(limit: int = 10) -> list[dict[str, Any]]:
 
         candidates: list[dict[str, Any]] = []
         for row in rows:
-            style = dict(row)
-            tags = json.loads(style.pop("tags_json") or "{}")
-            tag_rows = conn.execute(
-                "SELECT tag_type, tag_value FROM style_tags WHERE style_id = ?",
-                (style["style_id"],),
-            ).fetchall()
-            signal_rows = conn.execute(
-                "SELECT signal, value, delta, weight FROM style_signals WHERE style_id = ?",
-                (style["style_id"],),
-            ).fetchall()
-            event_stats = _event_stats_for_style(conn, style["style_id"])
-            audit_row = conn.execute(
-                """
-                SELECT status, selected_image_url, selected_coupon_url, final_tagline,
-                       final_price, updated_at
-                FROM push_audits
-                WHERE push_id = ?
-                """,
-                (_push_id_for_style(style["style_id"]),),
-            ).fetchone()
+            audit = dict(row)
+            snapshot = _push_snapshot_from_audit(conn, audit)
             candidates.append(
                 {
-                    **style,
-                    "push_id": _push_id_for_style(style["style_id"]),
-                    "tags": _merge_tags(tags, tag_rows),
-                    "signals": [dict(signal_row) for signal_row in signal_rows],
-                    "event_stats": event_stats,
-                    "status": audit_row["status"] if audit_row else "pending",
-                    "audit_details": dict(audit_row) if audit_row else {},
+                    "push_id": audit["push_id"],
+                    "style_id": audit["style_id"],
+                    "style_name": snapshot["style_name"],
+                    "enhanced_style_image_url": snapshot["image_url"],
+                    "hot_score": snapshot["hot_score"],
+                    "life_cycle": snapshot["life_cycle"],
+                    "tags": snapshot["tags"],
+                    "signals": snapshot["signals"],
+                    "event_stats": _event_stats_for_style(conn, audit["style_id"]),
+                    "status": audit["status"],
+                    "audit_details": audit,
                 }
             )
     return candidates
+
+
+def set_pending_push_styles(
+    style_ids: list[str],
+    merchant_id: str = "demo_shop",
+    replace_pending: bool = False,
+) -> dict[str, Any]:
+    unique_style_ids = list(dict.fromkeys(style_ids))
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            f"""
+            SELECT style_id, style_name, enhanced_style_image_url, tags_json, hot_score, life_cycle
+            FROM styles
+            WHERE style_id IN ({','.join('?' for _ in unique_style_ids) if unique_style_ids else "''"})
+              AND COALESCE(status, 'active') != 'deleted'
+            """,
+            unique_style_ids,
+        ).fetchall()
+        found = {row["style_id"]: dict(row) for row in rows}
+        missing = [style_id for style_id in unique_style_ids if style_id not in found]
+
+        if replace_pending:
+            conn.execute(
+                """
+                UPDATE push_audits
+                SET status = 'rejected', updated_at = ?
+                WHERE status NOT IN ('published', 'accepted', 'listed')
+                """,
+                (now,),
+            )
+
+        for style_id in found:
+            push_id = _push_id_for_style(style_id)
+            snapshot = _build_push_snapshot(conn, style_id, found[style_id])
+            conn.execute(
+                """
+                INSERT INTO push_audits
+                (push_id, style_id, merchant_id, status, selected_image_url, selected_coupon_url,
+                 final_tagline, final_price, updated_at, snapshot_style_name, snapshot_image_url,
+                 snapshot_tags_json, snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json)
+                VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(push_id) DO UPDATE SET
+                    merchant_id = excluded.merchant_id,
+                    status = 'pending',
+                    selected_image_url = NULL,
+                    selected_coupon_url = NULL,
+                    final_tagline = NULL,
+                    final_price = NULL,
+                    updated_at = excluded.updated_at,
+                    snapshot_style_name = excluded.snapshot_style_name,
+                    snapshot_image_url = excluded.snapshot_image_url,
+                    snapshot_tags_json = excluded.snapshot_tags_json,
+                    snapshot_hot_score = excluded.snapshot_hot_score,
+                    snapshot_life_cycle = excluded.snapshot_life_cycle,
+                    snapshot_signals_json = excluded.snapshot_signals_json
+                """,
+                (
+                    push_id,
+                    style_id,
+                    merchant_id,
+                    now,
+                    snapshot["style_name"],
+                    snapshot["image_url"],
+                    json.dumps(snapshot["tags"], ensure_ascii=False),
+                    snapshot["hot_score"],
+                    snapshot["life_cycle"],
+                    json.dumps(snapshot["signals"], ensure_ascii=False),
+                ),
+            )
+
+        pending_rows = conn.execute(
+            """
+            SELECT push_id, style_id, status
+            FROM push_audits
+            WHERE status = 'pending'
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    return {
+        "requested_style_ids": unique_style_ids,
+        "missing_style_ids": missing,
+        "pending": [dict(row) for row in pending_rows],
+    }
 
 
 def upsert_push_audit(
@@ -306,9 +380,9 @@ def upsert_push_audit(
     final_tagline: str | None = None,
     final_price: float | None = None,
 ) -> dict[str, Any]:
-    init_db(seed=True)
     now = _now()
     with connect_db() as conn:
+        _create_tables(conn)
         conn.execute(
             """
             INSERT INTO push_audits
@@ -772,6 +846,39 @@ def list_public_templates() -> list[dict[str, Any]]:
     init_db(seed=True)
     templates = list_seed_hand_templates()
     return [_template_payload(item) for item in templates]
+
+
+def list_selected_template_ids(merchant_id: str) -> list[str]:
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT template_id
+            FROM merchant_template_selections
+            WHERE merchant_id = ?
+            ORDER BY selected_at
+            """,
+            (merchant_id,),
+        ).fetchall()
+    return [row["template_id"] for row in rows]
+
+
+def save_selected_template_ids(merchant_id: str, template_ids: list[str]) -> list[str]:
+    unique_ids = list(dict.fromkeys(template_ids))
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute("DELETE FROM merchant_template_selections WHERE merchant_id = ?", (merchant_id,))
+        for template_id in unique_ids:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO merchant_template_selections
+                (merchant_id, template_id, selected_at)
+                VALUES (?, ?, ?)
+                """,
+                (merchant_id, template_id, now),
+            )
+    return unique_ids
 
 
 def _template_payload(item: dict[str, Any]) -> dict[str, Any]:
@@ -1740,6 +1847,13 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS merchant_template_selections (
+            merchant_id TEXT NOT NULL,
+            template_id TEXT NOT NULL,
+            selected_at TEXT NOT NULL,
+            PRIMARY KEY(merchant_id, template_id)
+        );
+
         CREATE TABLE IF NOT EXISTS styles (
             style_id TEXT PRIMARY KEY,
             original_style_image_url TEXT,
@@ -1830,6 +1944,12 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             selected_coupon_url TEXT,
             final_tagline TEXT,
             final_price REAL,
+            snapshot_style_name TEXT,
+            snapshot_image_url TEXT,
+            snapshot_tags_json TEXT NOT NULL DEFAULT '{}',
+            snapshot_hot_score REAL,
+            snapshot_life_cycle TEXT,
+            snapshot_signals_json TEXT NOT NULL DEFAULT '[]',
             updated_at TEXT NOT NULL,
             FOREIGN KEY(style_id) REFERENCES styles(style_id)
         );
@@ -2023,6 +2143,12 @@ def _ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "push_audits", "selected_coupon_url", "TEXT")
     _ensure_column(conn, "push_audits", "final_tagline", "TEXT")
     _ensure_column(conn, "push_audits", "final_price", "REAL")
+    _ensure_column(conn, "push_audits", "snapshot_style_name", "TEXT")
+    _ensure_column(conn, "push_audits", "snapshot_image_url", "TEXT")
+    _ensure_column(conn, "push_audits", "snapshot_tags_json", "TEXT NOT NULL DEFAULT '{}'")
+    _ensure_column(conn, "push_audits", "snapshot_hot_score", "REAL")
+    _ensure_column(conn, "push_audits", "snapshot_life_cycle", "TEXT")
+    _ensure_column(conn, "push_audits", "snapshot_signals_json", "TEXT NOT NULL DEFAULT '[]'")
 
 
 def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -2332,11 +2458,20 @@ def _seed_tags_for_style(style_id: str) -> dict[str, list[str]]:
     return palettes[(suffix - 1) % len(palettes)]
 
 
-def _merge_tags(seed_tags: dict[str, list[str]], tag_rows: list[sqlite3.Row]) -> dict[str, list[str]]:
-    merged: dict[str, set[str]] = {key: set(values) for key, values in seed_tags.items()}
+def _merge_tags(seed_tags: dict[str, list[str] | str], tag_rows: list[sqlite3.Row]) -> dict[str, list[str]]:
+    merged: dict[str, set[str]] = {key: set(_tag_values(values)) for key, values in seed_tags.items()}
     for row in tag_rows:
         merged.setdefault(row["tag_type"], set()).add(row["tag_value"])
     return {key: sorted(values) for key, values in merged.items()}
+
+
+def _tag_values(raw: list[str] | str | None) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        value = raw.strip()
+        return [value] if value else []
+    return [str(value).strip() for value in raw if str(value).strip()]
 
 
 def _seed_hot_score(style_id: str) -> float:
@@ -2386,3 +2521,54 @@ def _event_stats_for_style(conn: sqlite3.Connection, style_id: str) -> dict[str,
 
 def _push_id_for_style(style_id: str) -> str:
     return "push-" + style_id.replace("style-", "")
+
+
+def _build_push_snapshot(
+    conn: sqlite3.Connection,
+    style_id: str,
+    style_row: dict[str, Any] | sqlite3.Row | None = None,
+) -> dict[str, Any]:
+    style = dict(style_row) if style_row is not None else {}
+    if not style:
+        fetched = conn.execute(
+            """
+            SELECT style_id, style_name, enhanced_style_image_url, tags_json, hot_score, life_cycle
+            FROM styles
+            WHERE style_id = ?
+            """,
+            (style_id,),
+        ).fetchone()
+        style = dict(fetched) if fetched else {}
+
+    tags = json.loads(style.get("tags_json") or "{}") if style else {}
+    tag_rows = conn.execute(
+        "SELECT tag_type, tag_value FROM style_tags WHERE style_id = ?",
+        (style_id,),
+    ).fetchall()
+    signal_rows = conn.execute(
+        "SELECT signal, value, delta, weight FROM style_signals WHERE style_id = ?",
+        (style_id,),
+    ).fetchall()
+    return {
+        "style_name": style.get("style_name") or "",
+        "image_url": style.get("enhanced_style_image_url") or "",
+        "tags": _merge_tags(tags, tag_rows),
+        "hot_score": float(style.get("hot_score") or 0),
+        "life_cycle": style.get("life_cycle") or "观察期",
+        "signals": [dict(signal_row) for signal_row in signal_rows],
+    }
+
+
+def _push_snapshot_from_audit(conn: sqlite3.Connection, audit: dict[str, Any]) -> dict[str, Any]:
+    snapshot_tags = json.loads(audit.get("snapshot_tags_json") or "{}")
+    snapshot_signals = json.loads(audit.get("snapshot_signals_json") or "[]")
+    if audit.get("snapshot_style_name") or audit.get("snapshot_image_url") or snapshot_tags or snapshot_signals:
+        return {
+            "style_name": audit.get("snapshot_style_name") or "",
+            "image_url": audit.get("snapshot_image_url") or "",
+            "tags": snapshot_tags if isinstance(snapshot_tags, dict) else {},
+            "hot_score": float(audit.get("snapshot_hot_score") or 0),
+            "life_cycle": audit.get("snapshot_life_cycle") or "观察期",
+            "signals": snapshot_signals if isinstance(snapshot_signals, list) else [],
+        }
+    return _build_push_snapshot(conn, str(audit.get("style_id") or ""))

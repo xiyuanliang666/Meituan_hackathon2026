@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import ai, chat, dataset, db, evaluation, events, hand_standardize, operations, styles, taxonomy, templates, trends, tryon_history
+from app.api import ai, chat, dataset, db, evaluation, events, hand_standardize, operations, styles, taxonomy, templates, trends, tryon_history, tune
 from app.config import get_settings
 
 
@@ -33,6 +33,7 @@ app.include_router(hand_standardize.router, prefix="/api", tags=["hand-standardi
 app.include_router(tryon_history.router, prefix="/api", tags=["tryon-history"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(trends.router, prefix="/api", tags=["trends"])
+app.include_router(tune.router, prefix="/api", tags=["tune"])
 app.mount("/static", StaticFiles(directory=get_settings().storage_dir), name="static")
 
 # 挂载前端静态文件（联调模式：前端可通过 http://localhost:8000/app/ 访问）

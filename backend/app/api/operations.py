@@ -3,13 +3,21 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.operations import (
     AuditPushCardRequest,
     AuditPushCardResponse,
+    PendingPushStylesRequest,
+    PendingPushStylesResponse,
     PushCardResponse,
     ReportRequest,
     ReportResponse,
     SkillExecuteRequest,
     SkillExecuteResponse,
 )
-from app.services.operations import audit_push_card, execute_skill, generate_report, list_push_cards
+from app.services.operations import (
+    audit_push_card,
+    execute_skill,
+    generate_report,
+    list_push_cards,
+    update_pending_push_styles,
+)
 
 router = APIRouter()
 
@@ -24,6 +32,11 @@ def audit(push_id: str, request: AuditPushCardRequest) -> AuditPushCardResponse:
     if request.action not in {"accepted", "rejected"}:
         raise HTTPException(status_code=400, detail="action must be accepted or rejected")
     return audit_push_card(push_id, request)
+
+
+@router.put("/push-cards/pending", response_model=PendingPushStylesResponse)
+def set_pending_push_cards(request: PendingPushStylesRequest) -> PendingPushStylesResponse:
+    return update_pending_push_styles(request)
 
 
 @router.post("/report", response_model=ReportResponse)

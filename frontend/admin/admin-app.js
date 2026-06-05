@@ -25,6 +25,8 @@ function switchPage(page, options = {}) {
   if (page === 'dashboard') loadDashboardData();
   if (page === 'trend-agent') { loadTrendRunsAndList(); loadDataHealth(); loadCandidateTaxonomyTerms(); }
   if (page === 'push') loadPushData();
+  if (page === 'boost') renderBoostBudgetState();
+  if (page === 'notify') renderNotifyList();
   if (page === 'report') loadReportData('week');
 }
 
@@ -34,6 +36,94 @@ window.addEventListener('hashchange', () => {
 
 // ===== 后端状态 =====
 let adminBackendAvailable = false;
+const DEMO_BASE_BOOST_BUDGET = 500;
+const runtimeDemoState = {
+  boostBudget: null,
+  publishedPushIds: new Set(),
+  publishedStyles: new Map(),
+  removedPushIds: new Set(),
+  removedStyleIds: new Set(),
+  adoptedSuggestions: new Map(),
+  unreadNotifyIds: new Set(['notify-push', 'notify-report']),
+};
+
+const demoPushCardOverrides = {
+  'push-b38bf71ae1': {
+    hot_score: 93,
+    life_cycle: '上升期',
+    signal_sources: [
+      { signal: '搜索热度', value: 92, delta: 0.24, weight: 0.30 },
+      { signal: '评价词频', value: 218, delta: 0.17, weight: 0.30 },
+      { signal: '试戴收藏率', value: 0.43, delta: 0.28, weight: 0.40 },
+    ],
+  },
+  'push-b567a4e3b0': {
+    hot_score: 88,
+    life_cycle: '峰值期',
+    signal_sources: [
+      { signal: '搜索热度', value: 84, delta: 0.19, weight: 0.30 },
+      { signal: '评价词频', value: 176, delta: 0.12, weight: 0.30 },
+      { signal: '试戴收藏率', value: 0.37, delta: 0.21, weight: 0.40 },
+    ],
+  },
+  'push-ca2ef69375': {
+    hot_score: 79,
+    life_cycle: '上升期',
+    signal_sources: [
+      { signal: '搜索热度', value: 77, delta: 0.11, weight: 0.30 },
+      { signal: '评价词频', value: 142, delta: 0.09, weight: 0.30 },
+      { signal: '试戴收藏率', value: 0.31, delta: 0.16, weight: 0.40 },
+    ],
+  },
+};
+
+const notifyItems = [
+  {
+    id: 'notify-push',
+    iconBg: '#FCE4D6',
+    iconColor: '#993C1D',
+    icon: 'rocket',
+    title: '新爆款推送',
+    text: '「淡粉色珍珠法式」综合评分89，建议上架',
+    time: '10分钟前',
+  },
+  {
+    id: 'notify-report',
+    iconBg: '#EEEDFE',
+    iconColor: '#534AB7',
+    icon: 'report-analytics',
+    title: '周报已生成',
+    text: '第48周复盘报告已就绪，含4条运营建议',
+    time: '1小时前',
+  },
+  {
+    id: 'notify-alert',
+    iconBg: '#E2EFDA',
+    iconColor: '#375623',
+    icon: 'trending-down',
+    title: '热度预警',
+    text: '「法式简约纯色」连续下降3天，接近下架阈值',
+    time: '3小时前',
+  },
+  {
+    id: 'notify-boost',
+    iconBg: '#E3F2FD',
+    iconColor: '#1565C0',
+    icon: 'speakerphone',
+    title: '投流效果',
+    text: '「奶油渐变猫眼」投流帖子曝光突破3000',
+    time: '5小时前',
+  },
+  {
+    id: 'notify-publish',
+    iconBg: '#FAEEDA',
+    iconColor: '#BA7517',
+    icon: 'circle-check',
+    title: '上架成功',
+    text: '「奶油渐变猫眼」已成功上架，AI试戴已开通',
+    time: '昨天 14:30',
+  },
+];
 
 async function initAdminBackend() {
   adminBackendAvailable = await checkBackendHealth();
@@ -126,10 +216,10 @@ async function loadStylesData() {
       limit: 200,
     });
     if (data && data.styles && data.styles.length > 0) {
-      stylesData = data.styles.map(s => ({
+      const baseStyles = data.styles.map(s => ({
         style_id: s.style_id || s.id,
         name: s.style_name || s.name || '',
-        tags: Object.values(s.tags || {}).flat().filter(Boolean).slice(0, 4),
+        tags: flattenStyleTagsForPreview(s.tags || {}).slice(0, 4),
         lc: lifeCycleClass(s.life_cycle),
         lcText: s.life_cycle || '',
         date: s.created_at || '',
@@ -143,12 +233,13 @@ async function loadStylesData() {
         review_status: s.review_status || '',
         source: s.source || '',
       }));
+      stylesData = applyRuntimeStyleOverrides(baseStyles);
     } else {
-      stylesData = [];
+      stylesData = applyRuntimeStyleOverrides([]);
     }
   } catch (e) {
     console.warn('[素材] 加载款式失败:', e.message);
-    stylesData = [];
+    stylesData = applyRuntimeStyleOverrides([]);
   }
   stylesLoading = false;
   renderStyleList();
@@ -196,7 +287,7 @@ function renderStyleList() {
       </div>
       <div class="style-info">
         <div class="style-name-text">${s.name || '未命名款式'} ${s.status === 'draft' ? '<span class="seasonal-badge">草稿</span>' : '<span class="evergreen-badge">已上架</span>'}</div>
-        <div class="style-tags-row">${s.tags.slice(0,3).map(t=>`<span class="stag stag-craft">${t}</span>`).join('')}</div>
+        <div class="style-tags-row">${s.tags.slice(0,3).map(t=>`<span class="stag stag-craft">${escapeHtml(t)}</span>`).join('')}</div>
         <div class="style-meta-row">${styleStatusPill(s)}<span class="style-date">${s.date}</span></div>
       </div>
       <div class="style-actions">
@@ -325,6 +416,7 @@ async function toggleTryon(styleId, enabled) {
 
 const selectedTemplateIds = new Set();
 const selectedMerchantTemplateIds = new Set();
+const DEMO_MERCHANT_ID = 'demo_shop';
 let publicTemplates = [];
 let merchantTemplates = [];
 let activeTemplateTab = 'public';
@@ -337,6 +429,9 @@ async function renderTemplates() {
     try {
       publicTemplates = await apiGet('/templates/public');
       merchantTemplates = await apiGet('/templates', { source: 'merchant' });
+      const selection = await apiGet('/templates/selection', { merchant_id: DEMO_MERCHANT_ID });
+      selectedTemplateIds.clear();
+      (selection.template_ids || []).forEach(id => selectedTemplateIds.add(id));
     } catch (e) {
       console.warn('[模板] 加载失败:', e.message);
     }
@@ -402,14 +497,17 @@ function renderTemplateItem(t, tab = 'public', containerId = '') {
   return `<div class="tpl-item ${selectedTemplateIds.has(id) ? 'selected' : ''}" onclick="${clickAction}">
     <div class="tpl-check">✓</div>
     ${showDeleteSelect ? `<input type="checkbox" class="tpl-delete-check" ${selectedMerchantTemplateIds.has(id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleMerchantTemplateDeleteSelection('${id}', this.checked)">` : ''}
-    <button class="tpl-info-btn" onclick="event.stopPropagation();openTemplateInfo('${id}')"><i class="ti ti-info-circle"></i></button>
-    <img src="${staticUrl(t.hand_image_url)}" style="width:100%;height:70%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'">
-    <span>${t.label || t.skin_tone || '模板'}</span>
+    <img src="${staticUrl(t.hand_image_url)}" style="width:100%;height:80%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.outerHTML='<i class=\\'ti ti-hand-finger\\'></i>'">
+    <div class="tpl-item-footer">
+      <span>${t.label || t.skin_tone || '模板'}</span>
+      <button class="tpl-info-btn" onclick="event.stopPropagation();openTemplateInfo('${id}')">配置信息</button>
+    </div>
   </div>`;
 }
 
-function toggleTemplateSelection(templateId) {
-  if (selectedTemplateIds.has(templateId)) selectedTemplateIds.delete(templateId);
+async function toggleTemplateSelection(templateId) {
+  const wasSelected = selectedTemplateIds.has(templateId);
+  if (wasSelected) selectedTemplateIds.delete(templateId);
   else {
     if (selectedTemplateIds.size >= MAX_COMPOSITE_TEMPLATE_SELECTION) {
       showToast(`最多只能选择 ${MAX_COMPOSITE_TEMPLATE_SELECTION} 张模板`);
@@ -420,6 +518,29 @@ function toggleTemplateSelection(templateId) {
   renderTemplateLibrary('template-groups', activeTemplateTab);
   renderTemplateLibrary('upload-template-groups', activeUploadTemplateTab);
   updateTplCount();
+  if (adminBackendAvailable) {
+    try {
+      await saveTemplateSelection();
+    } catch (e) {
+      if (wasSelected) selectedTemplateIds.add(templateId);
+      else selectedTemplateIds.delete(templateId);
+      renderTemplateLibrary('template-groups', activeTemplateTab);
+      renderTemplateLibrary('upload-template-groups', activeUploadTemplateTab);
+      updateTplCount();
+      console.warn('[模板选择] 保存失败:', e.message);
+      showToast('模板选择保存失败');
+    }
+  }
+}
+
+async function saveTemplateSelection() {
+  return apiRequest('/templates/selection', {
+    method: 'PUT',
+    body: JSON.stringify({
+      merchant_id: DEMO_MERCHANT_ID,
+      template_ids: [...selectedTemplateIds],
+    }),
+  });
 }
 
 function toggleMerchantTemplateDeleteSelection(templateId, checked) {
@@ -464,6 +585,7 @@ async function confirmDeleteSelectedTemplates() {
       selectedTemplateIds.delete(id);
     });
     merchantTemplateDeleteMode = false;
+    if (adminBackendAvailable) await saveTemplateSelection();
     updateMerchantTemplateDeleteUI();
     showToast('自有模板已删除');
     await renderTemplates();
@@ -532,6 +654,41 @@ function escapeAttr(value) {
 
 function escapeHtml(value) {
   return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function flattenStyleTagsForPreview(tags) {
+  const orderedKeys = [
+    'color_system',
+    'style_tags',
+    'scene_tags',
+    'season_tags',
+    'nail_technique',
+    'nail_decoration',
+    'nail_finish',
+    'nail_shape',
+    'nail_length',
+    'skin_tone_suitability',
+    'hand_skin_tone',
+    'hand_shape',
+    'candidate_tags'
+  ];
+  const values = [];
+  orderedKeys.forEach(key => {
+    const raw = tags[key];
+    const items = Array.isArray(raw) ? raw : (raw && raw !== 'unknown' ? [raw] : []);
+    items.forEach(item => {
+      const text = candidateTagValue(item);
+      if (text && text !== 'unknown' && !values.includes(text)) values.push(text);
+    });
+  });
+  return values;
+}
+
+function candidateTagValue(item) {
+  const text = String(item || '').trim();
+  if (!text) return '';
+  const parts = text.split(':');
+  return (parts.length > 1 ? parts.slice(1).join(':') : text).trim();
 }
 
 async function saveTemplateInfo(templateId) {
@@ -719,34 +876,33 @@ function renderExtractedTags(tags) {
   
   // 工艺维度标签
   const craftTags = [];
-  if (tags.nail_technique) craftTags.push(...(Array.isArray(tags.nail_technique) ? tags.nail_technique : [tags.nail_technique]));
-  if (tags.nail_decoration) craftTags.push(...(Array.isArray(tags.nail_decoration) ? tags.nail_decoration : [tags.nail_decoration]));
-  if (tags.nail_finish) craftTags.push(tags.nail_finish);
-  if (tags.nail_shape) craftTags.push(tags.nail_shape);
-  if (tags.nail_length) craftTags.push(tags.nail_length);
+  if (tags.nail_technique) craftTags.push(...tagItemsForField(tags.nail_technique, 'nail_technique'));
+  if (tags.nail_decoration) craftTags.push(...tagItemsForField(tags.nail_decoration, 'nail_decoration'));
+  if (tags.nail_finish) craftTags.push(...tagItemsForField(tags.nail_finish, 'nail_finish'));
+  if (tags.nail_shape) craftTags.push(...tagItemsForField(tags.nail_shape, 'nail_shape'));
+  if (tags.nail_length) craftTags.push(...tagItemsForField(tags.nail_length, 'nail_length'));
   
   // 营销维度标签
   const marketTags = [];
-  if (tags.color_system) marketTags.push(...(Array.isArray(tags.color_system) ? tags.color_system : [tags.color_system]));
-  if (tags.style_tags) marketTags.push(...tags.style_tags);
-  if (tags.scene_tags) marketTags.push(...tags.scene_tags);
-  if (tags.season_tags) marketTags.push(...tags.season_tags);
+  if (tags.color_system) marketTags.push(...tagItemsForField(tags.color_system, 'color_system'));
+  if (tags.style_tags) marketTags.push(...tagItemsForField(tags.style_tags, 'style_tags'));
+  if (tags.scene_tags) marketTags.push(...tagItemsForField(tags.scene_tags, 'scene_tags'));
+  if (tags.season_tags) marketTags.push(...tagItemsForField(tags.season_tags, 'season_tags'));
+  if (tags.skin_tone_suitability) marketTags.push(...tagItemsForField(tags.skin_tone_suitability, 'skin_tone_suitability'));
   
   const candidateGroups = splitCandidateTags(tags.candidate_tags || []);
 
   // 渲染工艺维度
-  const craftFiltered = craftTags.filter(t => t && t !== 'unknown');
-  craftGroup.innerHTML = craftFiltered.map(t => renderTagChip(t, 'tag-craft')).join('')
+  const craftFiltered = craftTags.filter(item => item.value && item.value !== 'unknown');
+  craftGroup.innerHTML = craftFiltered.map(item => renderTagChip(item.value, 'tag-craft', false, item.fieldKey)).join('')
     + candidateGroups.craft.map(t => renderTagChip(t, 'tag-craft', true)).join('')
     + '<button class="tag-add-btn" onclick="addTagPrompt(\'craft-tags\',\'tag-craft\')">+</button>';
   
   // 渲染营销维度
-  const marketFiltered = marketTags.filter(t => t && t !== 'unknown');
-  const colorClasses = { color: 'tag-color', style: 'tag-style', scene: 'tag-scene', season: 'tag-season' };
-  marketGroup.innerHTML = marketFiltered.map((t, i) => {
-    const cls = i < (tags.color_system || []).length ? 'tag-color' : 
-                i < (tags.color_system || []).length + (tags.style_tags || []).length ? 'tag-style' : 'tag-season';
-    return renderTagChip(t, cls);
+  const marketFiltered = marketTags.filter(item => item.value && item.value !== 'unknown');
+  marketGroup.innerHTML = marketFiltered.map(item => {
+    const cls = tagClassForField(item.fieldKey);
+    return renderTagChip(item.value, cls, false, item.fieldKey);
   }).join('')
     + candidateGroups.market.map(t => renderTagChip(t, 'tag-color', true)).join('')
     + '<button class="tag-add-btn" onclick="addTagPrompt(\'market-tags\',\'tag-color\')">+</button>';
@@ -760,8 +916,21 @@ function renderExtractedTags(tags) {
   }
 }
 
-function renderTagChip(name, tagClass, isCandidate = false) {
-  return `<span class="tag ${tagClass}" data-candidate="${isCandidate ? '1' : '0'}">${name} <i class="tag-del" onclick="removeUploadTag(this)">×</i></span>`;
+function tagItemsForField(raw, fieldKey) {
+  const values = Array.isArray(raw) ? raw : [raw];
+  return values.map(value => ({ value: String(value || '').trim(), fieldKey }));
+}
+
+function tagClassForField(fieldKey) {
+  if (fieldKey === 'color_system') return 'tag-color';
+  if (fieldKey === 'scene_tags') return 'tag-scene';
+  if (fieldKey === 'season_tags') return 'tag-season';
+  if (fieldKey === 'style_tags') return 'tag-style';
+  return 'tag-craft';
+}
+
+function renderTagChip(name, tagClass, isCandidate = false, fieldKey = '') {
+  return `<span class="tag ${tagClass}" data-candidate="${isCandidate ? '1' : '0'}" data-field="${escapeAttr(fieldKey)}">${escapeHtml(name)} <i class="tag-del" onclick="removeUploadTag(this)">×</i></span>`;
 }
 
 function splitCandidateTags(candidateTags) {
@@ -771,7 +940,7 @@ function splitCandidateTags(candidateTags) {
     if (!text) return;
     const parts = text.split(':');
     const field = parts.length > 1 ? parts[0].trim() : '';
-    const value = (parts.length > 1 ? parts.slice(1).join(':') : text).trim();
+    const value = candidateTagValue(text);
     if (!value) return;
     if (field === '工艺维度' || field === 'craft-tags') groups.craft.push(value);
     else groups.market.push(value);
@@ -925,7 +1094,7 @@ function renderTagDropdownList(dd, groupId, tagClass, query) {
       item.addEventListener('click', function (ev) {
         ev.stopPropagation();
         if (existingValues.has(String(option.value).toLowerCase())) return;
-        _insertTag(groupId, tagClass, option.value, false);
+        _insertTag(groupId, tagClassForField(group.fieldKey), option.value, false, group.fieldKey);
         renderTagDropdownList(dd, groupId, tagClass, dd.querySelector('input').value);
       });
       optionsWrap.appendChild(item);
@@ -991,7 +1160,7 @@ async function addTagPrompt(groupId, tagClass) {
   }, 0);
 }
 
-function _insertTag(groupId, tagClass, name, isCandidate = false) {
+function _insertTag(groupId, tagClass, name, isCandidate = false, fieldKey = '') {
   const group = document.getElementById(groupId);
   const btn = group.querySelector('.tag-add-btn');
   const normalized = String(name || '').trim().toLowerCase();
@@ -1000,7 +1169,8 @@ function _insertTag(groupId, tagClass, name, isCandidate = false) {
   const tag = document.createElement('span');
   tag.className = 'tag ' + tagClass;
   tag.dataset.candidate = isCandidate ? '1' : '0';
-  tag.innerHTML = `${name} <i class="tag-del" onclick="removeUploadTag(this)">×</i>`;
+  tag.dataset.field = fieldKey;
+  tag.innerHTML = `${escapeHtml(name)} <i class="tag-del" onclick="removeUploadTag(this)">×</i>`;
   group.insertBefore(tag, btn);
   scheduleSaveCurrentUploadTags();
 }
@@ -1014,46 +1184,24 @@ let draftPollTimer = null;
 let uploadTagSaveTimer = null;
 
 async function goUploadStep(step) {
-  if (step === 3 && currentUploadStyleId) {
-    await saveCurrentUploadTags();
-  }
   document.querySelectorAll('.upload-step-panel').forEach(p => p.style.display = 'none');
   document.getElementById('upload-step-'+step).style.display = 'block';
-  [2,3,4].forEach(s => {
+  [2,3].forEach(s => {
     const el = document.getElementById('step-'+s);
     if (!el) return;
     el.className = 'step ' + (s < step ? 'step-done' : s === step ? 'step-active' : 'step-pending');
     if (s < step) el.querySelector('.step-num').innerHTML = '<i class="ti ti-check"></i>';
     else el.querySelector('.step-num').textContent = s;
   });
-  if (step === 3) {
-    loadTemplatesForUpload();
-  }
 }
 
-async function saveCurrentUploadTags() {
+async function saveCurrentUploadTags(options = {}) {
   await saveUploadStyleName();
-  const payload = {
-    color_system: lastExtractedTags.color_system || [],
-    style_tags: lastExtractedTags.style_tags || [],
-    scene_tags: lastExtractedTags.scene_tags || [],
-    season_tags: lastExtractedTags.season_tags || [],
-    skin_tone_suitability: lastExtractedTags.skin_tone_suitability || [],
-    nail_technique: lastExtractedTags.nail_technique || [],
-    nail_decoration: lastExtractedTags.nail_decoration || [],
-    nail_finish: lastExtractedTags.nail_finish || 'unknown',
-    nail_shape: lastExtractedTags.nail_shape || 'unknown',
-    nail_length: lastExtractedTags.nail_length || 'unknown',
-    finger_shape: lastExtractedTags.finger_shape || 'unknown',
-    nail_bed_shape: lastExtractedTags.nail_bed_shape || 'unknown',
-    candidate_tags: lastExtractedTags.candidate_tags || [],
-  };
+  const payload = emptyStyleTagsPayload();
   const craftEls = [...document.querySelectorAll('#craft-tags .tag')];
   const marketEls = [...document.querySelectorAll('#market-tags .tag')];
-  const craftTexts = craftEls.map(tagText).filter(Boolean);
-  const marketTexts = marketEls.map(tagText).filter(Boolean);
-  if (craftTexts.length) payload.nail_technique = craftTexts;
-  if (marketTexts.length) payload.style_tags = marketTexts;
+  craftEls.forEach(el => applyTagElementToPayload(payload, el, 'craft'));
+  marketEls.forEach(el => applyTagElementToPayload(payload, el, 'market'));
   payload.candidate_tags = [
     ...craftEls.filter(el => el.dataset.candidate === '1').map(el => `工艺维度: ${tagText(el)}`),
     ...marketEls.filter(el => el.dataset.candidate === '1').map(el => `营销维度: ${tagText(el)}`),
@@ -1066,7 +1214,39 @@ async function saveCurrentUploadTags() {
     lastExtractedTags = saved;
   } catch (e) {
     console.warn('[标签] 保存失败:', e.message);
+    if (!options.silent) throw e;
   }
+}
+
+function emptyStyleTagsPayload() {
+  return {
+    color_system: [],
+    style_tags: [],
+    scene_tags: [],
+    season_tags: [],
+    skin_tone_suitability: [],
+    nail_technique: [],
+    nail_decoration: [],
+    nail_finish: 'unknown',
+    nail_shape: 'unknown',
+    nail_length: 'unknown',
+    finger_shape: lastExtractedTags.finger_shape || 'unknown',
+    nail_bed_shape: lastExtractedTags.nail_bed_shape || 'unknown',
+    candidate_tags: [],
+  };
+}
+
+function applyTagElementToPayload(payload, el, fallbackGroup) {
+  if (el.dataset.candidate === '1') return;
+  const value = tagText(el);
+  if (!value) return;
+  const field = el.dataset.field || (fallbackGroup === 'craft' ? 'nail_technique' : 'style_tags');
+  if (['nail_finish', 'nail_shape', 'nail_length', 'finger_shape', 'nail_bed_shape'].includes(field)) {
+    if (!payload[field] || payload[field] === 'unknown') payload[field] = value;
+    return;
+  }
+  if (!Array.isArray(payload[field])) payload[field] = [];
+  if (!payload[field].includes(value)) payload[field].push(value);
 }
 
 function tagText(el) {
@@ -1076,7 +1256,7 @@ function tagText(el) {
 function scheduleSaveCurrentUploadTags() {
   if (!currentUploadStyleId) return;
   clearTimeout(uploadTagSaveTimer);
-  uploadTagSaveTimer = setTimeout(saveCurrentUploadTags, 350);
+  uploadTagSaveTimer = setTimeout(() => saveCurrentUploadTags({ silent: true }), 350);
 }
 
 async function saveUploadStyleName() {
@@ -1211,6 +1391,8 @@ function toggleCompositeCard(el, compositeId) {
 async function finishUpload() {
   if (!currentUploadStyleId) return;
   try {
+    clearTimeout(uploadTagSaveTimer);
+    await saveCurrentUploadTags();
     if (currentCompositeIds.length) {
       await apiRequest(`/styles/${currentUploadStyleId}/composites/selection`, {
         method: 'PUT',
@@ -1219,7 +1401,19 @@ async function finishUpload() {
     }
     await apiPost(`/styles/${currentUploadStyleId}/publish`, {});
     localStorage.removeItem('current_upload_style_id');
-    goUploadStep(4);
+    currentUploadStyleId = '';
+    activeStyleStatus = 'active';
+    selectedStyleIds.clear();
+    styleDeleteMode = false;
+    switchPage('assets');
+    const activeTab = getStyleTabButton('active');
+    if (activeTab) {
+      document.querySelectorAll('#panel-assets .asset-tabs .asset-tab').forEach(b => {
+        if (b.textContent.includes('已上架') || b.textContent.includes('草稿箱')) b.classList.remove('active');
+      });
+      activeTab.classList.add('active');
+    }
+    updateStyleDeleteUI();
     loadStylesData();
     showToast('款式已完成上传');
   } catch (e) {
@@ -1958,46 +2152,434 @@ function escapeHtml(value) {
 
 // ===== 爆款推送（联调 /api/push-cards） =====
 let pushCardsData = [];
+let activePushCard = null;
+let pushDeleteMode = false;
+const selectedPushIds = new Set();
+const pushEditorViewIndexById = new Map();
+const pushSelectedCompositeIndexById = new Map();
 
 async function loadPushData() {
-  if (!adminBackendAvailable) return;
+  if (!adminBackendAvailable) {
+    updateHomePushPending(0);
+    renderPushManager();
+    return;
+  }
   try {
     const data = await apiGet('/push-cards');
     if (Array.isArray(data) && data.length > 0) {
-      pushCardsData = data;
+      pushCardsData = applyRuntimePushCardOverrides(data);
       console.log('[推送] 加载爆款推送数据成功:', pushCardsData.length, '条');
+    } else {
+      pushCardsData = applyRuntimePushCardOverrides([]);
     }
   } catch (e) {
     console.warn('[推送] 加载失败:', e.message);
+    pushCardsData = applyRuntimePushCardOverrides([]);
   }
+  updateHomePushPending(pushCardsData.filter(card => !isPushListed(card)).length);
+  renderPushManager();
+}
+
+function showPushManager() {
+  const manager = document.getElementById('push-manager');
+  const editor = document.getElementById('push-editor');
+  if (manager) manager.style.display = 'block';
+  if (editor) editor.style.display = 'none';
+}
+
+function openPushEditor(pushId) {
+  const card = pushCardsData.find(item => item.push_id === pushId) || pushCardsData[0];
+  if (!card) return;
+  activePushCard = card;
+  renderPushEditor(card);
+  const manager = document.getElementById('push-manager');
+  const editor = document.getElementById('push-editor');
+  if (manager) manager.style.display = 'none';
+  if (editor) editor.style.display = 'block';
+}
+
+function renderPushManager() {
+  const pendingList = document.getElementById('push-pending-list');
+  const listedList = document.getElementById('push-listed-list');
+  if (!pendingList || !listedList) return;
+
+  const pending = pushCardsData.filter(card => !isPushListed(card));
+  const listed = pushCardsData.filter(isPushListed);
+  updateHomePushPending(pending.length);
+  document.getElementById('push-pending-count').textContent = `${pending.length} 条`;
+  document.getElementById('push-listed-count').textContent = `${listed.length} 条`;
+  pendingList.innerHTML = pending.length ? pending.map(renderPushManageCard).join('') : renderPushEmpty('暂无待上架推送');
+  listedList.innerHTML = listed.length ? listed.map(renderPushManageCard).join('') : renderPushEmpty('暂无已上架推送');
+  updatePushDeleteUI(pending);
+  showPushManager();
+}
+
+function updateHomePushPending(count) {
+  const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+  const strong = document.getElementById('home-push-pending-strong');
+  const badge = document.getElementById('home-push-pending-badge');
+  if (strong) strong.textContent = String(safeCount);
+  if (badge) badge.textContent = `${safeCount} 条待处理`;
+}
+
+function isPushListed(card) {
+  return ['accepted', 'listed', 'published'].includes(card.status);
+}
+
+function renderPushEmpty(text) {
+  return `<div class="style-empty-loading"><i class="ti ti-rocket" style="font-size:20px;display:block;margin-bottom:8px;color:#ccc"></i><span>${text}</span></div>`;
+}
+
+function renderPushManageCard(card) {
+  const img = card.style_image_urls?.[0] || '';
+  const tags = pushDisplayTags(card);
+  const time = pushCardTime(card);
+  const statusText = isPushListed(card) ? '已上架' : '待上架';
+  const statusClass = isPushListed(card) ? 'evergreen-badge' : 'seasonal-badge';
+  const selectable = pushDeleteMode && !isPushListed(card);
+  const clickAction = selectable
+    ? `togglePushSelection('${card.push_id}', !selectedPushIds.has('${card.push_id}')); renderPushManager()`
+    : `openPushEditor('${card.push_id}')`;
+  return `
+    <div class="style-item push-manage-item" onclick="${clickAction}">
+      ${selectable ? `<input type="checkbox" class="style-select" ${selectedPushIds.has(card.push_id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="togglePushSelection('${card.push_id}', this.checked); updatePushDeleteUI()">` : ''}
+      <div class="style-thumb" style="background:#FAEEDA;border-color:#EF9F27">
+        ${img ? `<img src="${staticUrl(img)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><i class="ti ti-photo" style="color:#BA7517;display:none"></i>` : `<i class="ti ti-photo" style="color:#BA7517"></i>`}
+      </div>
+      <div class="style-info">
+        <div class="style-name-text">${card.style_name || '未命名款式'} <span class="${statusClass}">${statusText}</span></div>
+        <div class="style-tags-row push-tags-row">${tags.map(renderPushTag).join('')}</div>
+        <div class="style-meta-row"><span class="lc-pill lc-${lifeCycleClass(card.life_cycle)}"><i class="ti ti-${lifeCycleIcon(card.life_cycle)}"></i>${card.life_cycle || '观察期'}</span><span class="style-date">${time}</span></div>
+      </div>
+      <div class="style-actions"><button class="push-edit-btn" onclick="event.stopPropagation();openPushEditor('${card.push_id}')">编辑推送</button></div>
+    </div>`;
+}
+
+function pushDisplayTags(card) {
+  return (card.style_tags || []).filter(Boolean).slice(0, 6);
+}
+
+function pushTagClass(idx) {
+  return idx < 2 ? 'stag-craft' : idx < 4 ? 'stag-color' : 'stag-style';
+}
+
+function renderPushTag(tag, idx) {
+  return `<span class="stag ${pushTagClass(idx)}">${tag}</span>`;
+}
+
+function togglePushSelection(pushId, checked) {
+  if (checked) selectedPushIds.add(pushId);
+  else selectedPushIds.delete(pushId);
+}
+
+function togglePushDeleteMode(force) {
+  pushDeleteMode = typeof force === 'boolean' ? force : !pushDeleteMode;
+  if (!pushDeleteMode) selectedPushIds.clear();
+  renderPushManager();
+}
+
+function toggleSelectAllPush(checked) {
+  selectedPushIds.clear();
+  if (checked) {
+    pushCardsData.filter(card => !isPushListed(card)).forEach(card => selectedPushIds.add(card.push_id));
+  }
+  renderPushManager();
+}
+
+function updatePushDeleteUI(pendingCards) {
+  const pending = pendingCards || pushCardsData.filter(card => !isPushListed(card));
+  const bar = document.getElementById('push-delete-bar');
+  const toggle = document.getElementById('push-delete-toggle');
+  const selectAll = document.getElementById('push-select-all');
+  if (bar) bar.style.display = pushDeleteMode ? 'flex' : 'none';
+  if (toggle) toggle.innerHTML = `<i class="ti ti-trash"></i> ${pushDeleteMode ? '删除中' : '删除'}`;
+  if (selectAll) {
+    selectAll.checked = !!pending.length && selectedPushIds.size === pending.length;
+    selectAll.indeterminate = selectedPushIds.size > 0 && selectedPushIds.size < pending.length;
+  }
+}
+
+async function confirmDeleteSelectedPush() {
+  const ids = [...selectedPushIds];
+  if (!ids.length) { showToast('请先选择推送'); return; }
+  if (!confirm(`确定删除选中的 ${ids.length} 条待上架推送？`)) return;
+  try {
+    for (const pushId of ids) {
+      await apiPost(`/push-cards/${pushId}/audit`, {
+        action: 'rejected',
+        merchant_id: 'demo_shop',
+      });
+    }
+    selectedPushIds.clear();
+    pushDeleteMode = false;
+    showToast('已删除所选推送');
+    await loadPushData();
+  } catch (e) {
+    alert('删除失败：' + e.message);
+  }
+}
+
+function pushCardTime(card) {
+  return card.audit_details?.created_at || card.audit_details?.updated_at || '今日 09:30';
+}
+
+function renderPushEditor(card) {
+  if (card?.push_id && !pushEditorViewIndexById.has(card.push_id)) {
+    pushEditorViewIndexById.set(card.push_id, 0);
+  }
+  document.getElementById('push-hot-score').textContent = `${Math.round(card.hot_score || 0)}分`;
+  document.querySelector('#push-editor .signal-time').textContent = pushCardTime(card);
+  document.querySelector('#push-editor .push-style-name').textContent = card.style_name || '未命名款式';
+  document.getElementById('push-tagline').textContent = card.tagline || taglines[0];
+  renderPushSignals(card);
+  renderPushSourceThumbs(card);
+  renderPushEditorTags(card);
+  renderPushEditorImages(card, currentPushViewIndex(card));
+  renderPushEditorLifeCycle(card);
+}
+
+function renderPushSignals(card) {
+  const box = document.querySelector('#push-editor .signal-pills');
+  if (!box) return;
+  const signals = Array.isArray(card.signal_sources) ? card.signal_sources : [];
+  const wanted = ['搜索热度', '评价词频', '试戴收藏率'];
+  const ordered = wanted
+    .map(name => signals.find(item => item.signal === name))
+    .filter(Boolean);
+  if (!ordered.length) return;
+  box.innerHTML = ordered.map(signal => {
+    const isRate = signal.signal === '试戴收藏率';
+    const value = isRate ? `${Math.round(Number(signal.value || 0) * 100)}%` : `${Math.round(Number(signal.value || 0))}`;
+    const delta = `↑${Math.round(Number(signal.delta || 0) * 100)}%`;
+    const icon = signal.signal === '搜索热度' ? 'search' : signal.signal === '评价词频' ? 'message' : 'heart';
+    const detail = signal.signal === '搜索热度'
+      ? `站内搜索热度<br>当前指数：${value}　较上周：+${Math.round(Number(signal.delta || 0) * 100)}%<br>权重 ${Math.round(Number(signal.weight || 0) * 100)}%`
+      : signal.signal === '评价词频'
+        ? `近7天评价词频<br>当前词频：${value}次　较上周：+${Math.round(Number(signal.delta || 0) * 100)}%<br>权重 ${Math.round(Number(signal.weight || 0) * 100)}%`
+        : `用户试戴后收藏率<br>当前：${value}　较上周：+${Math.round(Number(signal.delta || 0) * 100)}%<br>权重 ${Math.round(Number(signal.weight || 0) * 100)}%`;
+    return `<div class="signal-pill has-sig-tip" data-tip="${detail}"><i class="ti ti-${icon}"></i>${signal.signal} <span class="sig-up">${delta}</span></div>`;
+  }).join('');
+}
+
+function renderPushSourceThumbs(card) {
+  const box = document.querySelector('#push-editor .push-source-thumbs');
+  if (!box) return;
+  const posts = Array.isArray(card.source_posts) ? card.source_posts : [];
+  box.style.display = 'flex';
+  box.style.alignItems = 'flex-start';
+  box.style.gap = '12px';
+  box.style.overflowX = 'auto';
+  box.style.overflowY = 'visible';
+  box.style.padding = '2px 2px 12px';
+  box.style.minWidth = '0';
+  box.innerHTML = posts.map((post, idx) => renderPushSourceCard(post, idx)).join('');
+}
+
+function formatMetric(value) {
+  const num = Number(value || 0);
+  if (num >= 10000) {
+    const wan = num / 10000;
+    return `${Number.isInteger(wan) ? wan.toFixed(0) : wan.toFixed(1)}w`;
+  }
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(1).replace(/\\.0$/, '')}k`;
+  }
+  return String(num);
+}
+
+function renderPushSourceCard(post, idx) {
+  const url = post.image_url || post.image || '';
+  const title = post.title || '爆款来源';
+  const likes = formatMetric(post.metrics?.likes);
+  const favorites = formatMetric(post.metrics?.favorites);
+  const comments = formatMetric(post.metrics?.comments);
+  const growth = Number(post.metrics?.growth_3d || 0);
+  const status = post.status?.label || '爆款';
+  const platform = post.platform || '';
+  const relativeTime = post.relative_time || '';
+  const link = post.url || '';
+  const popoverId = `push-source-popover-${idx}`;
+  return `
+    <div
+      style="position:relative;flex:0 0 122px;min-width:122px;max-width:122px;font-size:0"
+      onmouseenter="togglePushSourcePopover('${popoverId}', true)"
+      onmouseleave="togglePushSourcePopover('${popoverId}', false)"
+    >
+      <a
+        href="${escapeAttr(link || '#')}"
+        ${link ? 'target="_blank" rel="noreferrer"' : 'onclick="event.preventDefault()"'}
+        style="display:block;width:122px;text-decoration:none;color:#2b2218"
+      >
+        <div style="width:122px;height:92px;border-radius:12px 12px 0 0;background:#F7F6F2;border:1px solid #eadfcf;overflow:hidden">
+          ${url ? `<img src="${staticUrl(url)}" alt="${escapeAttr(title)}" style="display:block;width:122px;height:92px;object-fit:cover">` : ''}
+        </div>
+        <div style="width:122px;padding:8px 9px 10px;background:#fff;border:1px solid #eadfcf;border-top:none;border-radius:0 0 12px 12px;box-shadow:0 8px 22px rgba(98,68,28,.06)">
+          <div style="font-size:12px;line-height:1.35;font-weight:600;color:#2b2218;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px;word-break:break-word">${escapeHtml(title)}</div>
+          <div style="margin-top:6px;font-size:11px;color:#7b6852;white-space:nowrap">❤️ ${likes}  🔖 ${favorites}</div>
+          <div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#b42318;white-space:nowrap"><span style="width:7px;height:7px;border-radius:999px;background:#ef4444;display:inline-block;box-shadow:0 0 0 3px rgba(239,68,68,.12)"></span>${escapeHtml(status)}</div>
+        </div>
+      </a>
+      <div id="${popoverId}" style="display:none;position:absolute;left:-6px;bottom:8px;width:248px;padding:14px 14px 12px;border-radius:14px;background:rgba(31,24,18,.96);color:#fff;box-shadow:0 20px 45px rgba(0,0,0,.24);z-index:30">
+        <div style="font-size:12px;color:rgba(255,255,255,.72)">${escapeHtml(platform || '来源帖子')}${relativeTime ? ` · ${escapeHtml(relativeTime)}` : ''}</div>
+        <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.84)">点赞 ${likes}</div>
+        <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.84)">收藏 ${favorites}  ↑ 3日增速${growth}%</div>
+        <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.84)">评论 ${comments}</div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:rgba(255,255,255,.8)">
+          <span style="display:inline-flex;align-items:center;gap:5px;font-weight:600;color:#ffb4a8"><span style="width:7px;height:7px;border-radius:999px;background:#ef4444;display:inline-block;box-shadow:0 0 0 3px rgba(239,68,68,.12)"></span>${escapeHtml(status)}</span>
+          ${platform ? `<span>${escapeHtml(platform)}</span>` : ''}
+        </div>
+        ${link
+          ? `<a href="${escapeAttr(link)}" target="_blank" rel="noreferrer" style="display:inline-block;margin-top:12px;font-size:12px;color:#f7d7aa;text-decoration:none;pointer-events:auto">点击跳转原帖 ↗</a>`
+          : `<div style="margin-top:12px;font-size:12px;color:#f7d7aa">原帖链接待补充</div>`}
+      </div>
+    </div>`;
+}
+
+function togglePushSourcePopover(id, visible) {
+  const popover = document.getElementById(id);
+  if (!popover) return;
+  popover.style.display = visible ? 'block' : 'none';
+}
+
+function renderPushEditorImages(card, activeIdx = 0) {
+  const images = pushEditorImages(card);
+  renderPushEditorImage(images[activeIdx] || images[0]);
+  renderPushThumbs(images, activeIdx);
+}
+
+function currentPushViewIndex(card) {
+  const pushId = card?.push_id || '';
+  return pushEditorViewIndexById.get(pushId) || 0;
+}
+
+function selectedPushCompositeIndex(card) {
+  const pushId = card?.push_id || '';
+  return pushSelectedCompositeIndexById.get(pushId) ?? null;
+}
+
+function selectedPushComposite(card) {
+  const idx = selectedPushCompositeIndex(card);
+  if (idx == null) return null;
+  const image = pushEditorImages(card)[idx];
+  return image?.kind === 'composite' ? { ...image, idx } : null;
+}
+
+function pushEditorImages(card) {
+  const sourceImages = card.style_image_urls || [];
+  const styleImage = sourceImages[0] || '';
+  const templateIds = [...selectedTemplateIds];
+  return [
+    { label: '款式原图', url: styleImage, kind: 'style' },
+    ...templateIds.map((templateId, idx) => ({
+      label: `合成效果图 ${idx + 1}`,
+      url: sourceImages[idx + 1] || '',
+      template: findTemplateInMemory(templateId),
+      kind: 'composite',
+    })),
+  ];
+}
+
+function renderPushEditorImage(image) {
+  const main = document.getElementById('push-main-img');
+  if (!main) return;
+  main.innerHTML = image.url
+    ? `<img src="${staticUrl(image.url)}" style="width:100%;height:100%;object-fit:contain;border-radius:10px">`
+    : `<i class="ti ti-photo" style="font-size:38px;color:#BA7517"></i><span>${image.label}</span>`;
+}
+
+function renderPushThumbs(images, activeIdx = 0) {
+  const thumbs = document.getElementById('push-thumbs');
+  if (!thumbs) return;
+  const selectedIdx = selectedPushCompositeIndex(activePushCard || pushCardsData[0] || {});
+  thumbs.innerHTML = images.map((image, idx) => `
+    <button class="push-thumb ${idx === activeIdx ? 'active' : ''}" onclick="selectPushImg(${idx})" title="${image.label}">
+      ${image.url ? `<img src="${staticUrl(image.url)}" alt="${image.label}">` : image.label.replace('效果', '').replace('图 ', '')}
+      ${image.kind === 'composite'
+        ? `<span class="push-thumb-select ${selectedIdx === idx ? 'is-selected' : ''}" onclick="event.stopPropagation();selectPushComposite(${idx})"><i class="ti ti-${selectedIdx === idx ? 'check' : ''}"></i></span>`
+        : ''}
+    </button>
+  `).join('');
+}
+
+function renderPushEditorTags(card) {
+  const box = document.querySelector('#push-editor .push-tags');
+  if (!box) return;
+  box.innerHTML = pushDisplayTags(card).map(renderPushTag).join('');
+}
+
+function renderPushEditorLifeCycle(card) {
+  const pill = document.querySelector('#push-editor .lc-pill');
+  if (!pill) return;
+  const text = card.life_cycle || '观察期';
+  pill.className = `lc-pill lc-${lifeCycleClass(text)} has-tooltip`;
+  pill.innerHTML = `<i class="ti ti-${lifeCycleIcon(text)}"></i>${text}<div class="lc-tooltip"><svg viewBox="0 0 180 60" class="tooltip-chart"><polyline points="5,55 20,50 35,45 50,38 65,30 80,24 95,20 110,16 125,12 140,9 155,7 170,5" fill="none" stroke="#97C459" stroke-width="2"/></svg><div class="tooltip-label">近12天热度趋势</div></div>`;
 }
 
 const taglines = ['秋冬约会必备！奶油渐变猫眼，光线下超有氛围感，显白又高级，赶紧安排～','这个秋冬就靠它了！奶油白渐变猫眼，温柔又高级～','简约不简单！奶油渐变猫眼，日常百搭还显白～'];
 let taglineIdx = 0;
 const coupons = {'1':{name:'全贴甲片简约款',price:'¥168',desc:'可做渐变·猫眼·晕染'},'2':{name:'半贴甲片基础款',price:'¥128',desc:'半贴为主'},'3':{name:'猫眼渐变升级款',price:'¥218',desc:'专攻猫眼渐变'}};
 
-function selectPushImg(el, idx) { document.querySelectorAll('.push-thumbs .push-thumb').forEach(t=>t.classList.remove('active')); el.classList.add('active'); document.getElementById('push-main-img').innerHTML=`<i class="ti ti-photo" style="font-size:38px;color:#BA7517"></i><span>合成效果图 ${idx}</span>`; }
+function selectPushImg(idx) {
+  const card = activePushCard || pushCardsData[0] || {};
+  if (card?.push_id) pushEditorViewIndexById.set(card.push_id, idx);
+  const images = pushEditorImages(card);
+  const image = images[idx] || images[0];
+  document.querySelectorAll('.push-thumbs .push-thumb').forEach((thumb, thumbIdx) => thumb.classList.toggle('active', thumbIdx === idx));
+  renderPushEditorImage(image);
+}
+
+function selectPushComposite(idx) {
+  const card = activePushCard || pushCardsData[0];
+  if (!card) return;
+  const image = pushEditorImages(card)[idx];
+  if (!image || image.kind !== 'composite') return;
+  pushSelectedCompositeIndexById.set(card.push_id, idx);
+  renderPushThumbs(pushEditorImages(card), currentPushViewIndex(card));
+}
+
+function currentPushImageIndex() {
+  return currentPushViewIndex(activePushCard || pushCardsData[0] || {});
+}
 
 async function regenPushImg(btn) {
-  btn.innerHTML='<i class="ti ti-refresh"></i> 生成中...';
-  if (adminBackendAvailable && pushCardsData.length > 0) {
-    try {
-      const card = pushCardsData[0];
-      const styleUrl = card.style_image_urls && card.style_image_urls[0];
-      if (styleUrl) {
-        const result = await apiPost('/generate-composite', {
-          style_image_url: styleUrl,
-          template_image_url: styleUrl, // 使用同款作为模板（实际应选裸手模板）
-        });
-        if (result && result.composite_image_url) {
-          document.getElementById('push-main-img').innerHTML = `<img src="${staticUrl(result.composite_image_url)}" style="width:100%;height:100%;object-fit:contain;border-radius:10px">`;
-        }
-      }
-    } catch (e) {
-      console.warn('[合成图] 重新生成失败:', e.message);
-    }
+  if (!adminBackendAvailable) { showToast('后端未连接，暂不能生成'); return; }
+  const card = activePushCard || pushCardsData[0];
+  if (!card) return;
+
+  const styleUrl = card.style_image_urls?.[0];
+  if (!styleUrl) { showToast('缺少款式原图，暂不能生成'); return; }
+
+  const images = pushEditorImages(card);
+  let targetIdx = currentPushImageIndex();
+  if (targetIdx === 0 && images.length > 1) targetIdx = 1;
+  const target = images[targetIdx];
+  const templateUrl = target?.template?.hand_image_url;
+  if (!target || target.kind !== 'composite' || !templateUrl) {
+    showToast('请先在素材管理选择模板图');
+    return;
   }
-  btn.innerHTML='<i class="ti ti-refresh"></i> 重新生成';
+
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-refresh"></i> 生成中...';
+  try {
+    const result = await apiPost('/generate-composite', {
+      style_image_url: styleUrl,
+      template_image_url: templateUrl,
+    });
+    if (result?.composite_image_url) {
+      card.style_image_urls ||= [];
+      card.style_image_urls[targetIdx] = result.composite_image_url;
+      renderPushEditorImages(card, targetIdx);
+      showToast('合成图已生成');
+    }
+  } catch (e) {
+    console.warn('[合成图] 重新生成失败:', e.message);
+    alert('生成失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
 }
 async function regenTagline() {
   const l = document.getElementById('tagline-regen-label');
@@ -2005,7 +2587,7 @@ async function regenTagline() {
   
   if (adminBackendAvailable && pushCardsData.length > 0) {
     try {
-      const card = pushCardsData[0];
+      const card = activePushCard || pushCardsData[0];
       const result = await apiPost('/report', {
         merchant_id: 'demo_shop',
         period: 'this_week',
@@ -2032,26 +2614,49 @@ async function regenTagline() {
 }
 function updateCoupon() { const v=document.getElementById('coupon-select').value; const c=coupons[v]; document.getElementById('coupon-name').textContent=c.name; document.getElementById('coupon-price').textContent=c.price; }
 
-function updatePriceSlider(val) { document.getElementById('price-slider-val').textContent = val; }
+function selectedCouponPrice() {
+  const coupon = coupons[document.getElementById('coupon-select')?.value || '1'] || coupons['1'];
+  return Number(String(coupon.price).replace(/[^\d.]/g, '')) || 0;
+}
 
 function goConfirm() { 
-  const price = document.getElementById('price-slider-val').textContent;
-  document.getElementById('confirm-price').textContent = price;
+  const card = activePushCard || pushCardsData[0];
+  if (!card) return;
+  const selectedImage = selectedPushComposite(card);
+  if (!selectedImage?.url) {
+    alert('请选择一张合成效果图作为推送主图');
+    return;
+  }
+  document.getElementById('confirm-price').textContent = selectedCouponPrice();
+  const confirmMain = document.getElementById('confirm-main-img');
+  const confirmStyleName = document.getElementById('confirm-style-name');
+  const confirmSummaryStyleName = document.getElementById('confirm-summary-style-name');
+  const confirmSummaryImageLabel = document.getElementById('confirm-summary-image-label');
+  const confirmTagline = document.getElementById('confirm-tagline');
+  const confirmTags = document.getElementById('confirm-style-tags');
+  if (confirmMain) confirmMain.innerHTML = `<img src="${staticUrl(selectedImage.url)}" style="width:100%;height:100%;object-fit:contain;border-radius:10px">`;
+  if (confirmStyleName) confirmStyleName.textContent = card.style_name || '未命名款式';
+  if (confirmSummaryStyleName) confirmSummaryStyleName.textContent = card.style_name || '未命名款式';
+  if (confirmSummaryImageLabel) confirmSummaryImageLabel.textContent = selectedImage.label;
+  if (confirmTagline) confirmTagline.textContent = document.getElementById('push-tagline').textContent.trim();
+  if (confirmTags) confirmTags.innerHTML = pushDisplayTags(card).map(renderPushTag).join('');
   switchPage('confirm'); 
 }
 
 async function confirmPublish() {
-  if (adminBackendAvailable && pushCardsData.length > 0) {
+  if (adminBackendAvailable && (activePushCard || pushCardsData.length > 0)) {
     try {
+      const card = activePushCard || pushCardsData[0];
       const selectedCouponId = document.getElementById('coupon-select').value;
       const selectedCoupon = coupons[selectedCouponId];
-      const result = await apiPost(`/push-cards/${pushCardsData[0].push_id}/audit`, {
+      const selectedImage = selectedPushComposite(card);
+      const result = await apiPost(`/push-cards/${card.push_id}/audit`, {
         action: 'accepted',
         merchant_id: 'demo_shop',
-        selected_image_url: pushCardsData[0].style_image_urls?.[0] || null,
-        selected_coupon_url: pushCardsData[0].coupon_url || selectedCoupon?.name || null,
+        selected_image_url: selectedImage?.url || null,
+        selected_coupon_url: card.coupon_url || selectedCoupon?.name || null,
         final_tagline: document.getElementById('push-tagline').textContent.trim(),
-        final_price: Number(document.getElementById('price-slider-val').textContent || 0),
+        final_price: selectedCouponPrice(),
       });
       console.log('[上架] 审核通过');
       if (result && result.message) showToast(result.message);
@@ -2131,6 +2736,77 @@ async function loadReportData(period) {
 
 let currentReportSuggestions = [];
 
+function reportBoostTargetStyle() {
+  const pendingStyleIds = new Set(
+    pushCardsData.filter(card => !isPushListed(card)).map(card => card.style_id),
+  );
+  return (
+    stylesData.find(style => style.status !== 'draft' && !pendingStyleIds.has(style.style_id))
+    || stylesData.find(style => style.status !== 'draft')
+    || null
+  );
+}
+
+function reportPendingPublishCard() {
+  return pushCardsData.find(card => !isPushListed(card)) || null;
+}
+
+function reportTakeDownTargetCard() {
+  return pushCardsData.find(card => isPushListed(card)) || null;
+}
+
+function normalizeReportSuggestions(suggestions) {
+  const boostStyle = reportBoostTargetStyle();
+  const pendingPush = reportPendingPublishCard();
+  const takeDownCard = reportTakeDownTargetCard();
+  const boostStyleName = boostStyle?.name || '当前主推款式';
+  const boostStyleId = boostStyle?.style_id || '';
+  const takeDownStyleName = takeDownCard?.style_name || '当前已上架款式';
+  const takeDownStyleId = takeDownCard?.style_id || '';
+  const takeDownPushId = takeDownCard?.push_id || '';
+  const publishStyleName = pendingPush?.style_name || '待上架新款式';
+  const publishStyleId = pendingPush?.style_id || '';
+  const publishPushId = pendingPush?.push_id || '';
+  const source = Array.isArray(suggestions) ? suggestions : [];
+  return [
+    {
+      ...(source[0] || {}),
+      text: `${boostStyleName}热度较高，建议增加投流预算 20%。`,
+      action_type: 'boost_budget',
+      action_params: {
+        style_id: boostStyleId,
+        style_name: boostStyleName,
+        budget_from: DEMO_BASE_BOOST_BUDGET,
+        budget_to: 600,
+        budget_delta: 0.2,
+      },
+      requires_confirm: true,
+    },
+    {
+      ...(source[1] || {}),
+      text: `${takeDownStyleName}最近热度下降明显，建议下架该款式并及时替换。`,
+      action_type: 'take_down_style',
+      action_params: {
+        push_id: takeDownPushId,
+        style_id: takeDownStyleId,
+        style_name: takeDownStyleName,
+      },
+      requires_confirm: false,
+    },
+    {
+      ...(source[2] || {}),
+      text: `${publishStyleName}热度较高，建议上架新款式并加入当前主推。`,
+      action_type: 'publish_style',
+      action_params: {
+        push_id: publishPushId,
+        style_id: publishStyleId,
+        style_name: publishStyleName,
+      },
+      requires_confirm: false,
+    },
+  ];
+}
+
 function renderApiReportData(result, period) {
   if (result.period_label) {
     document.getElementById('report-title').textContent = result.period_label;
@@ -2160,18 +2836,17 @@ function renderApiReportData(result, period) {
     }
   }
   if (Array.isArray(result.suggestions) && result.suggestions.length > 0) {
-    currentReportSuggestions = result.suggestions;
+    currentReportSuggestions = normalizeReportSuggestions(result.suggestions);
     const list = document.querySelector('#panel-report .suggestion-list');
     if (list) {
-      list.innerHTML = result.suggestions.map((item, idx) => `
+      list.innerHTML = currentReportSuggestions.map((item, idx) => `
         <div class="suggestion-item ${suggestionClass(item.action_type)}" id="sug-${idx}">
           <div class="sug-icon">${suggestionIcon(item.action_type)}</div>
           <div class="sug-body">
             <div class="sug-tag">${suggestionLabel(item.action_type)}</div>
             <div class="sug-text">${item.text}</div>
             <div class="sug-actions" id="sug-actions-${idx}">
-              <button class="btn-adopt" onclick="adoptSug(${idx})">采纳建议</button>
-              <button class="btn-ignore" onclick="ignoreSug(${idx})">忽略</button>
+              ${renderSuggestionActions(item, idx)}
             </div>
           </div>
         </div>
@@ -2229,14 +2904,14 @@ function switchReportPeriod(btn, period) {
 
 // Skills执行层（联调 /api/skills/execute）
 const skillUiByAction = {
-  boost_budget: { label:'加大投流预算', requiresConfirm:true, confirmMsg:'确认提高该款式投流预算？', execMsg:'已记录投流预算调整建议' },
+  boost_budget: { label:'加大投流预算', requiresConfirm:true, confirmMsg:'确认提高该款式投流预算？', execMsg:'已临时将投流预算提高到 ¥600/天' },
   prepare_replacement: { label:'准备替换款', requiresConfirm:false, execMsg:'已标记为待替换款' },
   maintain_strategy: { label:'维持当前策略', requiresConfirm:false, execMsg:'已记录：当前策略维持不变' },
-  take_down_style: { label:'下架款式', requiresConfirm:false, execMsg:'已标记为待下架款式' },
-  publish_style: { label:'上架款式', requiresConfirm:false, execMsg:'已记录上架执行' },
+  take_down_style: { label:'下架当前款式', requiresConfirm:false, execMsg:'已临时下架该款式' },
+  publish_style: { label:'建议上架新款式', requiresConfirm:false, execMsg:'已临时上架新款式' },
   pause_budget: { label:'收缩预算', requiresConfirm:false, execMsg:'已记录预算收缩建议' }
 };
-const fallbackSuggestionActions = ['boost_budget', 'prepare_replacement', 'maintain_strategy', 'take_down_style'];
+const fallbackSuggestionActions = ['boost_budget', 'take_down_style', 'publish_style'];
 
 function suggestionLabel(action) { return (skillUiByAction[action] || {}).label || '运营建议'; }
 function suggestionIcon(action) {
@@ -2244,8 +2919,22 @@ function suggestionIcon(action) {
   return mapping[action] || '💡';
 }
 function suggestionClass(action) {
-  const mapping = { boost_budget:'sug-boost', prepare_replacement:'sug-warn', maintain_strategy:'sug-maintain', take_down_style:'sug-replace', publish_style:'sug-boost', pause_budget:'sug-warn' };
+  const mapping = { boost_budget:'sug-boost', prepare_replacement:'sug-warn', maintain_strategy:'sug-maintain', take_down_style:'sug-takedown', publish_style:'sug-publish', pause_budget:'sug-warn' };
   return mapping[action] || 'sug-maintain';
+}
+
+function suggestionStateKey(item, idx) {
+  const action = item?.action_type || `idx-${idx}`;
+  const pushId = item?.action_params?.push_id || '';
+  const styleId = item?.action_params?.style_id || '';
+  return `${action}:${pushId}:${styleId}`;
+}
+
+function renderSuggestionActions(item, idx) {
+  if (runtimeDemoState.adoptedSuggestions.has(suggestionStateKey(item, idx))) {
+    return `<div class="adopted-label"><i class="ti ti-circle-check" style="color:#375623"></i> 已采纳 · ${suggestionLabel(item.action_type)}</div><button class="btn-undo" onclick="undoSug(${idx})">撤销</button>`;
+  }
+  return `<button class="btn-adopt" onclick="adoptSug(${idx})">采纳建议</button><button class="btn-ignore" onclick="ignoreSug(${idx})">忽略</button>`;
 }
 
 function adoptSug(idx) {
@@ -2281,36 +2970,21 @@ function adoptSug(idx) {
 async function executeSkill(idx, skill) {
   const item = document.getElementById('sug-'+idx);
   const actions = document.getElementById('sug-actions-'+idx);
-  actions.innerHTML = `<div class="adopted-label"><i class="ti ti-circle-check" style="color:#375623"></i> 已采纳 · ${skill.label}</div><button class="btn-undo" onclick="undoSug(${idx})">撤销</button>`;
-  item.classList.add('adopted');
-  
-  // 调用后端 Skills 执行 API
-  if (adminBackendAvailable) {
-    try {
-      await apiPost('/skills/execute', {
-        action_type: skill.action,
-        action_params: skill.action_params || {},
-      });
-      console.log('[Skills] 执行成功:', skill.action);
-    } catch (e) {
-      console.warn('[Skills] 执行失败:', e.message);
-    }
-  }
-  
+  applyRuntimeSkillEffect(skill);
+  runtimeDemoState.adoptedSuggestions.set(suggestionStateKey(currentReportSuggestions[idx], idx), skill);
+  if (actions) actions.innerHTML = renderSuggestionActions(currentReportSuggestions[idx], idx);
+  if (item) item.classList.add('adopted');
   showToast(skill.execMsg || '操作已执行');
-  
-  if (skill.action === 'prepare_replacement') {
-    setTimeout(() => { if(confirm('是否跳转到素材管理页上传新款式？')) switchPage('assets'); }, 500);
-  } else if (skill.action === 'take_down_style') {
-    setTimeout(() => { if(confirm('是否跳转到素材管理页确认下架？')) switchPage('assets'); }, 500);
-  }
 }
 
 function undoSug(idx) {
+  const adoptedSkill = runtimeDemoState.adoptedSuggestions.get(suggestionStateKey(currentReportSuggestions[idx], idx));
+  if (adoptedSkill) revertRuntimeSkillEffect(adoptedSkill);
+  runtimeDemoState.adoptedSuggestions.delete(suggestionStateKey(currentReportSuggestions[idx], idx));
   const item = document.getElementById('sug-'+idx);
   const actions = document.getElementById('sug-actions-'+idx);
-  item.classList.remove('adopted');
-  actions.innerHTML = `<button class="btn-adopt" onclick="adoptSug(${idx})">采纳建议</button><button class="btn-ignore" onclick="ignoreSug(${idx})">忽略</button>`;
+  if (item) item.classList.remove('adopted');
+  if (actions) actions.innerHTML = renderSuggestionActions(currentReportSuggestions[idx], idx);
   showToast('已撤销操作');
 }
 
@@ -2323,6 +2997,41 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function renderNotifyBell() {
+  const dot = document.getElementById('notify-bell-dot');
+  if (!dot) return;
+  dot.classList.toggle('hidden', runtimeDemoState.unreadNotifyIds.size === 0);
+}
+
+function renderNotifyList() {
+  const list = document.getElementById('notify-list');
+  if (!list) return;
+  list.innerHTML = notifyItems.map(item => {
+    const unread = runtimeDemoState.unreadNotifyIds.has(item.id);
+    return `
+      <div class="notify-item ${unread ? 'notify-unread' : ''}">
+        <div class="notify-icon" style="background:${item.iconBg}"><i class="ti ti-${item.icon}" style="color:${item.iconColor}"></i></div>
+        <div class="notify-body">
+          <div class="notify-title">${item.title}</div>
+          <div class="notify-text">${item.text}</div>
+          <div class="notify-time">${item.time}</div>
+        </div>
+        <div class="notify-actions">
+          <button class="notify-toggle-btn" onclick="setNotifyReadState('${item.id}', true)">已读</button>
+          <button class="notify-toggle-btn" onclick="setNotifyReadState('${item.id}', false)">未读</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  renderNotifyBell();
+}
+
+function setNotifyReadState(notifyId, read) {
+  if (read) runtimeDemoState.unreadNotifyIds.delete(notifyId);
+  else runtimeDemoState.unreadNotifyIds.add(notifyId);
+  renderNotifyList();
 }
 
 // ===== 偏好配置（持久化到 localStorage） =====
@@ -2364,6 +3073,145 @@ function getMerchantPrefs() {
     if (saved) return JSON.parse(saved);
   } catch (e) {}
   return { excluded_crafts: ['手绘'], focus: 'repurchase', price_tier: 'mid' };
+}
+
+function renderBoostBudgetState() {
+  const budget = runtimeDemoState.boostBudget ?? DEMO_BASE_BOOST_BUDGET;
+  const input = document.getElementById('budget-input');
+  const stat = document.getElementById('boost-budget-stat');
+  if (input) input.value = String(budget);
+  if (stat) stat.textContent = `¥${budget}/天`;
+}
+
+function applyRuntimePushCardOverrides(cards) {
+  return (cards || [])
+    .filter(card => !runtimeDemoState.removedPushIds.has(card.push_id) && !runtimeDemoState.removedStyleIds.has(card.style_id))
+    .map(card => {
+      const demoOverride = demoPushCardOverrides[card.push_id] || {};
+      const baseCard = { ...card, ...demoOverride };
+      if (!runtimeDemoState.publishedPushIds.has(card.push_id)) return baseCard;
+      return { ...baseCard, status: 'published' };
+    });
+}
+
+function pushCardToRuntimeStyleItem(card) {
+  return {
+    style_id: card.style_id,
+    name: card.style_name || '未命名款式',
+    tags: pushDisplayTags(card).slice(0, 4),
+    lc: lifeCycleClass(card.life_cycle),
+    lcText: card.life_cycle || '观察期',
+    date: '刚刚上架',
+    bg: '#FAEEDA',
+    bc: '#EF9F27',
+    ic: '#BA7517',
+    seasonal: false,
+    image_url: card.style_image_urls?.[0] || '',
+    tryon_enabled: true,
+    status: 'active',
+    review_status: 'published',
+    source: 'runtime_publish',
+    __runtimePublished: true,
+  };
+}
+
+function applyRuntimeStyleOverrides(baseStyles) {
+  const items = [...(baseStyles || [])].filter(item => !runtimeDemoState.removedStyleIds.has(item.style_id));
+  if (activeStyleStatus !== 'active') return items;
+  const seen = new Set(items.map(item => item.style_id));
+  [...runtimeDemoState.publishedStyles.values()].reverse().forEach(item => {
+    if (!seen.has(item.style_id)) {
+      items.unshift({ ...item });
+      seen.add(item.style_id);
+    }
+  });
+  return items;
+}
+
+function syncRuntimeStyleState() {
+  stylesData = applyRuntimeStyleOverrides(stylesData.filter(item => !item.__runtimePublished));
+  if (document.getElementById('panel-assets')?.classList.contains('active')) {
+    renderStyleList();
+  }
+}
+
+function syncRuntimePushState() {
+  pushCardsData = applyRuntimePushCardOverrides(pushCardsData);
+  updateHomePushPending(pushCardsData.filter(card => !isPushListed(card)).length);
+  if (document.getElementById('panel-push')?.classList.contains('active')) {
+    renderPushManager();
+  }
+}
+
+function applyRuntimeSkillEffect(skill) {
+  if (skill.action === 'boost_budget') {
+    runtimeDemoState.boostBudget = Number(skill.action_params?.budget_to) || 600;
+    renderBoostBudgetState();
+    return;
+  }
+  if (skill.action === 'take_down_style') {
+    const pushId = skill.action_params?.push_id || '';
+    const styleId = skill.action_params?.style_id || '';
+    if (pushId) runtimeDemoState.removedPushIds.add(pushId);
+    if (styleId) runtimeDemoState.removedStyleIds.add(styleId);
+    syncRuntimePushState();
+    syncRuntimeStyleState();
+    return;
+  }
+  if (skill.action === 'publish_style') {
+    const pushId = skill.action_params?.push_id || '';
+    const pushCard = pushCardsData.find(card => card.push_id === pushId);
+    if (pushId) runtimeDemoState.publishedPushIds.add(pushId);
+    if (pushCard) {
+      runtimeDemoState.publishedStyles.set(pushCard.style_id, pushCardToRuntimeStyleItem(pushCard));
+    } else if (skill.action_params?.style_id) {
+      runtimeDemoState.publishedStyles.set(skill.action_params.style_id, {
+        style_id: skill.action_params.style_id,
+        name: skill.action_params.style_name || '未命名款式',
+        tags: [],
+        lc: 'up',
+        lcText: '上升期',
+        date: '刚刚上架',
+        bg: '#FAEEDA',
+        bc: '#EF9F27',
+        ic: '#BA7517',
+        seasonal: false,
+        image_url: '',
+        tryon_enabled: true,
+        status: 'active',
+        review_status: 'published',
+        source: 'runtime_publish',
+        __runtimePublished: true,
+      });
+    }
+    syncRuntimePushState();
+    syncRuntimeStyleState();
+  }
+}
+
+function revertRuntimeSkillEffect(skill) {
+  if (skill.action === 'boost_budget') {
+    runtimeDemoState.boostBudget = null;
+    renderBoostBudgetState();
+    return;
+  }
+  if (skill.action === 'take_down_style') {
+    const pushId = skill.action_params?.push_id || '';
+    const styleId = skill.action_params?.style_id || '';
+    if (pushId) runtimeDemoState.removedPushIds.delete(pushId);
+    if (styleId) runtimeDemoState.removedStyleIds.delete(styleId);
+    syncRuntimePushState();
+    syncRuntimeStyleState();
+    return;
+  }
+  if (skill.action === 'publish_style') {
+    const pushId = skill.action_params?.push_id || '';
+    const styleId = skill.action_params?.style_id || '';
+    if (pushId) runtimeDemoState.publishedPushIds.delete(pushId);
+    if (styleId) runtimeDemoState.publishedStyles.delete(styleId);
+    syncRuntimePushState();
+    syncRuntimeStyleState();
+  }
 }
 
 // ===== 投流管理 =====
@@ -2445,13 +3293,23 @@ function init() {
   updateStyleDeleteUI();
   renderTemplates();
   restoreTrendSourceConfig();
-  switchPage(pageFromHash(), { updateHash: false });
+  renderBoostBudgetState();
+  renderNotifyList();
+  const currentPage = pageFromHash();
+  switchPage(currentPage, { updateHash: false });
   initAdminBackend().then(() => {
     if (adminBackendAvailable) {
       loadStylesData();
+      loadPushData();
       renderTemplates();
-      if (pageFromHash() === 'trend-agent') {
+      if (currentPage === 'trend-agent') {
         loadTrendRunsAndList();
+      }
+      if (currentPage === 'report') {
+        loadReportData('week');
+      }
+      if (currentPage === 'dashboard') {
+        loadDashboardData();
       }
       if (pageFromHash() === 'upload' && currentUploadStyleId) {
         restoreUploadDraft(currentUploadStyleId);

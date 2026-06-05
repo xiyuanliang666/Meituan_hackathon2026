@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>美甲AI智能运营 - 商户后台</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="admin-styles.css">
+<link rel="stylesheet" href="admin-styles.css?v=report-suggestions-20260605-2">
 </head>
 <body>
 <!-- 顶部导航 -->
@@ -14,16 +14,16 @@
   <div class="nav-center">
     <div class="nav-tabs">
       <div class="nav-tab active" data-page="home" onclick="switchPage('home')"><i class="ti ti-home"></i> 首页</div>
-      <div class="nav-tab" data-page="dashboard" onclick="switchPage('dashboard')"><i class="ti ti-chart-bar"></i> 数据看板</div>
       <div class="nav-tab" data-page="assets" onclick="switchPage('assets')"><i class="ti ti-photo"></i> 素材管理</div>
       <div class="nav-tab" data-page="trend-agent" onclick="switchPage('trend-agent')"><i class="ti ti-sparkles"></i> 趋势发现</div>
       <div class="nav-tab" data-page="push" onclick="switchPage('push')"><i class="ti ti-rocket"></i> 爆款推送</div>
-      <div class="nav-tab" data-page="boost" onclick="switchPage('boost')"><i class="ti ti-speakerphone"></i> 投流管理</div>
+      <div class="nav-tab" data-page="dashboard" onclick="switchPage('dashboard')"><i class="ti ti-chart-bar"></i> 数据看板</div>
       <div class="nav-tab" data-page="report" onclick="switchPage('report')"><i class="ti ti-report-analytics"></i> 复盘报告</div>
+      <div class="nav-tab" data-page="boost" onclick="switchPage('boost')"><i class="ti ti-speakerphone"></i> 投流管理</div>
     </div>
   </div>
   <div class="nav-right">
-    <div class="nav-bell" onclick="switchPage('notify')"><i class="ti ti-bell"></i><span class="bell-dot"></span></div>
+    <div class="nav-bell" onclick="switchPage('notify')"><i class="ti ti-bell"></i><span class="bell-dot" id="notify-bell-dot"></span></div>
     <div class="nav-shop">蔻丹美甲工作室</div>
     <div class="nav-avatar">蔻</div>
   </div>
@@ -31,7 +31,7 @@
 
 <!-- ===== 首页 ===== -->
 <div class="page-panel active" id="panel-home">
-  <div class="home-banner"><div class="home-banner-left"><h2>Prism 商户运营台</h2><p>今日店铺运营状态良好，有 <strong>1</strong> 条新爆款推送待处理</p></div><div class="home-banner-icon"><i class="ti ti-sparkles"></i></div></div>
+  <div class="home-banner"><div class="home-banner-left"><h2>Prism 商户运营台</h2><p>今日店铺运营状态良好，有 <strong id="home-push-pending-strong">0</strong> 条新爆款推送待处理</p></div><div class="home-banner-icon"><i class="ti ti-sparkles"></i></div></div>
   <div class="home-stats">
     <div class="home-stat-card" onclick="switchPage('dashboard')"><div class="home-stat-val">1,284</div><div class="home-stat-label">本周试戴次数</div><div class="home-stat-delta delta-up">↑ 31%</div></div>
     <div class="home-stat-card" onclick="switchPage('dashboard')"><div class="home-stat-val">34%</div><div class="home-stat-label">试戴收藏率</div><div class="home-stat-delta delta-up">↑ 6pp</div></div>
@@ -40,16 +40,17 @@
   </div>
   <h3 class="home-section-title">功能模块</h3>
   <div class="home-modules">
-    <div class="home-module-card" onclick="switchPage('dashboard')"><div class="home-module-icon" style="background:#E2EFDA"><i class="ti ti-chart-bar" style="color:#375623"></i></div><div class="home-module-info"><div class="home-module-name">数据看板</div><div class="home-module-desc">转化漏斗、AI助手播报、款式热度趋势</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('assets')"><div class="home-module-icon" style="background:#FAEEDA"><i class="ti ti-photo" style="color:#BA7517"></i></div><div class="home-module-info"><div class="home-module-name">素材管理</div><div class="home-module-desc">款式图、裸手模板、上传新款式</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('trend-agent')"><div class="home-module-icon" style="background:#F5F2FF"><i class="ti ti-sparkles" style="color:#8D79B8"></i></div><div class="home-module-info"><div class="home-module-name">趋势发现</div><div class="home-module-desc">数据源接入、趋势识别、爆款依据追踪</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
-    <div class="home-module-card" onclick="switchPage('push')"><div class="home-module-icon" style="background:#FCE4D6"><i class="ti ti-rocket" style="color:#993C1D"></i></div><div class="home-module-info"><div class="home-module-name">爆款推送</div><div class="home-module-desc">今日推送、编辑推荐语、一键上架</div></div><span class="home-module-badge">1 条待处理</span><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
+    <div class="home-module-card" onclick="switchPage('push')"><div class="home-module-icon" style="background:#FCE4D6"><i class="ti ti-rocket" style="color:#993C1D"></i></div><div class="home-module-info"><div class="home-module-name">爆款推送</div><div class="home-module-desc">今日推送、编辑推荐语、一键上架</div></div><span class="home-module-badge" id="home-push-pending-badge">0 条待处理</span><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
+    <div class="home-module-card" onclick="switchPage('dashboard')"><div class="home-module-icon" style="background:#E2EFDA"><i class="ti ti-chart-bar" style="color:#375623"></i></div><div class="home-module-info"><div class="home-module-name">数据看板</div><div class="home-module-desc">转化漏斗、AI助手播报、款式热度趋势</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('boost')"><div class="home-module-icon" style="background:#E3F2FD"><i class="ti ti-speakerphone" style="color:#1565C0"></i></div><div class="home-module-info"><div class="home-module-name">投流管理</div><div class="home-module-desc">投流帖子生成、预算管理、ROI追踪</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('report')"><div class="home-module-icon" style="background:#EEEDFE"><i class="ti ti-report-analytics" style="color:#534AB7"></i></div><div class="home-module-info"><div class="home-module-name">复盘报告</div><div class="home-module-desc">AI助手周报/日报、运营建议、一键采纳</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
+    <div class="home-module-card" onclick="switchPage('boost')"><div class="home-module-icon" style="background:#E3F2FD"><i class="ti ti-speakerphone" style="color:#1565C0"></i></div><div class="home-module-info"><div class="home-module-name">投流管理</div><div class="home-module-desc">投流帖子生成、预算管理、ROI追踪</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
   </div>
   <h3 class="home-section-title">待办事项</h3>
   <div class="home-todo-list">
-    <div class="home-todo-item"><div class="home-todo-dot dot-orange"></div><div class="home-todo-text">「奶油渐变猫眼」爆款推送待确认上架</div><button class="btn-primary-sm" onclick="switchPage('push')">去处理</button></div>
+    <div class="home-todo-item"><div class="home-todo-dot dot-orange"></div><div class="home-todo-text">「淡粉色珍珠法式」爆款推送待确认上架</div><button class="btn-primary-sm" onclick="switchPage('push')">去处理</button></div>
     <div class="home-todo-item"><div class="home-todo-dot dot-blue"></div><div class="home-todo-text">本周复盘报告已生成，含 4 条运营建议</div><button class="btn-ghost-sm" onclick="switchPage('report')">查看</button></div>
     <div class="home-todo-item"><div class="home-todo-dot dot-gray"></div><div class="home-todo-text">「法式简约纯色」热度下降，建议关注</div><button class="btn-ghost-sm" onclick="switchPage('dashboard')">查看</button></div>
   </div>
@@ -279,20 +280,48 @@
 
 <!-- ===== 爆款推送 ===== -->
 <div class="page-panel" id="panel-push">
-  <div class="page-top"><div><h2 class="page-title">今日爆款推送</h2><p class="page-sub">完成编辑后生成预览</p></div></div>
+  <div id="push-manager">
+    <div class="page-top"><div><h2 class="page-title">爆款推送管理</h2><p class="page-sub">管理待上架与已上架的爆款推送卡片</p></div></div>
+    <div class="card push-manager-card">
+      <div class="card-header"><div class="card-title"><i class="ti ti-rocket"></i> 待上架 <span class="count-badge" id="push-pending-count">0 条</span></div></div>
+      <div class="asset-actions" style="margin-bottom:12px">
+        <button class="btn-ghost-sm" id="push-delete-toggle" onclick="togglePushDeleteMode()"><i class="ti ti-trash"></i> 删除</button>
+      </div>
+      <div class="batch-delete-bar" id="push-delete-bar" style="display:none">
+        <label><input type="checkbox" id="push-select-all" onchange="toggleSelectAllPush(this.checked)"> 全选</label>
+        <button class="btn-danger-sm" onclick="confirmDeleteSelectedPush()">删除选中</button>
+        <button class="btn-ghost-sm" onclick="togglePushDeleteMode(false)">取消</button>
+      </div>
+      <div class="push-card-list" id="push-pending-list"></div>
+    </div>
+    <div class="card push-manager-card">
+      <div class="card-header"><div class="card-title"><i class="ti ti-circle-check"></i> 已上架 <span class="count-badge" id="push-listed-count">0 条</span></div></div>
+      <div class="push-card-list" id="push-listed-list"></div>
+    </div>
+  </div>
+  <div id="push-editor" style="display:none">
+  <div class="page-top"><div><button class="btn-back" onclick="showPushManager()"><i class="ti ti-arrow-left"></i> 返回爆款推送管理</button><h2 class="page-title">今日爆款推送</h2><p class="page-sub">完成编辑后生成预览</p></div></div>
   <div class="card">
-    <div class="signal-header"><div class="signal-label">爆款来源 · 三路信号综合评分 89分</div><div class="signal-time">2024-11-28 09:30</div></div>
+    <div class="signal-header"><div class="signal-label">爆款评分 <span id="push-hot-score">89分</span></div><div class="signal-time">2024-11-28 09:30</div></div>
     <div class="signal-pills">
       <div class="signal-pill has-sig-tip" data-tip="站内搜索热度<br>当前指数：89　较上周：+32%<br>权重 30%"><i class="ti ti-search"></i>搜索热度 <span class="sig-up">↑32%</span></div>
       <div class="signal-pill has-sig-tip" data-tip="大众点评评价词频<br>近7天：214次　较上周：+18%<br>权重 30%"><i class="ti ti-message"></i>评价词频 <span class="sig-up">↑18%</span></div>
       <div class="signal-pill has-sig-tip" data-tip="用户试戴后收藏率<br>当前：41%　较上周：+41%<br>权重 40%（最高）"><i class="ti ti-heart"></i>试戴收藏率 <span class="sig-up">↑41%</span></div>
+    </div>
+    <div class="push-source-row">
+      <div class="push-source-label">爆款来源</div>
+      <div class="push-source-thumbs">
+        <div class="push-source-thumb"></div>
+        <div class="push-source-thumb"></div>
+        <div class="push-source-thumb"></div>
+      </div>
     </div>
   </div>
   <div class="push-two-col">
     <div class="card">
       <div class="card-title-sm"><i class="ti ti-photo"></i> 款式图</div>
       <div class="push-main-img" id="push-main-img"><i class="ti ti-photo" style="font-size:38px;color:#BA7517"></i><span>合成效果图 1</span></div>
-      <div class="push-thumbs"><div class="push-thumb active" onclick="selectPushImg(this,1)">图1</div><div class="push-thumb" onclick="selectPushImg(this,2)">图2</div><div class="push-thumb" onclick="selectPushImg(this,3)">图3</div><div class="push-thumb" onclick="selectPushImg(this,4)">图4</div></div>
+      <div class="push-thumbs" id="push-thumbs"></div>
       <div class="push-img-actions"><button class="btn-ghost-sm"><i class="ti ti-layout-grid"></i> 换模板</button><button class="btn-primary-sm" onclick="regenPushImg(this)"><i class="ti ti-refresh"></i> 重新生成</button></div>
     </div>
     <div class="card">
@@ -306,21 +335,12 @@
       <div class="section-label" style="margin-top:16px">关联团购券</div>
       <select class="coupon-select" id="coupon-select" onchange="updateCoupon()"><option value="1">全贴甲片简约款 · ¥168</option><option value="2">半贴甲片基础款 · ¥128</option><option value="3">猫眼渐变升级款 · ¥218</option></select>
       <div class="coupon-preview"><div><div class="coupon-name" id="coupon-name">全贴甲片简约款</div><div class="coupon-desc">可做渐变·猫眼·晕染，手绘除外</div></div><div class="coupon-price" id="coupon-price">¥168</div></div>
-      <!-- 定价微调 -->
-      <div class="section-label" style="margin-top:14px">定价微调 <span class="hint-inline">建议区间 ¥150–200</span></div>
-      <div class="price-adjust">
-        <input type="range" min="100" max="300" value="168" id="price-slider" oninput="updatePriceSlider(this.value)">
-        <div class="price-adjust-val">¥<span id="price-slider-val">168</span></div>
-      </div>
-      <!-- 平台推荐关键词 -->
-      <div class="section-label" style="margin-top:14px">平台推荐关键词</div>
-      <div class="keyword-tags"><span class="keyword-tag">#猫眼渐变</span><span class="keyword-tag">#秋冬美甲</span><span class="keyword-tag">#显白</span><span class="keyword-tag">#约会美甲</span></div>
       <div class="push-actions">
-        <button class="btn-primary-sm" style="width:100%;justify-content:center;margin-bottom:6px" onclick="uploadOwnImage()"><i class="ti ti-upload"></i> 上传自有图片替换</button>
         <button class="btn-dark" onclick="goConfirm()"><i class="ti ti-eye"></i> 生成预览</button>
         <button class="btn-ghost">暂不处理</button>
       </div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -331,7 +351,7 @@
   <div class="card">
     <div class="card-header"><div class="card-title"><i class="ti ti-speakerphone"></i> 投流服务状态</div><span class="boost-status-on">● 已开通</span></div>
     <div class="boost-stats">
-      <div class="boost-stat"><div class="boost-stat-label">本周投流预算</div><div class="boost-stat-val">¥500/天</div></div>
+      <div class="boost-stat"><div class="boost-stat-label">本周投流预算</div><div class="boost-stat-val" id="boost-budget-stat">¥500/天</div></div>
       <div class="boost-stat"><div class="boost-stat-label">已消耗</div><div class="boost-stat-val">¥2,180</div></div>
       <div class="boost-stat"><div class="boost-stat-label">投流ROI</div><div class="boost-stat-val text-green">3.2x</div></div>
       <div class="boost-stat"><div class="boost-stat-label">带来试戴</div><div class="boost-stat-val">617次</div></div>
@@ -376,30 +396,20 @@
 <!-- ===== 消息通知（新增#19） ===== -->
 <div class="page-panel" id="panel-notify" style="display:none">
   <div class="page-top"><div><button class="btn-back" onclick="switchPage('home')"><i class="ti ti-arrow-left"></i> 返回</button><h2 class="page-title">消息通知</h2></div></div>
-  <div class="notify-list">
-    <div class="notify-item notify-unread"><div class="notify-icon" style="background:#FCE4D6"><i class="ti ti-rocket" style="color:#993C1D"></i></div><div class="notify-body"><div class="notify-title">新爆款推送</div><div class="notify-text">「奶油渐变猫眼」综合评分89，建议上架</div><div class="notify-time">10分钟前</div></div></div>
-    <div class="notify-item notify-unread"><div class="notify-icon" style="background:#EEEDFE"><i class="ti ti-report-analytics" style="color:#534AB7"></i></div><div class="notify-body"><div class="notify-title">周报已生成</div><div class="notify-text">第48周复盘报告已就绪，含4条运营建议</div><div class="notify-time">1小时前</div></div></div>
-    <div class="notify-item"><div class="notify-icon" style="background:#E2EFDA"><i class="ti ti-trending-down" style="color:#375623"></i></div><div class="notify-body"><div class="notify-title">热度预警</div><div class="notify-text">「法式简约纯色」连续下降3天，接近下架阈值</div><div class="notify-time">3小时前</div></div></div>
-    <div class="notify-item"><div class="notify-icon" style="background:#E3F2FD"><i class="ti ti-speakerphone" style="color:#1565C0"></i></div><div class="notify-body"><div class="notify-title">投流效果</div><div class="notify-text">「奶油渐变猫眼」投流帖子曝光突破3000</div><div class="notify-time">5小时前</div></div></div>
-    <div class="notify-item"><div class="notify-icon" style="background:#FAEEDA"><i class="ti ti-circle-check" style="color:#BA7517"></i></div><div class="notify-body"><div class="notify-title">上架成功</div><div class="notify-text">「奶油渐变猫眼」已成功上架，AI试戴已开通</div><div class="notify-time">昨天 14:30</div></div></div>
-  </div>
+  <div class="notify-list" id="notify-list"></div>
 </div>
 
 <!-- ===== 上传款式（完整4步 #13） ===== -->
 <div class="page-panel" id="panel-upload" style="display:none">
   <div class="page-top"><div><button class="btn-back" onclick="switchPage('assets')"><i class="ti ti-arrow-left"></i> 返回素材管理</button><h2 class="page-title">上传新款式</h2></div></div>
-  <div class="step-bar"><div class="step step-done"><div class="step-num"><i class="ti ti-check"></i></div><span>上传图片</span></div><div class="step-line"></div><div class="step" id="step-2"><div class="step-num">2</div><span>确认标签</span></div><div class="step-line"></div><div class="step" id="step-3"><div class="step-num">3</div><span>配置模板</span></div><div class="step-line"></div><div class="step" id="step-4"><div class="step-num">4</div><span>完成入库</span></div></div>
+  <div class="step-bar"><div class="step step-done"><div class="step-num"><i class="ti ti-check"></i></div><span>上传图片</span></div><div class="step-line"></div><div class="step" id="step-2"><div class="step-num">2</div><span>确认标签</span></div><div class="step-line"></div><div class="step" id="step-3"><div class="step-num">3</div><span>完成入库</span></div></div>
   <!-- 步骤2：确认标签 -->
   <div class="upload-step-panel" id="upload-step-2">
     <div class="card"><div class="card-title-sm"><i class="ti ti-photo"></i> 已上传款式图</div><div class="upload-preview"><div class="upload-img"><i class="ti ti-photo" style="font-size:32px;color:#BA7517"></i><span>款式预览图</span></div><div class="upload-info"><label class="upload-name-label">款式名称</label><input class="upload-style-name-input" id="upload-style-name" value="待上传..." onblur="saveUploadStyleName()" onkeydown="if(event.key==='Enter') this.blur()"><div class="upload-size">请先选择图片</div><div class="upload-result" id="upload-tag-status" style="display:none"><i class="ti ti-loader"></i> 标签提取中...</div></div></div></div>
-    <div class="card"><div class="card-title-sm"><i class="ti ti-tags"></i> 识别到的款式标签</div><p class="card-desc">点击 × 删除；点击 + 补充</p><div class="tag-section"><div class="tag-section-label">工艺维度</div><div class="tags-group" id="craft-tags"><button class="tag-add-btn" onclick="addTagPrompt('craft-tags','tag-craft')">+</button></div></div><div class="tag-section"><div class="tag-section-label">营销维度</div><div class="tags-group" id="market-tags"><button class="tag-add-btn" onclick="addTagPrompt('market-tags','tag-color')">+</button></div></div><div class="upload-actions"><button class="btn-ghost" onclick="switchPage('assets')">← 返回</button><button class="btn-primary-sm" onclick="goUploadStep(3)">确认标签，下一步 →</button></div></div>
+    <div class="card"><div class="card-title-sm"><i class="ti ti-tags"></i> 识别到的款式标签</div><p class="card-desc">点击 × 删除；点击 + 补充</p><div class="tag-section"><div class="tag-section-label">工艺维度</div><div class="tags-group" id="craft-tags"><button class="tag-add-btn" onclick="addTagPrompt('craft-tags','tag-craft')">+</button></div></div><div class="tag-section"><div class="tag-section-label">营销维度</div><div class="tags-group" id="market-tags"><button class="tag-add-btn" onclick="addTagPrompt('market-tags','tag-color')">+</button></div></div><div class="upload-actions"><button class="btn-ghost" onclick="switchPage('assets')">← 返回</button><button class="btn-primary-sm" onclick="finishUpload()">确认标签，完成入库</button></div></div>
   </div>
-  <!-- 步骤3：配置模板 -->
+  <!-- 步骤3：完成入库 -->
   <div class="upload-step-panel" id="upload-step-3" style="display:none">
-    <div class="card"><div class="card-title-sm"><i class="ti ti-hand-finger"></i> 选择合成模板 <span class="count-badge" id="upload-tpl-count">已选 0/4 张</span></div><p class="card-desc">最多选择 4 张裸手模板，预览时会批量生成所有选中模板的合成图</p><div class="asset-tabs"><button class="asset-tab active" onclick="switchTemplateTab('public', this, true)">公共模板库</button><button class="asset-tab" onclick="switchTemplateTab('merchant', this, true)">店铺自有模板库</button></div><div id="upload-template-groups"></div><button class="composite-preview-btn" onclick="previewComposite()"><i class="ti ti-eye"></i> 批量预览效果</button><div class="composite-preview-area" id="composite-preview-area"></div><div class="upload-actions"><button class="btn-ghost" onclick="goUploadStep(2)">← 返回标签</button><button class="btn-primary-sm" onclick="finishUpload()">完成上传</button></div></div>
-  </div>
-  <!-- 步骤4：完成入库 -->
-  <div class="upload-step-panel" id="upload-step-4" style="display:none">
     <div class="card" style="text-align:center;padding:48px">
       <i class="ti ti-circle-check" style="font-size:56px;color:#375623;display:block;margin-bottom:12px"></i>
       <h3 style="margin-bottom:6px">入库成功！</h3>
@@ -412,7 +422,7 @@
 <!-- ===== 确认上架 ===== -->
 <div class="page-panel" id="panel-confirm" style="display:none">
   <div class="page-top"><div><button class="btn-back" onclick="switchPage('push')"><i class="ti ti-arrow-left"></i> 返回修改</button><h2 class="page-title">确认上架详情</h2></div></div>
-  <div class="confirm-grid"><div><div class="card"><div class="card-title-sm"><i class="ti ti-photo"></i> 上架主图</div><div class="confirm-main-img"><i class="ti ti-photo" style="font-size:38px;color:#BA7517"></i><span>合成效果图 1</span></div></div><div class="card"><div class="card-title-sm"><i class="ti ti-info-circle"></i> 款式信息</div><h3 class="push-style-name">奶油渐变猫眼</h3><div class="push-tags"><span class="stag stag-craft"><i class="ti ti-sparkles"></i>猫眼</span><span class="stag stag-craft"><i class="ti ti-sparkles"></i>渐变</span><span class="stag stag-color"><i class="ti ti-palette"></i>奶油白</span><span class="stag stag-season"><i class="ti ti-snowflake"></i>秋冬</span></div><div class="section-label">推荐语</div><div class="tagline-box">秋冬约会必备！奶油渐变猫眼，显白又高级～</div></div></div><div><div class="card"><div class="card-title-sm"><i class="ti ti-clipboard-check"></i> 上架确认单</div><div class="summary-box"><div class="summary-row"><span>款式名称</span><span>奶油渐变猫眼</span></div><div class="summary-row"><span>上架主图</span><span>合成效果图 1</span></div><div class="summary-row"><span>团购券</span><span>全贴甲片简约款</span></div><div class="summary-row"><span>上架价格</span><span class="price-red">¥<span id="confirm-price">168</span></span></div><div class="summary-row"><span>生命周期</span><span class="text-green">↑ 上升期</span></div><div class="summary-row"><span>AI试戴</span><span class="text-green">上架后自动开启</span></div></div><button class="btn-confirm" onclick="confirmPublish()"><i class="ti ti-rocket"></i> 确认上架</button></div></div></div>
+  <div class="confirm-grid"><div><div class="card"><div class="card-title-sm"><i class="ti ti-photo"></i> 上架主图</div><div class="confirm-main-img" id="confirm-main-img"><i class="ti ti-photo" style="font-size:38px;color:#BA7517"></i><span>合成效果图 1</span></div></div><div class="card"><div class="card-title-sm"><i class="ti ti-info-circle"></i> 款式信息</div><h3 class="push-style-name" id="confirm-style-name">奶油渐变猫眼</h3><div class="push-tags" id="confirm-style-tags"><span class="stag stag-craft"><i class="ti ti-sparkles"></i>猫眼</span><span class="stag stag-craft"><i class="ti ti-sparkles"></i>渐变</span><span class="stag stag-color"><i class="ti ti-palette"></i>奶油白</span><span class="stag stag-season"><i class="ti ti-snowflake"></i>秋冬</span></div><div class="section-label">推荐语</div><div class="tagline-box" id="confirm-tagline">秋冬约会必备！奶油渐变猫眼，显白又高级～</div></div></div><div><div class="card"><div class="card-title-sm"><i class="ti ti-clipboard-check"></i> 上架确认单</div><div class="summary-box"><div class="summary-row"><span>款式名称</span><span id="confirm-summary-style-name">奶油渐变猫眼</span></div><div class="summary-row"><span>上架主图</span><span id="confirm-summary-image-label">合成效果图 1</span></div><div class="summary-row"><span>团购券</span><span>全贴甲片简约款</span></div><div class="summary-row"><span>上架价格</span><span class="price-red">¥<span id="confirm-price">168</span></span></div><div class="summary-row"><span>生命周期</span><span class="text-green">↑ 上升期</span></div><div class="summary-row"><span>AI试戴</span><span class="text-green">上架后自动开启</span></div></div><button class="btn-confirm" onclick="confirmPublish()"><i class="ti ti-rocket"></i> 确认上架</button></div></div></div>
   <div class="success-page" id="success-page"><i class="ti ti-circle-check" style="font-size:56px;color:#375623"></i><h3>上架成功！</h3><p>奶油渐变猫眼 已上架，AI试戴已开通</p><button class="btn-primary-sm" onclick="switchPage('home')">返回首页</button></div>
 </div>
 
@@ -436,6 +446,6 @@
 <div class="sig-tooltip-box" id="sig-tooltip-box"></div>
 
 <script src="../api-config.js"></script>
-<script src="admin-app.js"></script>
+<script src="admin-app.js?v=push-source-cards-20260605-10"></script>
 </body>
 </html>

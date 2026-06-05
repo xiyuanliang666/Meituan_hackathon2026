@@ -480,7 +480,7 @@ let tunePendingDeco = null;    // 单指装饰品名
 function openAiTunePanel() {
   const item = nailStyles.find(s => s.id === currentDetailId);
   if (!item) return;
-  tuneStyleItem = item;
+  tuneStyleItem = { ...item }; // 浅拷贝，避免污染原数据
   // 重置状态
   tuneIsGenerating = false;
   tuneSelFinger = null;
@@ -494,6 +494,24 @@ function openAiTunePanel() {
 
   // 重置 UI
   _tuneResetUI();
+
+  // 在款式图区域显示当前款式图（背景层，热区叠加其上）
+  const bg = document.getElementById('tuneNailBg');
+  if (bg) {
+    // 清除旧背景图
+    const oldImg = bg.querySelector('.tune-bg-img');
+    if (oldImg) oldImg.remove();
+    if (item.image_url) {
+      const img = document.createElement('img');
+      img.id = 'tuneStyleImg';
+      img.className = 'tune-bg-img';
+      img.src = staticUrl(item.image_url);
+      img.alt = item.name;
+      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:12px;z-index:0;pointer-events:none';
+      bg.insertBefore(img, bg.firstChild);
+    }
+  }
+
   navigateTo('tune');
 }
 
@@ -749,7 +767,7 @@ function _tuneBuildLoadingDesc() {
   }
 }
 
-function tuneConfirmGenerate() {
+async function tuneConfirmGenerate() {
   if (tuneIsGenerating) return;
   const btn = document.getElementById('tuneConfirmBtn');
   if (btn && btn.disabled) return;
@@ -762,32 +780,89 @@ function tuneConfirmGenerate() {
   document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = 'none');
   if (btn) btn.disabled = true;
 
-  // TODO: 接入真实 AI 生图 API，目前模拟 2.5s 后完成
-  setTimeout(() => {
-    tuneIsGenerating = false;
-    document.getElementById('tuneLdlay').classList.remove('show');
-    document.getElementById('tuneSc').classList.remove('tune-disabled');
-    document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
-    // 重置 pending，等待下一次选择
-    tunePendingShape = null;
-    tunePendingColor = null;
-    tunePendingFrench = null;
-    tunePendingDeco = null;
-    tunePendingSingleFunc = null;
-    // 清除选中高亮，回到初始态
-    document.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
-    document.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
-    document.querySelectorAll('.tune-pill').forEach(x => x.classList.remove('on'));
-    _tuneUpdateConfirmBtn();
-  }, 2500);
+  // 获取当前款式图 URL
+  const styleImageUrl = tuneStyleItem
+    ? (tuneStyleItem.image_url || '')
+    : '';
+
+  let tunedImageUrl = null;
+
+  if (backendAvailable && styleImageUrl) {
+    try {
+      let result;
+      if (tuneMode === 0) {
+        // 整体调整
+        result = await apiPost('/tune/overall', {
+          style_image_url: staticUrl(styleImageUrl),
+          nail_shape: tunePendingShape || null,
+          color: tunePendingColor || null,
+        });
+      } else {
+        // 单指微调
+        const fingerIdx = (tuneSelFinger !== null) ? (tuneSelFinger + 1) : 1;
+        result = await apiPost('/tune/single', {
+          style_image_url: staticUrl(styleImageUrl),
+          finger_index: fingerIdx,
+          action: tunePendingSingleFunc || 'color',
+          color: tunePendingSingleFunc === 'color' ? (tunePendingColor || null) : null,
+          french_style: tunePendingSingleFunc === 'french' ? (tunePendingFrench || null) : null,
+          decoration: tunePendingSingleFunc === 'deco' ? (tunePendingDeco || null) : null,
+        });
+      }
+      if (result && result.tuned_image_url) {
+        tunedImageUrl = result.tuned_image_url;
+        // 更新款式图为微调后结果
+        _tuneUpdateStyleImage(tunedImageUrl);
+        // 同步更新 tuneStyleItem 的 image_url，确保"试戴预览"使用微调后图片
+        if (tuneStyleItem) {
+          tuneStyleItem = { ...tuneStyleItem, _tuned_image_url: tunedImageUrl };
+        }
+        if (result.warnings && result.warnings.length > 0) {
+          console.warn('[微调] 警告:', result.warnings.join('; '));
+        }
+      }
+    } catch (e) {
+      console.warn('[微调] API 调用失败，使用本地模拟:', e.message);
+    }
+  }
+
+  tuneIsGenerating = false;
+  document.getElementById('tuneLdlay').classList.remove('show');
+  document.getElementById('tuneSc').classList.remove('tune-disabled');
+  document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
+  // 重置 pending，等待下一次选择
+  tunePendingShape = null;
+  tunePendingColor = null;
+  tunePendingFrench = null;
+  tunePendingDeco = null;
+  tunePendingSingleFunc = null;
+  // 清除选中高亮，回到初始态
+  document.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('.tune-pill').forEach(x => x.classList.remove('on'));
+  _tuneUpdateConfirmBtn();
 }
 
-function tuneSubmitText() {
+function _tuneUpdateStyleImage(imageUrl) {
+  // 更新微调页的款式图展示
+  const imgEl = document.getElementById('tuneStyleImg');
+  if (imgEl && imageUrl) {
+    imgEl.src = imageUrl;
+  }
+  // 同步更新详情页的试戴主图（供"试戴预览"使用）
+  if (tuneStyleItem && imageUrl) {
+    // 存入 tryonHistory 作为微调后的参考图
+    const styleId = tuneStyleItem.id;
+    if (!tryonHistory[styleId]) tryonHistory[styleId] = [];
+    tryonHistory[styleId].push(imageUrl);
+  }
+}
+
+async function tuneSubmitText() {
   const tf = document.getElementById('tuneTextField');
   const text = tf ? tf.value.trim() : '';
   if (!text || tuneIsGenerating) return;
   const desc = `正在根据描述生成：${text}…`;
-  tunePendingColor = text; // 用 color 字段临时承载，仅用于 confirm 检测
   tuneIsGenerating = true;
   document.getElementById('tuneLdDesc').textContent = desc;
   document.getElementById('tuneLdlay').classList.add('show');
@@ -795,27 +870,50 @@ function tuneSubmitText() {
   document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = 'none');
   if (tf) tf.value = '';
 
-  // TODO: 接入真实 API
-  setTimeout(() => {
-    tuneIsGenerating = false;
-    tunePendingColor = null;
-    document.getElementById('tuneLdlay').classList.remove('show');
-    document.getElementById('tuneSc').classList.remove('tune-disabled');
-    document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
-    _tuneUpdateConfirmBtn();
-  }, 2500);
+  const styleImageUrl = tuneStyleItem ? (tuneStyleItem.image_url || '') : '';
+
+  if (backendAvailable && styleImageUrl) {
+    try {
+      const result = await apiPost('/tune/overall', {
+        style_image_url: staticUrl(styleImageUrl),
+        user_text: text,
+      });
+      if (result && result.tuned_image_url) {
+        _tuneUpdateStyleImage(result.tuned_image_url);
+      }
+    } catch (e) {
+      console.warn('[微调文字] API 调用失败:', e.message);
+    }
+  }
+
+  tuneIsGenerating = false;
+  document.getElementById('tuneLdlay').classList.remove('show');
+  document.getElementById('tuneSc').classList.remove('tune-disabled');
+  document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
+  _tuneUpdateConfirmBtn();
 }
 
 function submitTuneToTryon() {
   // 将微调后款式图送入试戴流程
-  closeTunePage();
   if (!uploadedHandImageUrl) { showUploadGuideModal(tuneStyleItem?.id); return; }
   if (tuneStyleItem) {
-    // 只有在没有试戴历史（首次）时才触发试戴 API，避免重复调用
-    const historyImgs = tryonHistory[tuneStyleItem.id] || [];
-    if (historyImgs.length === 0) {
-      startTryOnWithProgress(tuneStyleItem);
+    // 如果有微调后图片，构造临时 item 用于试戴
+    const tunedUrl = tuneStyleItem._tuned_image_url;
+    const itemForTryon = tunedUrl
+      ? { ...tuneStyleItem, image_url: tunedUrl }
+      : tuneStyleItem;
+    // 清除该款式的已有试戴记录，强制重新生成（使用微调后图片）
+    if (tunedUrl) {
+      tryonAttempted.delete(tuneStyleItem.id);
+      tryonHistory[tuneStyleItem.id] = [];
+      // 更新 nailStyles 中对应款式的图片
+      const idx = nailStyles.findIndex(s => s.id === tuneStyleItem.id);
+      if (idx >= 0) nailStyles[idx] = { ...nailStyles[idx], image_url: tunedUrl };
     }
+    closeTunePage();
+    startTryOnWithProgress(itemForTryon);
+  } else {
+    closeTunePage();
   }
 }
 
