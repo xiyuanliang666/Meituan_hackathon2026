@@ -306,19 +306,3 @@ def push_trend_to_queue_endpoint(trend_id: str, request: TrendPushToQueueRequest
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-
-@router.post("/trends/{trend_id}/resolve-cover", response_model=TrendResolveCoverResponse)
-def resolve_trend_cover_endpoint(trend_id: str) -> TrendResolveCoverResponse:
-    init_db(seed=True)
-    try:
-        result = resolve_trend_cover(trend_id)
-    except Exception as exc:
-        detail = str(exc)
-        status_code = 404 if "not found" in detail else 400
-        raise HTTPException(status_code=status_code, detail=detail) from exc
-
-    return TrendResolveCoverResponse(
-        trend_id=result["trend_id"],
-        image_url=result.get("image_url") or "",
-        resolved=bool(result.get("resolved")),
-    )
