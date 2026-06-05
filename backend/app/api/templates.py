@@ -5,8 +5,10 @@ from app.services.business_db import (
     create_template,
     delete_template,
     get_template_by_id,
+    list_selected_template_ids,
     list_public_templates,
     list_templates,
+    save_selected_template_ids,
     update_template,
 )
 from app.services.hand_analyzer import analyze_seed_hand_templates
@@ -29,6 +31,16 @@ class UpdateTemplateRequest(BaseModel):
 
 
 class BatchDeleteTemplatesRequest(BaseModel):
+    template_ids: list[str]
+
+
+class TemplateSelectionRequest(BaseModel):
+    merchant_id: str = "demo_shop"
+    template_ids: list[str]
+
+
+class TemplateSelectionResponse(BaseModel):
+    merchant_id: str
     template_ids: list[str]
 
 
@@ -90,6 +102,20 @@ def add_template(request: CreateTemplateRequest) -> TemplateResponse:
 @router.get("/templates/public", response_model=list[TemplateResponse])
 def get_public_templates() -> list[TemplateResponse]:
     return [TemplateResponse(**t) for t in list_public_templates()]
+
+
+@router.get("/templates/selection", response_model=TemplateSelectionResponse)
+def get_template_selection(merchant_id: str = Query(default="demo_shop")) -> TemplateSelectionResponse:
+    return TemplateSelectionResponse(
+        merchant_id=merchant_id,
+        template_ids=list_selected_template_ids(merchant_id),
+    )
+
+
+@router.put("/templates/selection", response_model=TemplateSelectionResponse)
+def save_template_selection(request: TemplateSelectionRequest) -> TemplateSelectionResponse:
+    selected = save_selected_template_ids(request.merchant_id, request.template_ids)
+    return TemplateSelectionResponse(merchant_id=request.merchant_id, template_ids=selected)
 
 
 @router.post("/templates/analyze-seed-hands", response_model=AnalyzeTemplatesResponse)

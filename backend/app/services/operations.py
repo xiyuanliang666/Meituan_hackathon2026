@@ -1,9 +1,13 @@
 import json
+from pathlib import Path
 
 from app.prompts.operations import SYSTEM_PROMPT as OPERATIONS_SYSTEM_PROMPT
+from app.config import get_settings
 from app.schemas.operations import (
     AuditPushCardRequest,
     AuditPushCardResponse,
+    PendingPushStylesRequest,
+    PendingPushStylesResponse,
     PushCardResponse,
     ReportHotStyleItem,
     ReportMetric,
@@ -13,12 +17,61 @@ from app.schemas.operations import (
     SkillExecuteResponse,
     Suggestion,
 )
-from app.services.business_db import create_report_snapshot, list_event_stats, list_hot_push_candidates, upsert_push_audit
+from app.services.business_db import (
+    create_report_snapshot,
+    list_event_stats,
+    list_hot_push_candidates,
+    list_styles,
+    set_pending_push_styles,
+    upsert_push_audit,
+)
 from app.services.multimodal_client import (
     MultimodalModelError,
     generate_text_json_with_gemini,
     is_gemini_enabled,
 )
+
+TAG_DISPLAY_ORDER = (
+    "style_tags",
+    "color_system",
+    "nail_technique",
+    "nail_decoration",
+    "nail_finish",
+    "nail_shape",
+    "nail_length",
+    "scene_tags",
+    "season_tags",
+)
+
+DEMO_PUSH_SIGNAL_OVERRIDES: dict[str, dict[str, object]] = {
+    "push-b38bf71ae1": {
+        "hot_score": 93.0,
+        "life_cycle": "上升期",
+        "signals": [
+            {"signal": "搜索热度", "value": 92.0, "delta": 0.24, "weight": 0.30},
+            {"signal": "评价词频", "value": 218.0, "delta": 0.17, "weight": 0.30},
+            {"signal": "试戴收藏率", "value": 0.43, "delta": 0.28, "weight": 0.40},
+        ],
+    },
+    "push-b567a4e3b0": {
+        "hot_score": 88.0,
+        "life_cycle": "峰值期",
+        "signals": [
+            {"signal": "搜索热度", "value": 84.0, "delta": 0.19, "weight": 0.30},
+            {"signal": "评价词频", "value": 176.0, "delta": 0.12, "weight": 0.30},
+            {"signal": "试戴收藏率", "value": 0.37, "delta": 0.21, "weight": 0.40},
+        ],
+    },
+    "push-ca2ef69375": {
+        "hot_score": 79.0,
+        "life_cycle": "上升期",
+        "signals": [
+            {"signal": "搜索热度", "value": 77.0, "delta": 0.11, "weight": 0.30},
+            {"signal": "评价词频", "value": 142.0, "delta": 0.09, "weight": 0.30},
+            {"signal": "试戴收藏率", "value": 0.31, "delta": 0.16, "weight": 0.40},
+        ],
+    },
+}
 
 
 def list_push_cards() -> list[PushCardResponse]:
@@ -62,6 +115,15 @@ def audit_push_card(push_id: str, request: AuditPushCardRequest) -> AuditPushCar
     )
 
 
+def update_pending_push_styles(request: PendingPushStylesRequest) -> PendingPushStylesResponse:
+    result = set_pending_push_styles(
+        style_ids=request.style_ids,
+        merchant_id=request.merchant_id,
+        replace_pending=request.replace_pending,
+    )
+    return PendingPushStylesResponse(**result)
+
+
 def generate_report(request: ReportRequest) -> ReportResponse:
     context = _report_context_from_db(request)
     if is_gemini_enabled():
@@ -87,22 +149,9 @@ def _generate_report_with_gemini(context: dict) -> ReportResponse:
             f"\n输入数据：{json.dumps(context, ensure_ascii=False)}"
         ),
     )
-    suggestions = [
-        Suggestion(
-            text=str(item.get("text") or ""),
-            action_type=str(item.get("action_type") or "maintain_strategy"),
-            action_params=item.get("action_params") if isinstance(item.get("action_params"), dict) else {},
-            requires_confirm=bool(item.get("requires_confirm", False)),
-            adopted=bool(item.get("adopted", False)),
-        )
-        for item in data.get("suggestions", [])
-        if isinstance(item, dict) and item.get("text")
-    ]
-    if not suggestions:
-        raise ValueError("Gemini report has no valid suggestions")
     return ReportResponse(
         report_summary=str(data.get("report_summary") or "已生成本期运营复盘。"),
-        suggestions=suggestions,
+        suggestions=_fixed_report_suggestions(context),
         generation_mode="gemini-2.5-flash",
         period_label=context["period_label"],
         metrics=[ReportMetric(**item) for item in context["metrics"]],
@@ -129,26 +178,7 @@ def _generate_report_mock(context: dict) -> ReportResponse:
             f"{top_style['name']}当前热度分{top_style['score']:.0f}，处于{top_style['life_cycle']}。"
             f"{_event_summary(top_event_style)}"
         ),
-        suggestions=[
-            Suggestion(
-                text=f"{top_style['name']}热度靠前，建议优先上架主推并加大投流预算 20%。",
-                action_type="boost_budget",
-                action_params={"style_id": top_style["style_id"], "budget_delta": 0.20},
-                requires_confirm=True,
-            ),
-            Suggestion(
-                text="对试戴点击低但曝光高的款式，建议降低主推权重，保留自然流量观察。",
-                action_type="maintain_strategy",
-                action_params={"reason": "wait_for_more_events"},
-                requires_confirm=False,
-            ),
-            Suggestion(
-                text="建议继续积累曝光、试戴、收藏和下单事件，用行为数据校准爆款识别权重。",
-                action_type="prepare_replacement",
-                action_params={"target_event_count": 50},
-                requires_confirm=False,
-            ),
-        ],
+        suggestions=_fixed_report_suggestions(context),
         generation_mode="db_mock",
         period_label=context["period_label"],
         metrics=[ReportMetric(**item) for item in context["metrics"]],
@@ -186,17 +216,94 @@ def execute_skill(request: SkillExecuteRequest) -> SkillExecuteResponse:
     )
 
 
+def _fixed_report_suggestions(context: dict) -> list[Suggestion]:
+    pending_push_cards = [
+        card for card in context.get("push_cards", [])
+        if str(card.get("status") or "") not in {"accepted", "listed", "published"}
+    ]
+    pending_style_ids = {str(card.get("style_id") or "") for card in pending_push_cards}
+    active_styles = list_styles(limit=20, status="active")
+    active_style = next(
+        (item for item in active_styles if item.get("style_id") not in pending_style_ids),
+        active_styles[0] if active_styles else None,
+    )
+    pending_push = pending_push_cards[0] if pending_push_cards else None
+
+    boost_style_name = (
+        str(active_style.get("style_name") or "").strip()
+        if isinstance(active_style, dict) else ""
+    ) or "当前主推款式"
+    boost_style_id = (
+        str(active_style.get("style_id") or "").strip()
+        if isinstance(active_style, dict) else ""
+    )
+    publish_style_name = (
+        str(pending_push.get("style_name") or "").strip()
+        if isinstance(pending_push, dict) else ""
+    ) or "待上架新款式"
+    publish_style_id = (
+        str(pending_push.get("style_id") or "").strip()
+        if isinstance(pending_push, dict) else ""
+    )
+    publish_push_id = (
+        str(pending_push.get("push_id") or "").strip()
+        if isinstance(pending_push, dict) else ""
+    )
+
+    return [
+        Suggestion(
+            text=f"{boost_style_name}热度较高，建议增加投流预算 20%。",
+            action_type="boost_budget",
+            action_params={
+                "style_id": boost_style_id,
+                "style_name": boost_style_name,
+                "budget_from": 500,
+                "budget_to": 600,
+                "budget_delta": 0.20,
+            },
+            requires_confirm=True,
+        ),
+        Suggestion(
+            text="当前整体投流 ROI 表现稳定，建议维持当前策略，继续观察自然流量与转化表现。",
+            action_type="maintain_strategy",
+            action_params={"reason": "keep_current_strategy"},
+            requires_confirm=False,
+        ),
+        Suggestion(
+            text=f"{publish_style_name}热度较高，建议上架新款式并加入当前主推。",
+            action_type="publish_style",
+            action_params={
+                "push_id": publish_push_id,
+                "style_id": publish_style_id,
+                "style_name": publish_style_name,
+            },
+            requires_confirm=False,
+        ),
+    ]
+
+
 def _push_card_from_candidate(candidate: dict) -> dict:
+    override = DEMO_PUSH_SIGNAL_OVERRIDES.get(candidate["push_id"])
+    if override:
+        candidate = {
+            **candidate,
+            "hot_score": override["hot_score"],
+            "life_cycle": override["life_cycle"],
+            "signals": override["signals"],
+        }
     style_tags = _flatten_tags(candidate["tags"])
     event_stats = candidate.get("event_stats", {})
     signal_sources = _signal_sources_with_events(candidate["signals"], event_stats)
     hot_score = _hot_score(candidate, signal_sources)
+    push_id = candidate["push_id"]
+    style_image_urls = [candidate["enhanced_style_image_url"], *_load_demo_composite_urls(push_id)]
     return {
-        "push_id": candidate["push_id"],
+        "push_id": push_id,
         "style_id": candidate["style_id"],
         "style_name": candidate["style_name"],
         "style_tags": style_tags,
-        "style_image_urls": [candidate["enhanced_style_image_url"]],
+        "style_image_urls": style_image_urls,
+        "source_posts": _load_demo_source_posts(push_id),
         "signal_sources": signal_sources,
         "hot_score": hot_score,
         "life_cycle": _life_cycle(candidate["life_cycle"], hot_score, event_stats),
@@ -209,11 +316,81 @@ def _push_card_from_candidate(candidate: dict) -> dict:
     }
 
 
-def _flatten_tags(tags: dict[str, list[str]]) -> list[str]:
+def _load_demo_composite_urls(push_id: str) -> list[str]:
+    folder = _demo_asset_root() / "push-composites"
+    if not folder.exists():
+        return []
+    files = sorted(folder.glob(f"{push_id}__composite-*.*"))
+    return [_demo_static_url("demo_assets/push-composites", file.name) for file in files]
+
+
+def _load_demo_source_posts(push_id: str) -> list[dict]:
+    folder = _demo_asset_root() / "push-sources"
+    if not folder.exists():
+        return []
+
+    manifest_path = folder / f"{push_id}__sources.json"
+    if manifest_path.exists():
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        source_posts = data.get("sources", []) if isinstance(data, dict) else []
+        output: list[dict] = []
+        for item in source_posts:
+            if not isinstance(item, dict):
+                continue
+            resolved = dict(item)
+            image_name = str(item.get("image") or "").strip()
+            resolved["image_url"] = _demo_static_url("demo_assets/push-sources", image_name) if image_name else ""
+            output.append(resolved)
+        return output
+
+    files = sorted(folder.glob(f"{push_id}__source-*.*"))
+    return [
+        {
+            "image": file.name,
+            "image_url": _demo_static_url("demo_assets/push-sources", file.name),
+        }
+        for file in files
+    ]
+
+
+def _demo_asset_root() -> Path:
+    settings = get_settings()
+    storage_dir = Path(settings.storage_dir)
+    if not storage_dir.is_absolute():
+        storage_dir = Path(__file__).resolve().parents[2] / storage_dir
+    return storage_dir / "demo_assets"
+
+
+def _demo_static_url(*parts: str) -> str:
+    base = get_settings().public_base_url.rstrip("/")
+    path = "/".join(part.strip("/").replace("\\", "/") for part in parts if part)
+    return f"{base}/{path}"
+
+
+def _flatten_tags(tags: dict[str, list[str] | str]) -> list[str]:
     values: list[str] = []
-    for tag_values in tags.values():
-        values.extend(tag_values)
-    return sorted(set(values))
+    for key in TAG_DISPLAY_ORDER:
+        values.extend(_tag_values(tags.get(key)))
+    for key, tag_values in tags.items():
+        if key not in TAG_DISPLAY_ORDER:
+            values.extend(_tag_values(tag_values))
+
+    seen: set[str] = set()
+    unique_values: list[str] = []
+    for value in values:
+        if value and value != "unknown" and value not in seen:
+            seen.add(value)
+            unique_values.append(value)
+    return unique_values
+
+
+def _tag_values(raw: list[str] | str | None) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        value = raw.strip()
+        return [value] if value else []
+    return [str(value).strip() for value in raw if str(value).strip()]
 
 
 def _signal_sources_with_events(signals: list[dict], event_stats: dict[str, int]) -> list[dict]:
@@ -265,7 +442,8 @@ def _mock_trend(hot_score: float) -> list[float]:
 
 
 def _coupon_price(style_id: str) -> float:
-    suffix = int(style_id[-3:])
+    digits = "".join(ch for ch in style_id if ch.isdigit())
+    suffix = int(digits[-3:]) if digits else sum(ord(ch) for ch in style_id) % 1000
     return float(128 + (suffix % 5) * 20)
 
 

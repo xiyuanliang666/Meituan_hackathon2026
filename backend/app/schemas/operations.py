@@ -16,6 +16,7 @@ class PushCardResponse(BaseModel):
     style_name: str
     style_tags: list[str]
     style_image_urls: list[str]
+    source_posts: list[dict[str, Any]] = []
     signal_sources: list[SignalSource]
     hot_score: float
     life_cycle: str
@@ -46,6 +47,24 @@ class AuditPushCardResponse(BaseModel):
     selected_coupon_url: str | None = None
     final_tagline: str | None = None
     final_price: float | None = None
+
+
+class PendingPushStylesRequest(BaseModel):
+    merchant_id: str = "demo_shop"
+    style_ids: list[str]
+    replace_pending: bool = False
+
+
+class PendingPushStyleItem(BaseModel):
+    push_id: str
+    style_id: str
+    status: str
+
+
+class PendingPushStylesResponse(BaseModel):
+    requested_style_ids: list[str]
+    missing_style_ids: list[str]
+    pending: list[PendingPushStyleItem]
 
 
 class ReportRequest(BaseModel):
