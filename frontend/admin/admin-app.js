@@ -2651,49 +2651,50 @@ async function regenPushImg(btn) {
     try { await renderTemplates(); } catch (e) { /* ignore */ }
   }
 
-  const images = pushEditorImages(card);
-  let targetIdx = currentPushImageIndex();
-  if (targetIdx === 0 && images.length > 1) targetIdx = 1;
-  let target = images[targetIdx];
-  let templateUrl = target?.template?.hand_image_url;
-
-  // 当前 composite 无模板时，尝试用第一个有效的模板
-  if (!templateUrl && target?.kind === 'composite' && selectedTemplateIds.size > 0) {
-    for (const tid of selectedTemplateIds) {
-      const tpl = findTemplateInMemory(tid);
-      if (tpl?.hand_image_url) {
-        templateUrl = tpl.hand_image_url;
-        break;
-      }
+  // 收集所有有效模板
+  const validTemplates = [];
+  for (const tid of selectedTemplateIds) {
+    const tpl = findTemplateInMemory(tid);
+    if (tpl?.hand_image_url) {
+      validTemplates.push({ id: tid, hand_image_url: tpl.hand_image_url });
     }
   }
 
-  if (!target || target.kind !== 'composite' || !templateUrl) {
-    showToast('请先在素材管理选择模板图');
+  if (validTemplates.length === 0) {
+    showToast('请先在素材管理选择裸手模板图（1-4张）');
     return;
   }
 
   const originalText = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-refresh"></i> 生成中...';
-  try {
-    const result = await apiPost('/generate-composite', {
-      style_image_url: styleUrl,
-      template_image_url: templateUrl,
-    });
-    if (result?.composite_image_url) {
-      card.style_image_urls ||= [];
-      card.style_image_urls[targetIdx] = result.composite_image_url;
-      renderPushEditorImages(card, targetIdx);
-      showToast('合成图已生成');
+  btn.innerHTML = `<i class="ti ti-refresh"></i> 生成中 (0/${validTemplates.length})...`;
+
+  const newComposites = [];
+  for (let i = 0; i < validTemplates.length; i++) {
+    btn.innerHTML = `<i class="ti ti-refresh"></i> 生成中 (${i + 1}/${validTemplates.length})...`;
+    try {
+      const result = await apiPost('/generate-composite', {
+        style_image_url: styleUrl,
+        template_image_url: validTemplates[i].hand_image_url,
+      });
+      if (result?.composite_image_url) {
+        newComposites.push(result.composite_image_url);
+      }
+    } catch (e) {
+      console.warn('[合成图] 第' + (i + 1) + '张生成失败:', e.message);
     }
-  } catch (e) {
-    console.warn('[合成图] 重新生成失败:', e.message);
-    alert('生成失败：' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalText;
   }
+
+  if (newComposites.length > 0) {
+    card.style_image_urls = [styleUrl, ...newComposites];
+    renderPushEditorImages(card, 1);
+    showToast(`已生成 ${newComposites.length} 张合成图`);
+  } else {
+    showToast('所有合成图生成失败，请稍后重试');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = originalText;
 }
 async function regenTagline() {
   const l = document.getElementById('tagline-regen-label');
