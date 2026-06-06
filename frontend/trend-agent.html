@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prism · 智能运营 — 趋势发现</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="admin/admin-styles.css?v=trend-agent-standalone-1">
+<style>
+/* ── 独立页面覆盖：隐藏无关模块，只展示趋势发现 ── */
+body { background: #F7F5F0; }
+
+/* 顶部导航：保留品牌，简化 */
+.top-nav {
+  position: sticky; top: 0; z-index: 100;
+}
+
+/* 隐藏所有商户侧导航 tab，只保留智能运营 */
+.merchant-nav-tab { display: none !important; }
+
+/* 返回首页链接 */
+.back-to-home {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #888; text-decoration: none;
+  padding: 5px 10px; border-radius: 8px;
+  transition: background .15s, color .15s;
+}
+.back-to-home:hover { background: #F0EDE8; color: #3a3028; }
+
+/* 主体内容区 */
+.standalone-main {
+  max-width: 1280px; margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="top-nav">
+  <div class="nav-left">
+    <div class="nav-logo">
+      <span class="brand-en">Prism</span>
+      <span class="brand-cn">智能运营</span>
+    </div>
+  </div>
+  <div class="nav-center">
+    <div class="nav-tabs">
+      <div class="nav-tab ops-nav-tab active" data-page="trend-agent">
+        <i class="ti ti-sparkles"></i> 趋势发现
+      </div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <a class="back-to-home" href="index.html">
+      <i class="ti ti-arrow-left"></i> 返回首页
+    </a>
+    <a class="back-to-home" href="admin/index.html" style="margin-left:4px">
+      <i class="ti ti-layout-dashboard"></i> 商户后台
+    </a>
+  </div>
+</nav>
+
+<!-- 主体 -->
+<div class="standalone-main">
+  <div class="page-top">
+    <div>
+      <h2 class="page-title">智能运营</h2>
+      <p class="page-sub">Agent 助手 · UGC 抓取 · 趋势发现与数据聚合</p>
+    </div>
+    <div id="backend-status-bar" style="font-size:12px;color:#888;display:flex;align-items:center;gap:6px"></div>
+  </div>
+
+  <div class="trend-layout">
+    <!-- 主列 -->
+    <div class="trend-main">
+
+      <!-- 数据源接入 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-database-import"></i> 数据源接入</div>
+          <span class="card-sub">统一归一到 UGC posts 后进入同一条 Trend Agent Pipeline</span>
+        </div>
+        <div class="trend-source-tabs">
+          <button class="asset-tab active" data-source-mode="links" onclick="switchTrendSourceMode('links', this)">人工链接种子</button>
+          <button class="asset-tab" data-source-mode="clean" onclick="switchTrendSourceMode('clean', this)">使用现有清洗结果</button>
+        </div>
+        <div class="trend-source-summary">推荐日常使用"人工链接种子"；如果 raw 与 clean 已经准备好，再用"使用现有清洗结果"快速重跑趋势识别。</div>
+        <div class="trend-source-panel active" id="trend-source-links">
+          <div class="trend-source-actions">
+            <button class="btn-ghost-sm" onclick="loadSampleXhsLinks()"><i class="ti ti-link"></i> 载入示例链接</button>
+            <button class="btn-primary-sm" onclick="saveTrendSeedLinks()"><i class="ti ti-device-floppy"></i> 保存链接种子</button>
+          </div>
+          <textarea class="trend-textarea" id="trend-link-seeds" placeholder="一行一个小红书链接，用于后续抓取正文、图片和评论。"></textarea>
+          <div class="trend-source-hint" id="trend-link-status">会先追加更新 raw 帖子库，再自动清洗生成 clean 视图，之后继续评论抓取、摘要和趋势识别。</div>
+        </div>
+        <div class="trend-source-panel" id="trend-source-clean" style="display:none">
+          <div class="trend-source-actions">
+            <button class="btn-primary-sm" onclick="setTrendSourceStatus('trend-clean-status', '将直接复用 backend/mock_data/ugc_posts_from_links_clean.json，跳过评论抓取，重新导入并运行趋势识别。')"><i class="ti ti-refresh"></i> 准备重跑</button>
+          </div>
+          <div class="trend-source-hint" id="trend-clean-status">适合 raw 与 clean 都已经准备好，只想基于现有 clean 文件快速更新趋势池。</div>
+        </div>
+      </div>
+
+      <!-- 数据健康 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-heartbeat"></i> 数据健康</div>
+          <button class="btn-ghost-sm" onclick="loadDataHealth()"><i class="ti ti-refresh"></i> 刷新</button>
+        </div>
+        <div class="trend-health-grid" id="trend-health-grid">
+          <div class="trend-run-empty">点击刷新查看数据健康状态</div>
+        </div>
+      </div>
+
+      <!-- 运行状态 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-player-play"></i> 运行状态</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-ghost-sm" onclick="loadTrendRunsAndList()"><i class="ti ti-refresh"></i> 刷新</button>
+            <button class="btn-primary-sm" onclick="runTrendAgent()"><i class="ti ti-sparkles"></i> 运行趋势识别</button>
+          </div>
+        </div>
+        <div class="trend-run-card" id="trend-run-card">
+          <div class="trend-run-empty">尚未运行趋势识别任务</div>
+        </div>
+      </div>
+
+      <!-- 趋势池 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-flame"></i> 趋势池 <span class="count-badge" id="trend-count">0 条</span></div>
+          <div class="trend-filter-row">
+            <select class="coupon-select trend-filter-select" id="trend-status-filter" onchange="loadTrendList()">
+              <option value="">全部状态</option>
+              <option value="promote">优先推广</option>
+              <option value="watch">观察中</option>
+              <option value="discard">放弃</option>
+            </select>
+            <select class="coupon-select trend-filter-select" id="trend-life-cycle-filter" onchange="loadTrendList()">
+              <option value="">全部周期</option>
+              <option value="观察期">观察期</option>
+              <option value="上升期">上升期</option>
+              <option value="峰值期">峰值期</option>
+              <option value="衰退期">衰退期</option>
+            </select>
+          </div>
+        </div>
+        <div class="trend-list" id="trend-list"></div>
+      </div>
+
+    </div><!-- /trend-main -->
+
+    <!-- 侧栏 -->
+    <div class="trend-side">
+      <div class="card trend-detail-card" id="trend-detail-card">
+        <div class="trend-detail-empty">选择一条趋势查看详情、支撑帖子和转草稿入口</div>
+      </div>
+      <div class="card trend-candidate-card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-tag-starred"></i> 候选标签词</div>
+          <button class="btn-ghost-sm" onclick="loadCandidateTaxonomyTerms()"><i class="ti ti-refresh"></i> 刷新</button>
+        </div>
+        <div class="candidate-taxonomy-list" id="candidate-taxonomy-list">
+          <div class="trend-run-empty">暂无候选新标签词</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /trend-layout -->
+</div><!-- /standalone-main -->
+
+<!-- Signal Tooltip (全局) -->
+<div class="sig-tooltip-box" id="sig-tooltip-box"></div>
+
+<!-- 候选标签审批弹框 -->
+<div class="modal-overlay" id="candidate-approve-modal">
+  <div class="modal-content" style="text-align:left;max-width:440px">
+    <h3 style="margin-bottom:16px"><i class="ti ti-tag" style="color:#8D79B8"></i> 审核候选标签词</h3>
+    <div class="pref-form-group">
+      <label>候选词</label>
+      <input type="text" id="candidate-edit-term" style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+    </div>
+    <div class="pref-form-group">
+      <label>规范形式（正式入库名称）</label>
+      <input type="text" id="candidate-edit-normalized" style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+    </div>
+    <div class="pref-form-group">
+      <label>归属维度</label>
+      <select id="candidate-edit-field" class="coupon-select" style="width:100%">
+        <option value="style_tags">风格标签</option>
+        <option value="nail_technique">美甲技法</option>
+        <option value="color_system">色系</option>
+        <option value="nail_shape">甲型</option>
+        <option value="nail_length">甲长</option>
+        <option value="nail_decoration">装饰</option>
+        <option value="nail_finish">甲面质感</option>
+        <option value="scene_tags">场景</option>
+        <option value="season_tags">季节</option>
+        <option value="skin_tone_suitability">肤色适配</option>
+        <option value="finger_shape">指型</option>
+        <option value="nail_bed_shape">甲床型</option>
+      </select>
+    </div>
+    <div class="pref-form-group">
+      <label>变体形式（只读）</label>
+      <div id="candidate-edit-variants" style="font-size:12px;color:#888;padding:6px 0"></div>
+    </div>
+    <div class="pref-form-group">
+      <label>关联官方标签（只读）</label>
+      <div id="candidate-edit-related" style="font-size:12px;color:#888;padding:6px 0"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn-primary-sm" onclick="confirmApproveCandidate()"><i class="ti ti-check"></i> 确认通过并入库</button>
+      <button class="btn-ghost" onclick="hideCandidateApproveModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="api-config.js"></script>
+<script src="admin/admin-app.js?v=trend-agent-standalone-1"></script>
+<script>
+// ── 独立页面初始化：直接加载趋势数据，无需页面切换 ──
+document.addEventListener('DOMContentLoaded', () => {
+  // 检测后端
+  checkBackendAvailable();
+
+  // 直接加载趋势发现数据
+  setTimeout(() => {
+    loadTrendRunsAndList();
+    loadDataHealth();
+    loadCandidateTaxonomyTerms();
+  }, 300);
+
+  // 后端状态显示
+  updateBackendStatusBar();
+});
+
+function updateBackendStatusBar() {
+  const bar = document.getElementById('backend-status-bar');
+  if (!bar) return;
+  setTimeout(() => {
+    if (adminBackendAvailable) {
+      bar.innerHTML = '<span style="color:#5a9a70"><i class="ti ti-circle-check"></i> 后端已连接</span>';
+    } else {
+      bar.innerHTML = '<span style="color:#b07830"><i class="ti ti-wifi-off"></i> 后端未连接，展示本地数据</span>';
+    }
+  }, 800);
+}
+
+// 覆盖 switchPage，在独立页面中不做任何跳转
+function switchPage(page) {
+  // 独立页面：只保留 trend-agent 功能，其他跳转忽略
+  if (page === 'trend-agent') {
+    loadTrendRunsAndList();
+    loadDataHealth();
+    loadCandidateTaxonomyTerms();
+  }
+}
+</script>
+</body>
+</html>

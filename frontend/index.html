@@ -3,236 +3,256 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prism · AI Nail Art Studio</title>
+<title>Prism · 美甲AI试戴
+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Sans+SC:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Serif+SC:wght@300;400&family=Noto+Sans+SC:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
 <style>
-/* ─── tokens ─── */
-:root{
-  --white:#ffffff;
-  --ink:#1a1a1a;
-  --ink-mid:rgba(26,26,26,.48);
-  --ink-lo:rgba(26,26,26,.28);
-  --rose:#c4788a;
-  --dark:#3c3c3c;
-  --cream:#f5f3ef;
-  --w:min(1248px,86.667vw);
+/* ─────────────────────────────────────────
+   设计令牌  —  米白浅色系
+   背景: #f7f4ef  温润米白
+   强调: #b09070  哑陶棕，沉稳不跳
+   玫瑰: #d4899a  低饱玫瑰
+   文字: #3a3028  深暖棕
+───────────────────────────────────────── */
+:root {
+  --bg:        #f7f4ef;
+  --bg2:       #ede9e2;
+  --gold:      #a08060;
+  --gold-dim:  rgba(160,128,96,0.20);
+  --rose:      #c4788a;
+  --lavender:  #8878b0;
+  --text-hi:   rgba(42,32,24,0.88);
+  --text-mid:  rgba(42,32,24,0.46);
+  --text-lo:   rgba(42,32,24,0.26);
+  --glass:     rgba(255,255,255,0.55);
+  --glass-b:   rgba(255,255,255,0.80);
+  --chip-shadow: rgba(160,128,96,0.18);
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{font-size:16px;scroll-behavior:smooth;}
-body{font-family:"Roboto","Noto Sans SC",sans-serif;background:var(--white);color:var(--ink);overflow-x:hidden;}
-a{text-decoration:none;color:inherit;}
-img{display:block;}
 
-/* ─── 全局粒子线网 canvas ─── */
-#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
-header,main,footer{position:relative;z-index:1;}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
-/* ─── cursor ─── */
-*{cursor:none!important;}
-#cur{position:fixed;width:8px;height:8px;border-radius:50%;background:var(--ink);pointer-events:none;z-index:99999;transform:translate(-50%,-50%);mix-blend-mode:multiply;transition:transform .15s,background .2s;}
-#cur-r{position:fixed;width:30px;height:30px;border-radius:50%;border:1px solid rgba(26,26,26,.2);pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .3s,height .3s,border-color .3s;}
-body.hov #cur{background:var(--rose);transform:translate(-50%,-50%) scale(1.3);}
-body.hov #cur-r{width:44px;height:44px;border-color:rgba(196,120,138,.35);}
-
-/* ══════════════════════════════════════
-   NAV
-══════════════════════════════════════ */
-header{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:900;transition:background .3s,backdrop-filter .3s,border-bottom .3s;}
-.nav{display:flex;align-items:flex-start;justify-content:space-between;width:var(--w);margin:0 auto;padding-top:min(52px,3.8vw);}
-.nav-logo{
-  font-family:"Roboto",sans-serif;font-size:min(16px,1.15vw);font-weight:300;letter-spacing:.18em;color:var(--ink);
-  pointer-events:auto;opacity:0;animation:fadeUp .7s .05s cubic-bezier(.16,1,.3,1) forwards;
+body {
+  font-family: "Noto Sans SC", -apple-system, sans-serif;
+  /* 全局渐变背景：从米白顶部平滑过渡到暖米底部，不分屏 */
+  background: linear-gradient(
+    180deg,
+    #f7f4ef 0%,
+    #f4f0e8 18%,
+    #f1ebe0 36%,
+    #ede5d8 54%,
+    #e9dfd0 72%,
+    #e6d9c8 88%,
+    #e3d4c2 100%
+  );
+  background-attachment: fixed;
+  color: var(--text-hi);
+  cursor: none;
+  overflow-x: hidden;
 }
-.nav-logo sup{font-size:.55em;color:var(--rose);vertical-align:super;}
-.nav-links{display:flex;flex-direction:column;align-items:flex-end;gap:min(2px,.18vw);list-style:none;pointer-events:auto;}
-.nav-links li a{font-size:min(14px,1vw);letter-spacing:.08em;color:var(--ink);line-height:1.65em;opacity:0;animation:fadeUp .65s cubic-bezier(.16,1,.3,1) forwards;transition:opacity .2s;}
-.nav-links li:nth-child(1) a{animation-delay:.10s;}
-.nav-links li:nth-child(2) a{animation-delay:.16s;}
-.nav-links li:nth-child(3) a{animation-delay:.22s;}
-.nav-links li a:hover{opacity:.35!important;}
-.nav-ul{width:100%;height:1px;overflow:hidden;}
-.nav-ul span{display:block;width:100%;height:1px;background:var(--ink);opacity:.3;transform:translateX(100%);transition:transform .28s ease;}
-.nav-links li:hover .nav-ul span{transform:translateX(0);}
 
-/* ══════════════════════════════════════
-   S1 · HERO
-══════════════════════════════════════ */
-#hero{position:relative;width:100%;height:100dvh;display:flex;align-items:flex-end;overflow:hidden;}
-.hero-w{width:var(--w);margin:0 auto;display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:min(44px,3.2vw);}
-.hero-l .h-eyebrow{font-size:min(9px,.68vw);letter-spacing:.38em;text-transform:uppercase;color:var(--ink);opacity:.45;margin-bottom:min(20px,1.5vw);animation:fadeUp .6s .38s ease both;}
-.hero-l h1{font-family:"Roboto",sans-serif;font-weight:300;font-size:min(88px,6.2vw);line-height:.95;letter-spacing:-.01em;animation:fadeUp .9s .48s cubic-bezier(.16,1,.3,1) both;}
-.hero-l h1 em{display:block;font-style:italic;font-family:"Cormorant Garamond",serif;font-size:.72em;letter-spacing:.06em;color:var(--rose);margin-top:6px;}
-.hero-l .h-sub{margin-top:min(24px,1.8vw);font-size:min(11px,.82vw);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-mid);animation:fadeUp .6s .7s ease both;}
-.hero-r{display:flex;flex-direction:column;align-items:flex-end;gap:min(28px,2vw);}
-.hero-addr{font-size:min(10px,.75vw);line-height:2em;color:var(--ink-lo);text-align:right;animation:fadeUp .6s .62s ease both;}
-.scroll-row{display:flex;align-items:center;gap:min(7px,.55vw);animation:fadeUp .6s 1.05s ease both;}
-.scroll-row p{font-size:min(11px,.82vw);letter-spacing:.22em;text-transform:uppercase;color:var(--ink);line-height:1;}
-.s-arrow{display:flex;flex-direction:column;gap:2px;}
-.s-arrow i{display:block;width:min(14px,1vw);height:1px;background:var(--ink);animation:sarr 1.8s ease-in-out infinite;}
-.s-arrow i:nth-child(2){animation-delay:.18s;}
-.s-arrow i:nth-child(3){animation-delay:.36s;}
-@keyframes sarr{0%,100%{opacity:.25;transform:scaleX(.55);}60%{opacity:1;transform:scaleX(1);}}
-
-/* ══════════════════════════════════════
-   S2 · PROBLEM（米白底，痛点）
-══════════════════════════════════════ */
-#problem{
-  background:var(--cream);
-  padding:min(160px,11.1vw) 0 min(140px,9.7vw);
-  position:relative;z-index:2; /* 盖住 hero canvas 底层过渡 */
+/* 原生 cursor 在某些元素上会被覆盖，改为固定图片元素跟随鼠标，保证不消失 */
+*, *::before, *::after {
+  cursor: none !important;
 }
-.problem-w{width:var(--w);margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:min(80px,5.6vw);align-items:start;}
-/* 左：三问句 */
-.prob-questions{display:flex;flex-direction:column;gap:min(56px,3.9vw);}
-.prob-q{
-  font-family:"Roboto",sans-serif;font-weight:100;
-  line-height:1.2em;letter-spacing:-.01em;color:var(--ink);
+
+#site-cursor {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 36px; height: 36px;
+  z-index: 2147483647;
+  pointer-events: none;
+  background: url("assets/cursor-d.webp") 0 0 / contain no-repeat;
+  transform: translate(0, 0);
+  opacity: 1;
+  will-change: left, top, transform;
 }
-.prob-q:nth-child(1){font-size:min(52px,3.6vw);}
-.prob-q:nth-child(2){font-size:min(46px,3.2vw);opacity:.85;}
-.prob-q:nth-child(3){font-size:min(40px,2.8vw);opacity:.7;}
-/* 右：解法 */
-.prob-answer{padding-top:min(8px,.6vw);}
-.prob-tag{font-size:min(9px,.68vw);letter-spacing:.28em;text-transform:uppercase;color:var(--ink-lo);margin-bottom:min(20px,1.4vw);}
-.prob-headline{font-family:"Roboto",sans-serif;font-size:min(22px,1.55vw);font-weight:300;line-height:1.55em;color:var(--ink);margin-bottom:min(32px,2.2vw);}
-.prob-list{list-style:none;display:flex;flex-direction:column;gap:min(16px,1.1vw);}
-.prob-list li{display:flex;align-items:baseline;gap:min(12px,.9vw);font-size:min(15px,1.05vw);line-height:1.75em;color:var(--ink-mid);}
-.prob-list li::before{content:'→';color:var(--ink);opacity:.5;flex-shrink:0;font-weight:300;}
 
-/* ══════════════════════════════════════
-   S3 · WORKS（散落图片展示）
-══════════════════════════════════════ */
-#works{padding-top:min(200px,14vw);padding-bottom:min(360px,25vw);position:relative;min-height:300vh;}
-.works-w{width:var(--w);margin:0 auto;}
-.works-header{display:flex;align-items:flex-start;justify-content:space-between;padding-top:min(64px,4.5vw);}
-.works-title{font-family:"Roboto",sans-serif;font-size:min(60px,4.2vw);font-weight:400;letter-spacing:-.02em;line-height:1em;}
-.works-cats{list-style:none;display:flex;flex-direction:column;align-items:flex-end;gap:min(3px,.24vw);padding-top:min(4px,.3vw);}
-.works-cats li a{font-size:min(14px,1vw);letter-spacing:.06em;line-height:1.85em;color:var(--ink);transition:opacity .2s;}
-.works-cats li a:hover{opacity:.38;}
-.works-cats li a::after{content:'';display:inline-block;width:0;height:1px;background:var(--ink);opacity:.4;transition:width .28s;vertical-align:middle;margin-left:5px;}
-.works-cats li a:hover::after{width:18px;}
-
-.cat-section{position:relative;min-height:100vh;display:flex;align-items:center;margin-top:min(200px,14vw);}
-.cat-title{font-family:"Roboto",sans-serif;font-weight:100;font-size:min(90px,6.3vw);line-height:1em;letter-spacing:-.02em;color:var(--ink);white-space:nowrap;flex-shrink:0;width:min(560px,39vw);}
-.cat-meta{margin-top:min(18px,1.3vw);}
-.cat-meta p{font-size:min(14px,1vw);letter-spacing:.06em;line-height:2em;color:var(--ink-mid);}
-.cat-imgs{position:absolute;right:0;top:50%;width:min(640px,45vw);transform:translateY(-48%);}
-.simg{position:absolute;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1);transition:box-shadow .3s;}
-.simg img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .6s cubic-bezier(.16,1,.3,1);}
-.simg:hover{box-shadow:0 12px 40px rgba(0,0,0,.18);}
-.simg:hover img{transform:scale(1.04);}
-/* Section 1 */
-.s1-i1{width:min(220px,15.3vw);height:min(300px,20.8vw);top:0;right:min(200px,13.9vw);transform:rotate(2deg);}
-.s1-i2{width:min(180px,12.5vw);height:min(240px,16.7vw);top:min(200px,14vw);right:min(380px,26.4vw);transform:rotate(-3.5deg);}
-.s1-i3{width:min(180px,12.5vw);height:min(240px,16.7vw);top:min(180px,12.5vw);right:0;transform:rotate(1.5deg);}
-.s1-i4{width:min(160px,11.1vw);height:min(220px,15.3vw);top:min(380px,26.4vw);right:min(140px,9.7vw);transform:rotate(-2deg);}
-.s1-i5{width:min(150px,10.4vw);height:min(200px,13.9vw);top:min(320px,22.2vw);right:min(320px,22.2vw);transform:rotate(4deg);}
-/* Section 2 */
-.s2-i1{width:min(240px,16.7vw);height:min(320px,22.2vw);top:0;right:min(160px,11.1vw);transform:rotate(-2.5deg);}
-.s2-i2{width:min(180px,12.5vw);height:min(240px,16.7vw);top:min(220px,15.3vw);right:min(360px,25vw);transform:rotate(3deg);}
-.s2-i3{width:min(170px,11.8vw);height:min(230px,16vw);top:min(200px,13.9vw);right:0;transform:rotate(-1.5deg);}
-.s2-i4{width:min(150px,10.4vw);height:min(200px,13.9vw);top:min(400px,27.8vw);right:min(200px,13.9vw);transform:rotate(2.5deg);}
-/* Section 3 */
-.s3-i1{width:min(220px,15.3vw);height:min(300px,20.8vw);top:min(40px,2.8vw);right:min(220px,15.3vw);transform:rotate(1.8deg);}
-.s3-i2{width:min(180px,12.5vw);height:min(240px,16.7vw);top:min(240px,16.7vw);right:min(380px,26.4vw);transform:rotate(-3deg);}
-.s3-i3{width:min(170px,11.8vw);height:min(230px,16vw);top:min(200px,13.9vw);right:0;transform:rotate(2.2deg);}
-.s3-i4{width:min(150px,10.4vw);height:min(200px,13.9vw);top:min(380px,26.4vw);right:min(160px,11.1vw);transform:rotate(-1.8deg);}
-
-/* VIEW ALL → 进入体验 */
-#view-all{padding:min(160px,11.1vw) 0 min(200px,13.9vw);display:flex;flex-direction:column;align-items:center;}
-.va-link{display:flex;align-items:flex-start;gap:min(8px,.6vw);}
-.va-text{font-family:"Roboto",sans-serif;font-weight:700;font-size:min(70px,4.9vw);letter-spacing:.02em;line-height:1em;color:var(--ink);transition:opacity .3s;}
-.va-link:hover .va-text{opacity:.45;}
-.va-count{font-size:min(13px,.95vw);font-weight:300;color:var(--ink-mid);margin-top:min(6px,.45vw);line-height:1;}
-.va-circle{width:min(36px,2.5vw);height:min(36px,2.5vw);border-radius:50%;border:1px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:min(14px,1vw);margin-top:min(4px,.3vw);transition:background .3s,color .3s;flex-shrink:0;}
-.va-link:hover .va-circle{background:var(--ink);color:#fff;}
-.va-line{position:relative;width:min(800px,55.6vw);height:1px;margin-top:min(8px,.6vw);}
-.va-line::before{content:'';position:absolute;inset:0;background:rgba(26,26,26,.15);}
-.va-line::after{content:'';position:absolute;inset:0;background:var(--ink);transform:translateX(-100%);transition:transform .5s cubic-bezier(.16,1,.3,1);}
-.va-link:hover .va-line::after{transform:translateX(0);}
-
-/* ══════════════════════════════════════
-   S4 · ENTRY（双入口，深灰底）
-══════════════════════════════════════ */
-#entry{
-  background:var(--dark);
-  padding:min(120px,8.3vw) 0 min(140px,9.7vw);
-  position:relative;overflow:hidden;
+@media (min-resolution: 2dppx) {
+  #site-cursor { background-image: url("assets/cursor-d@2x.webp"); }
 }
-#entry::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;}
-.entry-w{position:relative;z-index:1;width:var(--w);margin:0 auto;}
-.entry-eyebrow{font-size:min(9px,.68vw);letter-spacing:.36em;text-transform:uppercase;color:var(--rose);margin-bottom:min(48px,3.3vw);text-align:center;}
-.entry-cards{display:grid;grid-template-columns:1fr 1fr;gap:min(24px,1.7vw);}
-/* 单张卡片 */
-.ecard{
-  position:relative;overflow:hidden;
-  background:rgba(255,255,255,.055);
-  border:1px solid rgba(255,255,255,.12);
-  padding:min(48px,3.3vw) min(44px,3.1vw) min(40px,2.8vw);
-  transition:transform .4s cubic-bezier(.16,1,.3,1),border-color .3s,background .3s;
+
+body.cursor-press #site-cursor {
+  transform: translate(0, 0) scale(0.96);
 }
-.ecard:hover{transform:translateY(-8px);border-color:rgba(255,255,255,.32);background:rgba(255,255,255,.085);}
-/* 图标区 */
-.ecard-icon{
-  width:min(52px,3.6vw);height:min(52px,3.6vw);
-  border-radius:min(14px,1vw);
-  border:1px solid rgba(255,255,255,.15);
-  display:flex;align-items:center;justify-content:center;
-  margin-bottom:min(28px,2vw);
-  font-size:min(24px,1.7vw);
-  transition:border-color .3s;
+
+/* ─── 第一屏 ─── */
+#s1 {
+  position: relative; width: 100%; height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; background: transparent;
 }
-.eu .ecard-icon{background:rgba(196,120,138,.12);border-color:rgba(196,120,138,.25);}
-.ea .ecard-icon{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);}
-.ecard:hover .ecard-icon{border-color:rgba(255,255,255,.35);}
-/* 标题 */
-.ecard-title{font-family:"Roboto",sans-serif;font-size:min(40px,2.8vw);font-weight:300;line-height:1em;letter-spacing:-.01em;color:#fff;margin-bottom:min(16px,1.1vw);}
-.eu .ecard-title{color:var(--rose);}
-/* 描述 */
-.ecard-desc{font-size:min(14px,1vw);line-height:1.85em;color:rgba(255,255,255,.55);margin-bottom:min(32px,2.2vw);}
-/* CTA */
-.ecard-cta{display:flex;align-items:center;gap:min(8px,.6vw);font-size:min(12px,.88vw);letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.45);transition:color .3s,gap .3s;}
-.ecard:hover .ecard-cta{gap:min(14px,1vw);}
-.eu:hover .ecard-cta{color:var(--rose);}
-.ea:hover .ecard-cta{color:#fff;}
-/* 底部引导文字 */
-.entry-hint{margin-top:min(24px,1.7vw);text-align:center;font-size:min(11px,.8vw);letter-spacing:.12em;color:rgba(255,255,255,.22);}
 
-/* ══════════════════════════════════════
-   S5 · ABOUT
-══════════════════════════════════════ */
-#about{padding:min(160px,11.1vw) 0 min(120px,8.3vw);border-top:1px solid rgba(26,26,26,.08);}
-.about-w{width:var(--w);margin:0 auto;}
-.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:min(80px,5.6vw);align-items:end;}
-.about-l .ab-principle{font-size:min(9px,.68vw);letter-spacing:.28em;text-transform:uppercase;color:var(--ink-lo);margin-bottom:min(20px,1.4vw);}
-.about-l .ab-big{font-family:"Cormorant Garamond",serif;font-style:italic;font-size:min(100px,6.95vw);font-weight:300;line-height:1em;letter-spacing:-.02em;white-space:nowrap;color:var(--ink);}
-.about-l .ab-since{margin-top:min(44px,3.1vw);display:flex;align-items:baseline;gap:min(14px,1vw);}
-.about-l .ab-yr{font-size:min(48px,3.35vw);font-weight:300;letter-spacing:-.04em;line-height:1em;}
-.about-l .ab-lb{font-size:min(10px,.75vw);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-lo);}
-.about-r .ab-tag{font-size:min(9px,.68vw);letter-spacing:.28em;text-transform:uppercase;color:var(--ink-lo);margin-bottom:min(18px,1.3vw);}
-.about-r .ab-body{font-size:min(15px,1.05vw);line-height:1.95em;color:var(--ink-mid);}
-.about-r .ab-body+.ab-body{margin-top:min(24px,1.7vw);}
+/* 细腻纸纹点阵 */
+#s1::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(160,128,96,0.10) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+  z-index: 0;
+}
 
-/* ══════════════════════════════════════
-   FOOTER
-══════════════════════════════════════ */
-footer{padding:min(52px,3.6vw) 0;border-top:1px solid rgba(26,26,26,.08);}
-.foot-w{width:var(--w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;}
-.foot-brand{font-size:min(14px,1vw);font-weight:300;letter-spacing:.2em;color:var(--ink);}
-.foot-copy{font-size:min(10px,.75vw);letter-spacing:.12em;color:var(--ink-lo);}
+/* 柔和光晕 */
+.glow-layer {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+}
+.glow-layer::before {
+  content: '';
+  position: absolute;
+  width: 560px; height: 560px;
+  left: 50%; top: 50%; transform: translate(-50%, -52%);
+  background: radial-gradient(ellipse, rgba(212,180,200,0.13) 0%, transparent 65%);
+  border-radius: 50%;
+  animation: breathe 7s ease-in-out infinite;
+}
+.glow-layer::after {
+  content: '';
+  position: absolute;
+  width: 320px; height: 220px;
+  left: 50%; top: 54%; transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse, rgba(160,128,96,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: breathe 7s 2.5s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50%       { opacity: 1;   transform: translate(-50%, -50%) scale(1.07); }
+}
 
-/* ══════════════════════════════════════
-   Reveal & keyframes
-══════════════════════════════════════ */
-.rv{opacity:0;transform:translateY(26px);transition:opacity .85s cubic-bezier(.16,1,.3,1),transform .85s cubic-bezier(.16,1,.3,1);}
-.rv.in{opacity:1;transform:none;}
-.simg{opacity:0;transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1);}
-.simg.in{opacity:1;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+/* 品牌 nav */
+.nav {
+  position: absolute; top: 0; left: 0; right: 0;
+  z-index: 20;
+  padding: 32px 48px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-brand {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 22px; font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--text-hi);
+}
+.nav-brand span { color: var(--gold); }
+.nav-sub {
+  font-size: 10px; letter-spacing: 0.22em;
+  color: var(--text-mid); text-transform: uppercase;
+}
 
-<<<<<<< Updated upstream
+/* ─── 顶部滚动进度条 ─── */
+#scroll-progress {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 2px;
+  background: rgba(160,128,96,0.12);
+  z-index: 9999; pointer-events: none;
+}
+#scroll-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold) 0%, var(--rose) 100%);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform .1s linear;
+  border-radius: 0 2px 2px 0;
+}
+
+/* 中央文案 */
+.hero {
+  position: relative; z-index: 15;
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+}
+.hero-eyebrow {
+  font-size: 9px; letter-spacing: 0.38em; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 18px;
+  opacity: 0; animation: rise .8s .2s cubic-bezier(.16,1,.3,1) forwards;
+  display: none; /* 已删除 */
+}
+.hero h1 {
+  font-family: "Cormorant Garamond", serif;
+  font-size: clamp(52px, 8vw, 96px);
+  font-weight: 300; line-height: 0.92;
+  letter-spacing: 0.06em;
+  color: var(--text-hi);
+  opacity: 0; animation: rise .9s .35s cubic-bezier(.16,1,.3,1) forwards;
+}
+.hero h1 em {
+  font-style: italic; color: var(--rose);
+  display: block; font-size: 0.68em; letter-spacing: 0.12em; margin-top: 4px;
+}
+.hero-line {
+  width: 1px; height: 40px;
+  background: linear-gradient(180deg, var(--gold-dim), transparent);
+  margin: 24px auto;
+  opacity: 0; animation: rise .6s .6s ease forwards;
+}
+/* hero-sub 改为三个入口链接行 */
+.hero-sub {
+  display: flex; align-items: center; gap: 0;
+  opacity: 0; animation: rise .6s .7s ease forwards;
+  pointer-events: auto;
+}
+.hero-entry {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; letter-spacing: 0.16em;
+  color: var(--text-mid); text-decoration: none;
+  padding: 8px 18px;
+  border-radius: 99px;
+  transition: color .2s, background .2s;
+  position: relative;
+}
+.hero-entry:hover {
+  color: var(--text-hi);
+  background: rgba(160,128,96,0.08);
+}
+.hero-entry i { font-size: 13px; opacity: 0.7; }
+.hero-entry-sep {
+  width: 1px; height: 12px;
+  background: rgba(42,32,24,0.14);
+  flex-shrink: 0;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* scroll 指示 */
+.scroll-hint {
+  position: absolute; bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 20; display: flex; flex-direction: column;
+  align-items: center; gap: 8px;
+  opacity: 0; animation: fadeIn 1s 1.4s ease forwards;
+}
+.scroll-hint span {
+  font-size: 8px; letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--text-lo);
+}
+.scroll-pill {
+  width: 20px; height: 32px;
+  border: 1px solid rgba(42,32,24,0.18);
+  border-radius: 10px;
+  position: relative; overflow: hidden;
+}
+.scroll-pill::after {
+  content: '';
+  position: absolute; left: 50%; top: 6px;
+  width: 3px; height: 6px; border-radius: 2px;
+  background: var(--gold);
+  transform: translateX(-50%);
+  animation: scrollDot 2s 2s ease infinite;
+}
+@keyframes scrollDot {
+  0%   { top: 6px;  opacity: 1; }
+  80%  { top: 18px; opacity: 0; }
+  100% { top: 6px;  opacity: 0; }
+}
+@keyframes fadeIn { to { opacity: 1; } }
+
 /* ─── 甲片形状：SVG clipPath objectBoundingBox，贝塞尔曲线，完美指甲轮廓 ─── */
 /*
   用内联 SVG 定义指甲轮廓：
@@ -247,13 +267,13 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
   pointer-events: all;
   cursor: none;
   z-index: 6;
-  will-change: transform;
+  will-change: transform, opacity;
   overflow: hidden;
   clip-path: url(#nail-shape);
   -webkit-clip-path: url(#nail-shape);
   /* 浅色背景：阴影用暖棕，柔和 */
   filter: drop-shadow(0 3px 12px rgba(120,90,60,0.20)) drop-shadow(0 1px 3px rgba(120,90,60,0.12));
-  transition: filter .2s;
+  transition: filter .2s, opacity .6s ease;
 }
 /* 统一高光层 */
 .chip::after {
@@ -348,39 +368,22 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
   z-index: 1;
 }
 
-/* ─── 第二屏 ─── */
+/* ─── 最终入口屏 ─── */
 #s2 {
   position: relative; width: 100%; min-height: 100vh;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 80px 24px;
-  overflow: hidden;
+  overflow: hidden; background: transparent;
 }
 #s2::before {
   content: '';
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 46% 28% at 50% 20%, rgba(186,160,220,0.16) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 30% at 18% 85%, rgba(245,220,160,0.18) 0%, transparent 65%),
-    radial-gradient(ellipse 34% 26% at 82% 78%, rgba(186,160,220,0.10) 0%, transparent 64%),
-    linear-gradient(180deg,
-      #f7f4ef 0%,
-      #f5efe2 38%,
-      #efe5cf 72%,
-      #e8dcc2 100%
-    );
-  z-index: 0;
-}
-/* 柔和过渡层：米白起步，浅紫薄雾衔接鼠标色 */
-#s2::after {
-  content: '';
-  position: absolute;
-  top: -1px; left: 0; right: 0; height: 220px;
-  background:
-    radial-gradient(ellipse 44% 44% at 50% 40%, rgba(186,160,220,0.12) 0%, transparent 70%),
-    linear-gradient(180deg, #f7f4ef 0%, rgba(247,244,239,0.84) 48%, rgba(247,244,239,0) 100%);
-  z-index: 1;
-  pointer-events: none;
+    radial-gradient(ellipse 46% 28% at 50% 20%, rgba(186,160,220,0.10) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 30% at 18% 85%, rgba(245,220,160,0.10) 0%, transparent 65%),
+    radial-gradient(ellipse 34% 26% at 82% 78%, rgba(186,160,220,0.06) 0%, transparent 64%);
+  z-index: 0; pointer-events: none;
 }
 
 .s2-inner {
@@ -422,14 +425,14 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
   color: var(--text-mid); margin-top: 16px;
 }
 
-/* 首页入口卡片 */
+/* 入口卡片行 */
 .entry-row {
   display: flex; gap: 16px;
   flex-wrap: wrap; justify-content: center; width: 100%;
 }
 .ecard {
   position: relative; overflow: hidden;
-  flex: 1; min-width: 220px; max-width: 320px;
+  flex: 1; min-width: 200px; max-width: 280px;
   background: rgba(255,255,255,0.66);
   border: 1px solid rgba(141,121,184,0.14);
   border-radius: 24px; padding: 32px 28px;
@@ -442,7 +445,6 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
     border-color .3s,
     box-shadow .3s;
 }
-/* 卡片内光晕 */
 .ecard::before {
   content: '';
   position: absolute; top: -40%; left: -20%;
@@ -454,7 +456,7 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 }
 .eu::before { background: radial-gradient(ellipse, rgba(141,121,184,0.12) 0%, transparent 65%); }
 .ea::before { background: radial-gradient(ellipse, rgba(210,184,132,0.11) 0%, transparent 65%); }
-.eo::before { background: radial-gradient(ellipse, rgba(167,146,216,0.14) 0%, transparent 65%); }
+.eo::before { background: radial-gradient(ellipse, rgba(196,120,138,0.11) 0%, transparent 65%); }
 .ecard:hover { transform: translateY(-10px); border-color: rgba(141,121,184,0.28); box-shadow: 0 16px 48px rgba(130,100,70,0.10), 0 0 0 1px rgba(141,121,184,0.08); }
 .ecard:hover::before { opacity: 1; }
 
@@ -468,11 +470,11 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 }
 .eu .ico-wrap { background: rgba(141,121,184,0.12); border-color: rgba(141,121,184,0.22); }
 .ea .ico-wrap { background: rgba(210,184,132,0.12); border-color: rgba(210,184,132,0.20); }
-.eo .ico-wrap { background: rgba(167,146,216,0.12); border-color: rgba(167,146,216,0.24); }
+.eo .ico-wrap { background: rgba(196,120,138,0.12); border-color: rgba(196,120,138,0.22); }
 .ecard .ico-wrap i { font-size: 22px; }
 .eu .ico-wrap i { color: #8d79b8; }
 .ea .ico-wrap i { color: #9a7a52; }
-.eo .ico-wrap i { color: #8f76c7; }
+.eo .ico-wrap i { color: #c4788a; }
 
 .ecard .ttl {
   font-family: "Noto Serif SC", serif;
@@ -481,7 +483,7 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 }
 .eu .ttl { color: #8d79b8; }
 .ea .ttl { color: #9a7a52; }
-.eo .ttl { color: #8f76c7; }
+.eo .ttl { color: #c4788a; }
 
 .ecard .dsc {
   font-size: 12px; color: var(--text-mid);
@@ -496,7 +498,271 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 .ecard:hover .arr { gap: 9px; }
 .eu:hover .arr { color: #8d79b8; }
 .ea:hover .arr { color: #9a7a52; }
-.eo:hover .arr { color: #8f76c7; }
+.eo:hover .arr { color: #c4788a; }
+
+/* ─── 功能介绍屏公共样式 ─── */
+.feat-section {
+  position: relative; width: 100%; min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 96px 24px;
+  overflow: hidden;
+}
+
+/* 各屏背景透明，继承 body 全局渐变 */
+.feat-section::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 50% 40% at 80% 20%, rgba(196,120,138,0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 35% at 15% 80%, rgba(141,121,184,0.05) 0%, transparent 70%);
+  z-index: 0; pointer-events: none;
+}
+
+.feat-inner {
+  position: relative; z-index: 2;
+  max-width: 960px; width: 100%;
+  display: flex; align-items: center; gap: 72px;
+}
+.feat-inner.reverse { flex-direction: row-reverse; }
+
+/* 左侧文案 */
+.feat-copy { flex: 0 0 380px; }
+.feat-num {
+  font-size: 10px; letter-spacing: 0.30em; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 16px;
+}
+.feat-copy h2 {
+  font-family: "Cormorant Garamond", serif;
+  font-size: clamp(32px, 4.5vw, 50px);
+  font-weight: 300; line-height: 1.2;
+  color: var(--text-hi); margin-bottom: 18px;
+  letter-spacing: 0.04em;
+}
+.feat-copy h2 em { font-style: italic; color: var(--rose); }
+.feat-copy > p {
+  font-family: "Noto Serif SC", serif;
+  font-size: 14px; line-height: 2;
+  color: var(--text-mid); letter-spacing: 0.04em;
+  font-weight: 300;
+}
+
+/* 功能点列表 */
+.feat-points { margin-top: 28px; display: flex; flex-direction: column; gap: 14px; }
+.feat-point {
+  display: flex; align-items: flex-start; gap: 12px;
+  opacity: 0.7; transition: opacity .2s;
+}
+.feat-point:hover { opacity: 1; }
+.fpdot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--gold); flex-shrink: 0; margin-top: 7px;
+}
+.feat-point p {
+  font-size: 13px; color: var(--text-mid); line-height: 1.8;
+}
+.feat-point p strong { color: var(--text-hi); font-weight: 500; font-size: 13px; }
+
+/* 右侧演示卡片 */
+.feat-demo {
+  flex: 1; min-width: 0;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(160,128,96,0.12);
+  border-radius: 20px;
+  padding: 24px;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 32px rgba(120,90,60,0.08);
+}
+
+.demo-label {
+  font-size: 9px; letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--text-lo); margin-bottom: 6px;
+}
+.demo-title {
+  font-size: 13px; font-weight: 500; color: var(--text-hi);
+  margin-bottom: 14px;
+}
+
+/* 试戴展示：横向一行四张图 */
+.demo-grid-wrap {
+  width: 100%;
+}
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.demo-cell {
+  background: var(--bg2); border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 3 / 4;
+}
+/* 图片底部渐变遮罩 + 款式名标签 */
+.demo-cell::after {
+  content: attr(data-label);
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 6px 8px 7px;
+  background: linear-gradient(transparent, rgba(30,20,15,0.55));
+  font-size: 9px; letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.90);
+  text-align: center;
+  pointer-events: none;
+}
+.demo-nail {
+  width: 36px; height: 58px;
+  border-radius: 50% 50% 40% 40% / 55% 55% 45% 45%;
+  box-shadow: 0 2px 8px rgba(120,90,60,0.18);
+}
+
+/* 微调控件演示 */
+.demo-tabs {
+  display: flex; gap: 6px; margin-bottom: 10px;
+}
+.demo-tab {
+  font-size: 10px; padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid rgba(160,128,96,0.22);
+  color: var(--text-mid);
+}
+.demo-tab.on {
+  background: rgba(255,255,255,0.8);
+  border-color: rgba(160,128,96,0.42);
+  color: var(--text-hi);
+}
+.demo-swatches {
+  display: flex; gap: 6px; margin-bottom: 12px;
+}
+.demo-sw {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid rgba(160,128,96,0.15);
+  transition: transform .15s;
+}
+.demo-sw.on {
+  outline: 2px solid rgba(160,128,96,0.5);
+  outline-offset: 2px;
+}
+.demo-input {
+  background: rgba(247,244,239,0.8);
+  border: 1px solid rgba(160,128,96,0.16);
+  border-radius: 8px; padding: 7px 10px;
+  font-size: 10px; color: var(--text-mid);
+}
+
+/* AI 趋势 Pipeline */
+.demo-pipeline {
+  display: flex; align-items: center; gap: 4px;
+  flex-wrap: wrap; margin-bottom: 12px;
+}
+.pipe-step {
+  font-size: 9px; padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(247,244,239,0.9);
+  border: 1px solid rgba(160,128,96,0.15);
+  color: var(--text-mid);
+}
+.pipe-arrow { font-size: 10px; color: var(--text-lo); }
+
+.demo-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 5px; margin-bottom: 12px;
+}
+.demo-stat {
+  background: rgba(247,244,239,0.9);
+  border: 1px solid rgba(160,128,96,0.12);
+  border-radius: 7px; padding: 6px 4px; text-align: center;
+}
+.demo-stat-val {
+  font-size: 14px; font-weight: 500; color: var(--text-hi);
+}
+.demo-stat-val.green { color: #5a9a70; }
+.demo-stat-lbl { font-size: 9px; color: var(--text-lo); margin-top: 2px; }
+
+/* 趋势卡片列表 */
+.demo-trend-list { display: flex; flex-direction: column; gap: 7px; }
+.demo-trend {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(247,244,239,0.8);
+  border: 1px solid rgba(160,128,96,0.12);
+  border-radius: 10px; padding: 9px 12px;
+}
+.demo-trend.hi { border-color: rgba(141,121,184,0.30); }
+.trend-score {
+  font-size: 17px; font-weight: 500; color: var(--text-hi);
+  width: 40px; flex-shrink: 0; text-align: center;
+}
+.trend-info { flex: 1; }
+.trend-name { font-size: 11px; font-weight: 500; color: var(--text-hi); margin-bottom: 3px; }
+.trend-tags { display: flex; gap: 5px; align-items: center; }
+.trend-pill {
+  font-size: 9px; padding: 1px 7px; border-radius: 99px; border: 1px solid;
+}
+.trend-pill.up { color: #5a9a70; border-color: rgba(90,154,112,0.3); }
+.trend-pill.mid { color: #8878b0; border-color: rgba(136,120,176,0.3); }
+.trend-pill.peak { color: #b07830; border-color: rgba(176,120,48,0.3); }
+.trend-meta { font-size: 9px; color: var(--text-lo); }
+.trend-action {
+  font-size: 9px; padding: 2px 8px; border-radius: 99px;
+  border: 1px solid rgba(160,128,96,0.28);
+  color: var(--text-mid); flex-shrink: 0;
+}
+
+/* 商户工作台演示 */
+.demo-push-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.demo-push {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(247,244,239,0.8);
+  border: 1px solid rgba(160,128,96,0.12);
+  border-radius: 10px; padding: 9px 12px;
+}
+.push-thumb {
+  width: 38px; height: 38px; border-radius: 8px;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: var(--text-lo);
+}
+.push-info { flex: 1; }
+.push-name { font-size: 11px; font-weight: 500; color: var(--text-hi); margin-bottom: 2px; }
+.push-meta { font-size: 9px; color: var(--text-lo); }
+.push-badge {
+  font-size: 9px; padding: 2px 7px; border-radius: 99px;
+  border: 1px solid;
+}
+.push-badge.up { color: #5a9a70; border-color: rgba(90,154,112,0.3); background: rgba(90,154,112,0.07); }
+.push-badge.mid { color: #b07830; border-color: rgba(176,120,48,0.3); background: rgba(176,120,48,0.07); }
+.demo-insight {
+  background: rgba(247,244,239,0.9);
+  border: 1px solid rgba(160,128,96,0.14);
+  border-radius: 10px; padding: 10px 14px;
+}
+.insight-hdr { font-size: 10px; font-weight: 500; color: var(--text-hi); margin-bottom: 6px; }
+.insight-line { font-size: 10px; color: var(--text-mid); line-height: 1.7; }
+.insight-line span.up { color: #5a9a70; font-weight: 500; }
+.insight-line span.warn { color: #b07830; font-weight: 500; }
+.insight-line span.down { color: #c4788a; font-weight: 500; }
+
+/* 分隔线（背景统一后仅作极淡装饰） */
+.section-divider {
+  width: 100%; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(160,128,96,0.08) 30%, rgba(160,128,96,0.08) 70%, transparent 100%);
+  position: relative; z-index: 2;
+}
+
+/* ─── 入场动画：用 class 控制 ─── */
+.anim-hidden {
+  opacity: 0;
+  transform: translateY(20px);
+  /* 确保透明时依然可接收点击事件（<a> 链接不受影响） */
+  pointer-events: auto;
+}
+.anim-hidden.anim-in {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  transition: opacity .75s ease, transform .75s cubic-bezier(.16,1,.3,1);
+}
+.anim-hidden.anim-d1.anim-in { transition-delay: 0.10s; }
+.anim-hidden.anim-d2.anim-in { transition-delay: 0.20s; }
+.anim-hidden.anim-d3.anim-in { transition-delay: 0.30s; }
+.anim-hidden.anim-d4.anim-in { transition-delay: 0.40s; }
 
 /* 页脚 */
 .bfooter {
@@ -506,391 +772,584 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 }
 
 /* ─── 响应式 ─── */
+@media (max-width: 860px) {
+  .feat-inner, .feat-inner.reverse {
+    flex-direction: column; gap: 40px;
+  }
+  .feat-copy { flex: none; width: 100%; }
+}
 @media (max-width: 640px) {
   .nav { padding: 24px 24px; }
   .nav-sub { display: none; }
   .hero h1 { font-size: 52px; }
   .s2-headline h2 { font-size: 28px; }
-  .ecard { min-width: 160px; padding: 24px 20px; }
-=======
-/* ══════════════════════════════════════
-   Mobile
-══════════════════════════════════════ */
-@media(max-width:768px){
-  .nav-links{display:none;}
-  .hero-l h1{font-size:54px;}
-  .hero-r .hero-addr{display:none;}
-  .problem-w{grid-template-columns:1fr;gap:48px;}
-  .prob-q:nth-child(1){font-size:36px;}
-  .prob-q:nth-child(2){font-size:32px;}
-  .prob-q:nth-child(3){font-size:28px;}
-  #works{min-height:unset;}
-  .cat-section{flex-direction:column;align-items:flex-start;min-height:unset;margin-top:80px;padding-bottom:320px;}
-  .cat-title{font-size:40px;width:auto;}
-  .cat-imgs{position:relative;right:auto;top:auto;transform:none;width:100%;height:360px;margin-top:24px;}
-  .va-text{font-size:36px;}
-  .entry-cards{grid-template-columns:1fr;gap:16px;}
-  .ecard-title{font-size:32px;}
-  .about-grid{grid-template-columns:1fr;gap:40px;}
-  .about-l .ab-big{font-size:52px;white-space:normal;}
-  .foot-w{flex-direction:column;gap:8px;align-items:flex-start;}
->>>>>>> Stashed changes
+  .ecard { min-width: 140px; padding: 24px 18px; }
+  .feat-section { padding: 72px 20px; }
 }
 </style>
 </head>
 <body>
 
-<div id="cur"></div>
-<div id="cur-r"></div>
-<canvas id="bg-canvas"></canvas>
+<div id="site-cursor" aria-hidden="true"></div>
 
-<!-- ══════════ NAV ══════════ -->
-<header>
-  <div class="nav">
-    <a href="/" class="nav-logo">Prism<sup>®</sup></a>
-    <ul class="nav-links">
-      <li><a href="#works">WORKS</a><div class="nav-ul"><span></span></div></li>
-      <li><a href="#about">ABOUT US</a><div class="nav-ul"><span></span></div></li>
-      <li><a href="#entry">CONTACT</a><div class="nav-ul"><span></span></div></li>
-    </ul>
-  </div>
-</header>
+<!-- 顶部滚动进度条 -->
+<div id="scroll-progress"><div id="scroll-progress-bar"></div></div>
 
-<main>
+<!-- SVG clipPath：真实指甲轮廓，objectBoundingBox 自适应任意尺寸 -->
+<svg class="nail-clip-def" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="nail-shape" clipPathUnits="objectBoundingBox">
+      <!--
+        指甲轮廓（0~1 坐标）：
+        顶弧饱满（控制点 cy=-0.2 使顶端鼓出）
+        两侧从 0.14/0.86 收窄到 0.04/0.96 再到 0.14/0.86
+        底端平收到 0.22~0.78
+      -->
+      <path d="
+        M 0.50, 0.00
+        C 0.28,-0.04  0.04, 0.10  0.04, 0.34
+        C 0.04, 0.60  0.10, 0.80  0.20, 0.92
+        C 0.28, 1.00  0.72, 1.00  0.80, 0.92
+        C 0.90, 0.80  0.96, 0.60  0.96, 0.34
+        C 0.96, 0.10  0.72,-0.04  0.50, 0.00
+        Z
+      "/>
+    </clipPath>
+  </defs>
+</svg>
 
-<!-- ══════════ S1 · HERO ══════════ -->
-<section id="hero">
-  <div class="hero-w">
-    <div class="hero-l">
-      <div class="h-eyebrow">art direction / design / AI engineering</div>
-      <h1>Nail<em>Art Studio</em></h1>
-      <p class="h-sub">上传手图 · AI 分析 · 精准推荐</p>
-    </div>
-    <div class="hero-r">
-      <p class="hero-addr">AI Nail Art<br>Virtual Try-On<br>2026</p>
-      <div class="scroll-row">
-        <p>SCROLL</p>
-        <div class="s-arrow"><i></i><i></i><i></i></div>
-      </div>
-    </div>
-  </div>
-</section>
 
-<!-- ══════════ S2 · PROBLEM ══════════ -->
-<section id="problem">
-  <div class="problem-w">
+<!-- ═══════ 第一屏 ═══════ -->
+<section id="s1">
+  <div class="glow-layer"></div>
 
-    <!-- 左：三个问句 -->
-    <div class="prob-questions">
-      <p class="prob-q rv">
-        去美甲门店，<br>不知道选哪款？
-      </p>
-      <p class="prob-q rv" style="transition-delay:.12s">
-        选完之后，<br>总是后悔了？
-      </p>
-      <p class="prob-q rv" style="transition-delay:.24s">
-        美甲师推荐的，<br>真的适合你吗？
-      </p>
-    </div>
+  <nav class="nav">
+    <div class="nav-brand">Prism</div>
+    <div class="nav-sub">AI Nail Art Studio</div>
+  </nav>
 
-    <!-- 右：AI 解法 -->
-    <div class="prob-answer rv" style="transition-delay:.1s">
-      <p class="prob-tag">[ solution ]</p>
-      <p class="prob-headline">
-        Prism 用 AI 替你回答<br>这三个问题。
-      </p>
-      <ul class="prob-list">
-        <li>基于你肤色的专属色系推荐</li>
-        <li>适合你手型的款式智能筛选</li>
-        <li>当前季节 / 场景的搭配建议</li>
-        <li>上传手图，30 秒出结果</li>
-      </ul>
-    </div>
-
-  </div>
-</section>
-
-<!-- ══════════ S3 · WORKS ══════════ -->
-<section id="works">
-  <div class="works-w">
-
-    <div class="works-header rv">
-      <h2 class="works-title">WORKS</h2>
-      <ul class="works-cats">
-        <li><a href="user/index.html">纯色 Solid</a></li>
-        <li><a href="user/index.html">法式 French</a></li>
-        <li><a href="user/index.html">猫眼 Cat Eye</a></li>
-        <li><a href="user/index.html">渐变 Gradient</a></li>
-        <li><a href="user/index.html">大理石 Marble</a></li>
-      </ul>
-    </div>
-
-    <!-- 分类 1 -->
-    <div class="cat-section rv" style="transition-delay:.08s">
-      <div>
-        <div class="cat-title">nail<br>direction</div>
-        <div class="cat-meta">
-          <p>AI 虚拟试戴</p>
-          <p>手型分析</p>
-        </div>
-      </div>
-      <div class="cat-imgs" style="height:min(580px,40.3vw)">
-        <a class="simg s1-i1" href="user/index.html" style="transition-delay:.04s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=440&h=600&q=82&auto=format&fit=crop" alt="nail art 1" loading="lazy">
-        </a>
-        <a class="simg s1-i2" href="user/index.html" style="transition-delay:.12s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=360&h=480&q=82&auto=format&fit=crop&crop=top" alt="nail art 2" loading="lazy">
-        </a>
-        <a class="simg s1-i3" href="user/index.html" style="transition-delay:.20s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=360&h=480&q=82&auto=format&fit=crop&crop=bottom" alt="nail art 3" loading="lazy">
-        </a>
-        <a class="simg s1-i4" href="user/index.html" style="transition-delay:.28s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=300&h=400&q=82&auto=format&fit=crop&crop=left" alt="nail art 4" loading="lazy">
-        </a>
-        <a class="simg s1-i5" href="user/index.html" style="transition-delay:.36s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=300&h=400&q=82&auto=format&fit=crop&crop=right" alt="nail art 5" loading="lazy">
-        </a>
-      </div>
-    </div>
-
-    <!-- 分类 2 -->
-    <div class="cat-section rv" style="transition-delay:.08s">
-      <div>
-        <div class="cat-title">solid &<br>french</div>
-        <div class="cat-meta">
-          <p>纯色经典</p>
-          <p>法式优雅</p>
-          <p>渐变晕染</p>
-        </div>
-      </div>
-      <div class="cat-imgs" style="height:min(620px,43vw)">
-        <a class="simg s2-i1" href="user/index.html" style="transition-delay:.04s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=480&h=640&q=82&auto=format&fit=crop&hue=340&sat=-20" alt="solid" loading="lazy">
-        </a>
-        <a class="simg s2-i2" href="user/index.html" style="transition-delay:.12s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=360&h=480&q=82&auto=format&fit=crop&sat=-80&exp=12" alt="french" loading="lazy">
-        </a>
-        <a class="simg s2-i3" href="user/index.html" style="transition-delay:.20s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=340&h=460&q=82&auto=format&fit=crop&hue=200&sat=15" alt="gradient" loading="lazy">
-        </a>
-        <a class="simg s2-i4" href="user/index.html" style="transition-delay:.28s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=300&h=400&q=82&auto=format&fit=crop&hue=40" alt="cream" loading="lazy">
-        </a>
-      </div>
-    </div>
-
-    <!-- 分类 3 -->
-    <div class="cat-section rv" style="transition-delay:.08s">
-      <div>
-        <div class="cat-title">cat eye &<br>marble</div>
-        <div class="cat-meta">
-          <p>猫眼魅惑</p>
-          <p>大理石纹</p>
-          <p>金箔 · 极光</p>
-        </div>
-      </div>
-      <div class="cat-imgs" style="height:min(580px,40.3vw)">
-        <a class="simg s3-i1" href="user/index.html" style="transition-delay:.04s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=440&h=600&q=82&auto=format&fit=crop&hue=270&sat=30" alt="cat eye" loading="lazy">
-        </a>
-        <a class="simg s3-i2" href="user/index.html" style="transition-delay:.12s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=360&h=480&q=82&auto=format&fit=crop&sat=-40&con=15" alt="marble" loading="lazy">
-        </a>
-        <a class="simg s3-i3" href="user/index.html" style="transition-delay:.20s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=340&h=460&q=82&auto=format&fit=crop&hue=40&sat=25" alt="gold" loading="lazy">
-        </a>
-        <a class="simg s3-i4" href="user/index.html" style="transition-delay:.28s">
-          <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?w=300&h=400&q=82&auto=format&fit=crop&hue=180&sat=20" alt="aurora" loading="lazy">
-        </a>
-      </div>
-    </div>
-
-  </div>
-</section>
-
-<!-- VIEW ALL → 进入体验 -->
-<section id="view-all">
-  <div class="rv">
-    <a class="va-link" href="user/index.html">
-      <span class="va-text">VIEW ALL STYLES</span>
-      <span class="va-count">50+</span>
-      <span class="va-circle">→</span>
-    </a>
-    <div class="va-line"></div>
-  </div>
-</section>
-
-<!-- ══════════ S4 · ENTRY 双入口 ══════════ -->
-<section id="entry">
-  <div class="entry-w">
-
-    <p class="entry-eyebrow rv">CHOOSE YOUR ROLE</p>
-
-    <div class="entry-cards">
-
-      <!-- 用户侧 -->
-      <a class="ecard eu rv" href="user/index.html" style="transition-delay:.06s">
-        <div class="ecard-icon">💅</div>
-        <div class="ecard-title">用户体验</div>
-        <p class="ecard-desc">
-          AI 虚拟试戴<br>
-          智能推荐 · 手型分析<br>
-          30 秒找到专属你的款式
-        </p>
-        <div class="ecard-cta">
-          开始体验 <span>→</span>
-        </div>
+  <div class="hero">
+    <h1>Nail<em>Art</em></h1>
+    <div class="hero-line"></div>
+    <div class="hero-sub">
+      <a class="hero-entry" href="user/index.html">
+        <i class="ti ti-hand-finger"></i> 用户体验
       </a>
-<<<<<<< Updated upstream
-      <a class="ecard eo" href="admin/index.html?platform=ops#trend-agent">
-        <div class="ico-wrap"><i class="ti ti-sparkles"></i></div>
-        <div class="ttl">智能运营</div>
-        <div class="dsc">Agent助手 · UGC平台<br>趋势发现 · 数据聚合</div>
-        <div class="arr">进入运营台 <i class="ti ti-arrow-narrow-right"></i></div>
+      <div class="hero-entry-sep"></div>
+      <a class="hero-entry" href="admin/index.html">
+        <i class="ti ti-chart-dots-3"></i> 商户管理
       </a>
-      <a class="ecard ea" href="admin/index.html">
+      <div class="hero-entry-sep"></div>
+      <a class="hero-entry" href="trend-agent.html">
+        <i class="ti ti-sparkles"></i> 智能运营
+      </a>
+    </div>
+  </div>
+
+  <div class="scroll-hint">
+    <div class="scroll-pill"></div>
+    <span>scroll</span>
+  </div>
+</section>
+
+<!-- ═══════ 功能屏 01：美甲试衣间 ═══════ -->
+<div class="section-divider"></div>
+<section class="feat-section" id="sf1">
+  <div class="feat-inner">
+    <div class="feat-copy anim-hidden">
+      <div class="feat-num">01 &nbsp;—&nbsp; 用户体验</div>
+      <h2>美甲<em>试衣间</em></h2>
+      <p>上传一张手图，AI 分析你的手型与肤色<br>秒级试戴，多款对比，彻底告别选择困难</p>
+      <div class="feat-points">
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>AI 虚拟试戴</strong><br>上传手图，一键试戴心仪款式，多宫格对比不怕纠结。</p>
+        </div>
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>精细微调</strong><br>单指独立调色，变换色彩、添加装饰、彰显个性。</p>
+        </div>
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>AI 助手小团</strong><br>场景化推荐，圣诞、约会、通勤，总有一款适合今天的你。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feat-demo anim-hidden anim-d1">
+      <div class="demo-label">虚拟试戴对比</div>
+      <div class="demo-title">同一双手 · 四款风格同时预览</div>
+      <div class="demo-grid-wrap">
+        <div class="demo-grid">
+          <div class="demo-cell" data-label="猫眼渐变">
+            <img src="assets/nail-compare-1.png" alt="猫眼渐变" style="width:100%;height:100%;object-fit:cover;">
+          </div>
+          <div class="demo-cell" data-label="奶油法式">
+            <img src="assets/nail-compare-2.png" alt="奶油法式" style="width:100%;height:100%;object-fit:cover;">
+          </div>
+          <div class="demo-cell" data-label="莫兰迪紫">
+            <img src="assets/nail-compare-3.png" alt="莫兰迪紫" style="width:100%;height:100%;object-fit:cover;">
+          </div>
+          <div class="demo-cell" data-label="元气橘棕">
+            <img src="assets/nail-compare-4.png" alt="元气橘棕" style="width:100%;height:100%;object-fit:cover;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 分隔线 -->
+      <div style="margin: 16px 0 12px; height:1px; background:linear-gradient(90deg,transparent,rgba(160,128,96,0.15),transparent);"></div>
+
+      <!-- 微调区域：更紧凑的两列布局 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div class="demo-label" style="margin-bottom:0;">AI 款式微调</div>
+        <div class="demo-tabs" style="margin-bottom:0;">
+          <div class="demo-tab">整体</div>
+          <div class="demo-tab on">单指</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:10px;color:var(--text-lo);flex-shrink:0;">选色</span>
+        <div class="demo-swatches" style="margin-bottom:0;">
+          <div class="demo-sw on" style="background:#d8c5cc"></div>
+          <div class="demo-sw" style="background:#e5d8c7"></div>
+          <div class="demo-sw" style="background:#b7b2c8"></div>
+          <div class="demo-sw" style="background:#c7d4d8"></div>
+          <div class="demo-sw" style="background:#e7c3c0"></div>
+        </div>
+      </div>
+      <div class="demo-input" style="display:flex;align-items:center;gap:8px;">
+        <i class="ti ti-sparkles" style="font-size:11px;color:var(--gold);flex-shrink:0;"></i>
+        把食指改成更显白的冷粉色，保留法式边缘
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 功能屏 02：AI 爆款雷达 ═══════ -->
+<div class="section-divider"></div>
+<section class="feat-section" id="sf2">
+  <div class="feat-inner reverse">
+    <div class="feat-copy anim-hidden anim-d1">
+      <div class="feat-num">02 &nbsp;—&nbsp; 智能运营</div>
+      <h2>AI <em>爆款雷达</em></h2>
+      <p>Agent 全自动抓取小红书 UGC<br>多维信号聚合，敏锐识别新兴爆款趋势</p>
+      <div class="feat-points">
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>全自动 UGC 抓取</strong><br>Agent 自动抓取内容平台帖子，全链路无需人工干预。</p>
+        </div>
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>趋势评分与推送</strong><br>多维信号聚合评分，识别新兴爆款，一键推送至商户工作台。</p>
+        </div>
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>证据溯源 · 标签发现</strong><br>每条趋势可溯源支撑帖子，AI 自动发现新兴需求词。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feat-demo anim-hidden">
+      <div class="demo-label">Agent Pipeline</div>
+      <div class="demo-title">本轮识别已完成 · 产出 3 条趋势</div>
+      <div class="demo-pipeline">
+        <span class="pipe-step">UGC 抓取</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">清洗</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">评论摘要</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">趋势识别</span>
+      </div>
+      <div class="demo-stats">
+        <div class="demo-stat"><div class="demo-stat-val">36</div><div class="demo-stat-lbl">本次帖子</div></div>
+        <div class="demo-stat"><div class="demo-stat-val">34</div><div class="demo-stat-lbl">评论完成</div></div>
+        <div class="demo-stat"><div class="demo-stat-val green">3</div><div class="demo-stat-lbl">产出趋势</div></div>
+        <div class="demo-stat"><div class="demo-stat-val">1</div><div class="demo-stat-lbl">推送队列</div></div>
+      </div>
+      <div class="demo-trend-list">
+        <div class="demo-trend hi">
+          <div class="trend-score">93.8</div>
+          <div class="trend-info">
+            <div class="trend-name">奶油金渐变猫眼</div>
+            <div class="trend-tags">
+              <span class="trend-pill up">上升期</span>
+              <span class="trend-meta">18 篇 · 置信度 91%</span>
+            </div>
+          </div>
+          <span class="trend-action">推送 →</span>
+        </div>
+        <div class="demo-trend">
+          <div class="trend-score">86.4</div>
+          <div class="trend-info">
+            <div class="trend-name">冰透极光猫眼</div>
+            <div class="trend-tags">
+              <span class="trend-pill mid">观察期</span>
+              <span class="trend-meta">12 篇 · 置信度 84%</span>
+            </div>
+          </div>
+          <span class="trend-action">观察</span>
+        </div>
+        <div class="demo-trend">
+          <div class="trend-score">78.2</div>
+          <div class="trend-info">
+            <div class="trend-name">裸粉微法式短甲</div>
+            <div class="trend-tags">
+              <span class="trend-pill peak">峰值期</span>
+              <span class="trend-meta">9 篇 · 置信度 79%</span>
+            </div>
+          </div>
+          <span class="trend-action">观察</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 功能屏 03：商户工作台 ═══════ -->
+<div class="section-divider"></div>
+<section class="feat-section" id="sf3">
+  <div class="feat-inner">
+    <div class="feat-copy anim-hidden">
+      <div class="feat-num">03 &nbsp;—&nbsp; 商户管理</div>
+      <h2>商户<em>工作台</em></h2>
+      <p>爆款一键上架，数据实时播报<br>AI 周报自动输出运营建议，智能化经营</p>
+      <div class="feat-points">
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>爆款推送 · 一键上架</strong><br>AI 实时评分推送爆款款式，商户一键上架，提升运营效率。</p>
+        </div>
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>智能数据看板</strong><br>运营助手定时播报核心指标，款式生命周期实时可视。</p>
+        </div>
+        <div class="feat-point">
+          <div class="fpdot"></div>
+          <p><strong>投流与复盘</strong><br>AI 周报自动输出运营建议，一键采纳，ROI 持续优化。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="feat-demo anim-hidden anim-d1">
+      <div class="demo-label">爆款推送</div>
+      <div class="demo-title">2 条待上架 · AI 综合评分</div>
+      <div class="demo-push-list">
+        <div class="demo-push">
+          <div class="push-thumb" style="padding:0;overflow:hidden;">
+            <img src="assets/push-xigua.png" alt="夏日西瓜啵啵" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">
+          </div>
+          <div class="push-info">
+            <div class="push-name">夏日西瓜啵啵</div>
+            <div class="push-meta">爆款评分 89分 · 今日 09:30</div>
+          </div>
+          <span class="push-badge up">上升期</span>
+        </div>
+        <div class="demo-push">
+          <div class="push-thumb" style="padding:0;overflow:hidden;">
+            <img src="assets/push-french.jpg" alt="优雅珍珠法式" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">
+          </div>
+          <div class="push-info">
+            <div class="push-name">优雅珍珠法式</div>
+            <div class="push-meta">爆款评分 74分 · 今日 11:10</div>
+          </div>
+          <span class="push-badge mid">观察期</span>
+        </div>
+      </div>
+      <div class="demo-insight">
+        <div class="insight-hdr">✦ 运营助手播报</div>
+        <div class="insight-line">· 今日试戴 <span class="up">↑23%</span>，投流带来试戴占比 <span class="up">41%</span>，效果显著。</div>
+        <div class="insight-line">· <span class="warn">夏日西瓜啵啵</span> 收藏率连续3天上升，建议今日加大投流。</div>
+        <div class="insight-line">· <span class="warn">圣诞红绿镜面</span> 热度 <span class="down">↓12%</span>，建议准备新年替换款。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 最终入口屏 ═══════ -->
+<div class="section-divider"></div>
+<section id="s2">
+  <div class="s2-inner">
+    <div class="s2-headline anim-hidden">
+      <div class="tag">Choose your vibe</div>
+      <h2>每一款美甲<br>都是你<em>今天的心情</em></h2>
+      <p>找到专属你的色彩，让指尖成为你的表达</p>
+    </div>
+
+    <div class="entry-row">
+      <a class="ecard eu anim-hidden anim-d1" href="user/index.html">
+        <div class="ico-wrap"><i class="ti ti-hand-finger"></i></div>
+        <div class="ttl">用户体验</div>
+        <div class="dsc">AI 虚拟试戴<br>智能推荐 · 手型分析</div>
+        <div class="arr">开始体验 <i class="ti ti-arrow-narrow-right"></i></div>
+      </a>
+      <a class="ecard ea anim-hidden anim-d2" href="admin/index.html">
         <div class="ico-wrap"><i class="ti ti-chart-dots-3"></i></div>
         <div class="ttl">商户管理</div>
         <div class="dsc">数据看板 · 爆款推送<br>素材管理 · 复盘报告</div>
         <div class="arr">进入后台 <i class="ti ti-arrow-narrow-right"></i></div>
-=======
-
-      <!-- 商户侧 -->
-      <a class="ecard ea rv" href="admin/index.html" style="transition-delay:.14s">
-        <div class="ecard-icon">📊</div>
-        <div class="ecard-title">商户管理</div>
-        <p class="ecard-desc">
-          数据看板 · 爆款推送<br>
-          素材管理 · 复盘报告<br>
-          实时掌握门店经营数据
-        </p>
-        <div class="ecard-cta">
-          进入后台 <span>→</span>
-        </div>
->>>>>>> Stashed changes
       </a>
-
-    </div>
-
-    <p class="entry-hint rv" style="transition-delay:.22s">
-      消费者请选择「用户体验」&nbsp;&nbsp;·&nbsp;&nbsp;店主 / 运营请选择「商户管理」
-    </p>
-
-  </div>
-</section>
-
-<!-- ══════════ S5 · ABOUT ══════════ -->
-<section id="about">
-  <div class="about-w">
-    <div class="about-grid">
-      <div class="about-l rv">
-        <p class="ab-principle">[ principle ]</p>
-        <p class="ab-big">eloquently<br>expressed.</p>
-        <div class="ab-since">
-          <span class="ab-yr">2026</span>
-          <span class="ab-lb">Since Hackathon</span>
-        </div>
-      </div>
-      <div class="about-r rv" style="transition-delay:.15s">
-        <p class="ab-tag">[ what we are ]</p>
-        <p class="ab-body">Prism 是面向美甲消费者与商户的 AI 智能平台。通过上传手部图片，AI 自动分析手型、肤色与场景，精准推荐最适合你的美甲款式，让每一次选择都成为一次艺术表达。</p>
-        <p class="ab-body">Prism is an AI-powered nail art platform combining hand analysis with intelligent style matching — turning every appointment into a moment of personal expression.</p>
-      </div>
+      <a class="ecard eo anim-hidden anim-d3" href="trend-agent.html">
+        <div class="ico-wrap"><i class="ti ti-sparkles"></i></div>
+        <div class="ttl">智能运营</div>
+        <div class="dsc">AI 爆款雷达<br>趋势发现 · 数据聚合</div>
+        <div class="arr">趋势发现 <i class="ti ti-arrow-narrow-right"></i></div>
+      </a>
     </div>
   </div>
+
+  <div class="bfooter">Prism</div>
 </section>
-
-</main>
-
-<footer>
-  <div class="foot-w">
-    <span class="foot-brand">Prism</span>
-    <span class="foot-copy">© 2026 Prism AI Nail Art Studio</span>
-  </div>
-</footer>
 
 <script>
-/* ── 粒子线网背景 ── */
-(function(){
-  const cv=document.getElementById('bg-canvas'),ct=cv.getContext('2d');
-  let W,H,pts=[];
-  const N=90,MAX_D=180,SPEED=0.22;
-  function resize(){
-    W=cv.width=window.innerWidth;
-    cv.height=Math.max(window.innerHeight,document.documentElement.scrollHeight);
-    H=cv.height; init();
-  }
-  function init(){
-    pts=[];
-    for(let i=0;i<N;i++) pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*SPEED,vy:(Math.random()-.5)*SPEED});
-  }
-  function draw(){
-    ct.clearRect(0,0,W,H);
-    pts.forEach(p=>{
-      p.x+=p.vx; p.y+=p.vy;
-      if(p.x<0||p.x>W)p.vx*=-1;
-      if(p.y<0||p.y>H)p.vy*=-1;
+// ──────────────────────────────────────
+// 甲片配置：全暖调精选，含全新款式
+// ──────────────────────────────────────
+// 淡雅浅色系：淡黄 / 淡粉 / 淡蓝 / 淡紫 / 裸色 / 法式，色彩和谐统一
+const SPECS = [
+  // ── 淡粉系 ──
+  { type:'solid',  vars:'--c:#f5d8e0',               mc:'#d4a0b0', hi:'rgba(255,255,255,0.65)' },
+  { type:'solid',  vars:'--c:#f0c8d4',               mc:'#c890a0', hi:'rgba(255,255,255,0.60)' },
+  { type:'solid',  vars:'--c:#edd4dc',               mc:'#c89898', hi:'rgba(255,255,255,0.60)' },
+  { type:'grad',   vars:'--c1:#f7dce4;--c2:#e8c0cc', mc:'#d4a0b0', hi:'rgba(255,255,255,0.62)' },
+  // ── 淡黄 / 奶油系 ──
+  { type:'solid',  vars:'--c:#f7eed8',               mc:'#c8a870', hi:'rgba(255,255,255,0.65)' },
+  { type:'solid',  vars:'--c:#f5e8c8',               mc:'#c0a060', hi:'rgba(255,255,255,0.62)' },
+  { type:'solid',  vars:'--c:#f0e0b0',               mc:'#b89050', hi:'rgba(255,255,255,0.58)' },
+  { type:'grad',   vars:'--c1:#f7f0d8;--c2:#edd8b0', mc:'#c8a870', hi:'rgba(255,255,255,0.65)' },
+  // ── 淡蓝 / 粉蓝系 ──
+  { type:'solid',  vars:'--c:#d8eaf5',               mc:'#88aac8', hi:'rgba(255,255,255,0.68)' },
+  { type:'solid',  vars:'--c:#cce0f0',               mc:'#7898b8', hi:'rgba(255,255,255,0.65)' },
+  { type:'grad',   vars:'--c1:#dceef7;--c2:#c4d8ed', mc:'#88aac8', hi:'rgba(255,255,255,0.68)' },
+  // ── 淡紫 / 薰衣草 ──
+  { type:'solid',  vars:'--c:#e8dcf5',               mc:'#a888c8', hi:'rgba(255,255,255,0.62)' },
+  { type:'solid',  vars:'--c:#e0d4f0',               mc:'#9878b8', hi:'rgba(255,255,255,0.60)' },
+  { type:'grad',   vars:'--c1:#eee4f7;--c2:#d8c8ec', mc:'#a888c8', hi:'rgba(255,255,255,0.62)' },
+  // ── 法式裸色 ──
+  { type:'french', vars:'--base:#f7f0e8',             mc:'#c8a888', hi:'rgba(255,255,255,0.72)' },
+  { type:'french', vars:'--base:#f5ece4',             mc:'#c0a080', hi:'rgba(255,255,255,0.70)' },
+  // ── 淡绿 / 薄荷 ──
+  { type:'solid',  vars:'--c:#d8f0e4',               mc:'#88b898', hi:'rgba(255,255,255,0.65)' },
+  { type:'grad',   vars:'--c1:#e0f4e8;--c2:#c8e8d8', mc:'#80b090', hi:'rgba(255,255,255,0.65)' },
+  // ── 渐变混色（粉→黄，粉→紫，蓝→绿） ──
+  { type:'grad',   vars:'--c1:#f5dce4;--c2:#f0e8c0', mc:'#d0b080', hi:'rgba(255,255,255,0.60)' },
+  { type:'grad',   vars:'--c1:#ecd8f0;--c2:#d4e8f5', mc:'#a0a8c8', hi:'rgba(255,255,255,0.62)' },
+  // ── 大理石（浅米） ──
+  { type:'marble', vars:'--base:#f5f0ea',             mc:'#c0b0a0', hi:'rgba(255,255,255,0.68)' },
+  { type:'marble', vars:'--base:#f0ece5',             mc:'#b8a898', hi:'rgba(255,255,255,0.65)' },
+];
+
+// ──────────────────────────────────────
+// 布局：3层景深，明确主次
+// ──────────────────────────────────────
+const allChips = [];
+
+
+
+function buildChips() {
+  document.querySelectorAll('.chip').forEach(e => e.remove());
+  allChips.length = 0;
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const j  = (v, r) => v + (Math.random() - 0.5) * r;
+
+  // 定义三层点位
+  // 尺寸统一：每层固定宽度，只允许 ±4px 轻微随机，避免奇大奇小
+  const layers = [
+    // 核心：6片，宽52px
+    {
+      pts: [
+        [0.18, 0.22], [0.80, 0.20],
+        [0.12, 0.60], [0.87, 0.58],
+        [0.32, 0.82], [0.68, 0.84],
+      ],
+      baseSize: 52, sizeJit: 3, opRange: [0.90, 1.0], jit: 0.04,
+    },
+    // 中层：8片，宽46px（与核心层相差6px，视觉几乎一致）
+    {
+      pts: [
+        [0.10, 0.32], [0.88, 0.34],
+        [0.26, 0.08], [0.72, 0.10],
+        [0.12, 0.74], [0.86, 0.76],
+        [0.42, 0.90], [0.58, 0.88],
+      ],
+      baseSize: 46, sizeJit: 3, opRange: [0.72, 0.86], jit: 0.03,
+    },
+    // 外圈：8片，宽40px，略低透明度暗示层次
+    {
+      pts: [
+        [0.04, 0.10], [0.94, 0.08],
+        [0.03, 0.88], [0.95, 0.86],
+        [0.48, 0.04], [0.52, 0.95],
+        [0.06, 0.50], [0.93, 0.50],
+      ],
+      baseSize: 40, sizeJit: 3, opRange: [0.50, 0.65], jit: 0.025,
+    },
+  ];
+
+  let idx = 0;
+  layers.forEach(layer => {
+    layer.pts.forEach(([rx, ry]) => {
+      const spec = SPECS[idx % SPECS.length];
+      const cx   = j(vw * rx, vw * layer.jit);
+      const cy   = j(vh * ry, vh * layer.jit);
+      const w    = layer.baseSize + (Math.random() - 0.5) * layer.sizeJit * 2;
+      const h    = w * 1.62;
+      const op   = (layer.opRange[0] + Math.random() * (layer.opRange[1] - layer.opRange[0])).toFixed(2);
+      const r0   = (Math.random() - 0.5) * 10;
+
+      const el = document.createElement('div');
+      el.className = `chip chip-${spec.type}`;
+      el.style.cssText = [
+        `left:${cx.toFixed(1)}px`,
+        `top:${cy.toFixed(1)}px`,
+        `width:${w.toFixed(1)}px`,
+        `height:${h.toFixed(1)}px`,
+        `opacity:${op}`,
+        spec.vars || '',
+      ].filter(Boolean).join(';');
+
+      el._rot         = r0;
+      el._amp         = 3 + Math.random() * 5;
+      el._phase       = Math.random() * Math.PI * 2;
+      el._speed       = 0.4 + Math.random() * 0.35;
+      el._bx          = cx;
+      el._by          = cy;
+      el._fallRate    = 0.6 + Math.random() * 0.8;
+      el._baseOpacity = op;   // 保存初始透明度，用于淡出计算
+
+      document.body.appendChild(el);
+      allChips.push({ el, spec });
+
+      // 悬停甲片：只保留甲片发光，不再修改鼠标指甲
+      el.addEventListener('mouseenter', () => {
+        el.style.filter = `drop-shadow(0 6px 20px rgba(120,90,60,0.30)) drop-shadow(0 0 10px ${spec.mc}44)`;
+      });
+      el.addEventListener('mouseleave', () => {
+        el.style.filter = '';
+      });
+
+      idx++;
     });
-    for(let i=0;i<pts.length;i++){
-      for(let j=i+1;j<pts.length;j++){
-        const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<MAX_D){
-          const a=(1-d/MAX_D)*0.055;
-          ct.beginPath();ct.moveTo(pts[i].x,pts[i].y);ct.lineTo(pts[j].x,pts[j].y);
-          ct.strokeStyle=`rgba(26,26,26,${a.toFixed(4)})`;ct.lineWidth=.6;ct.stroke();
-        }
-      }
-    }
-    pts.forEach(p=>{ct.beginPath();ct.arc(p.x,p.y,1.2,0,Math.PI*2);ct.fillStyle='rgba(26,26,26,.06)';ct.fill();});
-    requestAnimationFrame(draw);
-  }
-  let lastH=0;
-  function checkH(){const dh=document.documentElement.scrollHeight;if(dh!==lastH){lastH=dh;resize();}setTimeout(checkH,1200);}
-  window.addEventListener('resize',resize);
-  resize(); draw(); setTimeout(checkH,800);
-})();
-
-/* ── 光标 ── */
-const cur=document.getElementById('cur'),curR=document.getElementById('cur-r');
-let mx=window.innerWidth/2,my=window.innerHeight/2,rx=mx,ry=my;
-document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px';},{passive:true});
-(function rt(){rx+=(mx-rx)*.13;ry+=(my-ry)*.13;curR.style.left=rx+'px';curR.style.top=ry+'px';requestAnimationFrame(rt);})();
-document.querySelectorAll('a,button').forEach(el=>{
-  el.addEventListener('mouseenter',()=>document.body.classList.add('hov'));
-  el.addEventListener('mouseleave',()=>document.body.classList.remove('hov'));
-});
-
-/* ── 图片视差 ── */
-window.addEventListener('scroll',()=>{
-  document.querySelectorAll('.simg').forEach((el,i)=>{
-    const rate=.04+(i%5)*.012;
-    const cy=el.getBoundingClientRect().top+el.offsetHeight/2-window.innerHeight/2;
-    const base=el.style.transform.replace(/\s*translateY\([^)]*\)/,'');
-    el.style.transform=base+` translateY(${(cy*rate).toFixed(2)}px)`;
   });
-},{passive:true});
+}
 
-/* ── Scroll Reveal ── */
-const io=new IntersectionObserver(entries=>{
-  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
-},{threshold:.08});
-document.querySelectorAll('.rv').forEach(el=>io.observe(el));
-document.querySelectorAll('.simg').forEach(el=>{
-  const sio=new IntersectionObserver(entries=>{
-    entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');sio.unobserve(e.target);}});
-  },{threshold:.04});
-  sio.observe(el);
-});
+buildChips();
+window.addEventListener('resize', buildChips);
 
-/* ── NAV 磨砂玻璃 ── */
-const navEl=document.querySelector('header');
-window.addEventListener('scroll',()=>{
-  const s=window.scrollY>50;
-  navEl.style.background=s?'rgba(255,255,255,.88)':'transparent';
-  navEl.style.backdropFilter=s?'blur(14px)':'none';
-  navEl.style.webkitBackdropFilter=s?'blur(14px)':'none';
-  navEl.style.borderBottom=s?'1px solid rgba(26,26,26,.06)':'none';
-},{passive:true});
+// ──────────────────────────────────────
+// 动画循环：浮动 + 视差
+// ──────────────────────────────────────
+let lt = 0;
+let lastSy = 0;
+let fallVel = 0; // 雨滴加速度积累
+
+function tick(ts) {
+  const dt  = Math.min((ts - lt) / 1000, 0.05);
+  lt = ts;
+  const sy  = window.scrollY;
+  const dsy = sy - lastSy;
+  lastSy = sy;
+
+  const s1Height = document.getElementById('s1').offsetHeight;
+  // 淡出区间：0.4~0.9 倍第一屏高度，平滑渐隐
+  const fadeStart = s1Height * 0.4;
+  const fadeEnd   = s1Height * 0.9;
+
+  // 滚动越快，加速度越大（雨滴物理）
+  fallVel += dsy * 0.15;
+  fallVel *= 0.88;
+
+  allChips.forEach(({ el }) => {
+    el._phase += el._speed * dt;
+
+    const fy = Math.sin(el._phase) * el._amp;
+    const fx = Math.sin(el._phase * 0.3) * 1.8;
+    const fr = Math.sin(el._phase * 0.5) * 1.8;
+    const drop = sy * el._fallRate + fallVel * el._fallRate * 8;
+
+    el.style.transform = `translate(-50%,-50%) translate(${fx}px,${(fy + drop).toFixed(2)}px) rotate(${(el._rot + fr).toFixed(2)}deg)`;
+
+    // 平滑淡出：在淡出区间内线性计算 opacity
+    let chipOpacity;
+    if (sy <= fadeStart) {
+      chipOpacity = parseFloat(el._baseOpacity);
+    } else if (sy >= fadeEnd) {
+      chipOpacity = 0;
+    } else {
+      const ratio = (sy - fadeStart) / (fadeEnd - fadeStart);
+      chipOpacity = parseFloat(el._baseOpacity) * (1 - ratio);
+    }
+    el.style.opacity = chipOpacity.toFixed(3);
+    el.style.pointerEvents = chipOpacity < 0.05 ? 'none' : 'all';
+  });
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(t => { lt = t; requestAnimationFrame(tick); });
+
+// ──────────────────────────────────────
+// 固定图片鼠标：始终显示，不在 mouseleave 时隐藏
+// ──────────────────────────────────────
+const siteCursor = document.getElementById('site-cursor');
+let cursorX = window.innerWidth / 2;
+let cursorY = window.innerHeight / 2;
+
+function moveSiteCursor(x, y) {
+  cursorX = x;
+  cursorY = y;
+  siteCursor.style.left = `${cursorX}px`;
+  siteCursor.style.top = `${cursorY}px`;
+  siteCursor.style.opacity = '1';
+}
+
+moveSiteCursor(cursorX, cursorY);
+
+document.addEventListener('mousemove', e => moveSiteCursor(e.clientX, e.clientY), { passive: true });
+document.addEventListener('mousedown', () => document.body.classList.add('cursor-press'));
+document.addEventListener('mouseup', () => document.body.classList.remove('cursor-press'));
+window.addEventListener('blur', () => document.body.classList.remove('cursor-press'));
+
+// ──────────────────────────────────────
+// 顶部滚动进度条
+// ──────────────────────────────────────
+const progressBar = document.getElementById('scroll-progress-bar');
+function updateProgress() {
+  const scrollTop = window.scrollY;
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  const ratio = docHeight > 0 ? Math.min(scrollTop / docHeight, 1) : 0;
+  progressBar.style.transform = `scaleX(${ratio})`;
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+updateProgress();
+
+// ──────────────────────────────────────
+// 全局滚动入场动画
+// ──────────────────────────────────────
+const obsOpts = {
+  threshold: 0.05,
+  rootMargin: '0px 0px -40px 0px'  // 提前 40px 触发，防止底部元素漏触发
+};
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('anim-in');
+      obs.unobserve(entry.target);
+    }
+  });
+}, obsOpts);
+
+document.querySelectorAll('.anim-hidden').forEach(el => obs.observe(el));
+
+// 保险措施：页面加载完成后 800ms，强制触发所有在视口内但未动画的元素
+setTimeout(() => {
+  document.querySelectorAll('.anim-hidden:not(.anim-in)').forEach(el => {
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight + 100) {
+      el.classList.add('anim-in');
+    }
+  });
+}, 800);
 </script>
 </body>
 </html>
