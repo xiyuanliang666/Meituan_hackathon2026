@@ -13,3 +13,4 @@ node_modules
 backend/storage/uploads/
 backend/storage/generated/
 backend/.playwright-xhs-profile/
+*.local_backup
