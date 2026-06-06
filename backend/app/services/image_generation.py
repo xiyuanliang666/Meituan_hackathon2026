@@ -183,21 +183,32 @@ def _call_image_edit(
     if size != "1024x1024":
         sizes_to_try.append("1024x1024")
 
+    fidelity_modes_to_try = [True, False]  # gpt-image-2 不支持 input_fidelity
+
     last_detail = ""
     last_code = 0
     for attempt_size in sizes_to_try:
-        data["size"] = attempt_size
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(endpoint, headers=headers, data=data, files=files)
-        if response.status_code < 400:
-            last_code = 0
+        for use_fidelity in fidelity_modes_to_try:
+            req_data = dict(data)
+            req_data["size"] = attempt_size
+            if not use_fidelity:
+                req_data.pop("input_fidelity", None)
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(endpoint, headers=headers, data=req_data, files=files)
+            if response.status_code < 400:
+                last_code = 0
+                break
+            last_code = response.status_code
+            last_detail = response.text[:500]
+            if "input_fidelity" in last_detail.lower() and use_fidelity:
+                logger.info("Model %s does not support input_fidelity, retrying without it", model_name)
+                continue
+            if "unsupported size" in last_detail.lower() and attempt_size != sizes_to_try[-1]:
+                logger.info("Size %s not supported by %s, retrying with %s", attempt_size, model_name, sizes_to_try[-1])
+                break
+            raise RuntimeError(f"HTTP {last_code}: {last_detail}")
+        if last_code == 0:
             break
-        last_code = response.status_code
-        last_detail = response.text[:500]
-        if "unsupported size" in last_detail.lower() and attempt_size != sizes_to_try[-1]:
-            logger.info("Size %s not supported by %s, retrying with %s", attempt_size, model_name, sizes_to_try[-1])
-            continue
-        raise RuntimeError(f"HTTP {last_code}: {last_detail}")
     if last_code >= 400:
         raise RuntimeError(f"HTTP {last_code}: {last_detail}")
 
