@@ -311,17 +311,21 @@ def _push_card_from_candidate(candidate: dict) -> dict:
     style_tags = _flatten_tags(candidate["tags"])
     event_stats = candidate.get("event_stats", {})
     signal_sources = _signal_sources_with_events(candidate["signals"], event_stats)
-    hot_score = _hot_score(candidate, signal_sources)
     push_id = candidate["push_id"]
+    hot_score = round(float(candidate.get("hot_score") or 0), 1) if is_trend_card else _hot_score(candidate, signal_sources)
     style_id = candidate.get("style_id") or ""
-    style_image_urls = [candidate["enhanced_style_image_url"], *_load_demo_composite_urls(push_id)]
+    style_image_urls = candidate.get("style_image_urls") or [
+        candidate["enhanced_style_image_url"],
+        *_load_demo_composite_urls(push_id),
+    ]
+    source_posts = candidate.get("source_posts") or (_load_demo_source_posts(push_id) if not is_trend_card else [])
     return {
         "push_id": push_id,
         "style_id": style_id,
         "style_name": candidate["style_name"],
         "style_tags": style_tags,
         "style_image_urls": style_image_urls,
-        "source_posts": _load_demo_source_posts(push_id) if not is_trend_card else [],
+        "source_posts": source_posts,
         "signal_sources": signal_sources,
         "hot_score": hot_score,
         "life_cycle": _life_cycle(candidate["life_cycle"], hot_score, event_stats),

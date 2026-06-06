@@ -1,13 +1,17 @@
 // ===== 页面切换 =====
 const ADMIN_PAGES = new Set(['home', 'dashboard', 'assets', 'trend-agent', 'push', 'boost', 'report', 'notify', 'upload', 'confirm']);
 const SPECIAL_PAGE_NAV_PARENT = { confirm: 'push', upload: 'assets', notify: 'home' };
+const IS_SMART_OPS_PLATFORM = new URLSearchParams(window.location.search).get('platform') === 'ops';
 
 function pageFromHash() {
+  if (IS_SMART_OPS_PLATFORM) return 'trend-agent';
   const page = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+  if (page === 'trend-agent') return 'home';
   return ADMIN_PAGES.has(page) ? page : 'home';
 }
 
 function switchPage(page, options = {}) {
+  if (IS_SMART_OPS_PLATFORM) page = 'trend-agent';
   if (!ADMIN_PAGES.has(page)) page = 'home';
   const shouldUpdateHash = options.updateHash !== false;
 
@@ -28,6 +32,14 @@ function switchPage(page, options = {}) {
   if (page === 'boost') renderBoostBudgetState();
   if (page === 'notify') renderNotifyList();
   if (page === 'report') loadReportData('week');
+}
+
+function applyPlatformChrome() {
+  if (!IS_SMART_OPS_PLATFORM) return;
+  document.body.classList.add('smart-ops-platform');
+  document.title = 'Prism 智能运营平台';
+  const brand = document.querySelector('.brand-cn');
+  if (brand) brand.textContent = '智能运营平台';
 }
 
 window.addEventListener('hashchange', () => {
@@ -201,6 +213,8 @@ let selectedTrendId = '';
 let latestTrendPipelineRunId = localStorage.getItem('trend_latest_pipeline_run_id') || '';
 let trendRunPollTimer = null;
 let trendSeenIds = new Set();
+let trendScoreScaleMax = 0;
+const TREND_DISPLAY_SCORE_MAX = 93.8;
 
 async function loadStylesData() {
   if (!adminBackendAvailable) {
@@ -1713,6 +1727,7 @@ async function loadTrendList() {
     });
     const incomingTrends = Array.isArray(data?.trends) ? data.trends : [];
     trendListData = dedupeTrendItems(incomingTrends);
+    trendScoreScaleMax = Math.max(...trendListData.map(item => Number(item?.trend_score || 0)), 0);
     renderTrendList();
     updateTrendCount();
     if (trendListData.length) {
@@ -1725,6 +1740,7 @@ async function loadTrendList() {
   } catch (e) {
     listEl.innerHTML = `<div class="trend-run-empty">趋势池加载失败：${e.message}</div>`;
     trendListData = [];
+    trendScoreScaleMax = 0;
     updateTrendCount();
   }
 }
@@ -1776,7 +1792,7 @@ function renderTrendList() {
         <div class="trend-item-body">
           <div class="trend-item-head">
             <div class="trend-item-title">${escapeHtml(item.core_style || '未命名趋势')}</div>
-            <div class="trend-item-score">${formatScore(item.trend_score)}</div>
+            <div class="trend-item-score">${formatTrendScore100(item.trend_score)}</div>
           </div>
           <div class="trend-item-meta">
             ${trendBadge(item.life_cycle, item.memory_status)}
@@ -1842,7 +1858,7 @@ function renderTrendDetail(trend) {
     <div class="trend-detail-head">
       <div>
         <div class="trend-detail-title">${escapeHtml(trend.core_style || '未命名趋势')}</div>
-        <div class="trend-detail-meta">${trendBadge(trend.life_cycle, trend.memory_status)}<span class="trend-score-pill">趋势分 ${formatScore(trend.trend_score)}</span><span class="trend-score-pill">置信度 ${formatPercent(trend.confidence)}</span></div>
+        <div class="trend-detail-meta">${trendBadge(trend.life_cycle, trend.memory_status)}<span class="trend-score-pill">趋势分 ${formatTrendScore100(trend.trend_score)}</span><span class="trend-score-pill">原始分 ${formatScore(trend.trend_score)}</span><span class="trend-score-pill">置信度 ${formatPercent(trend.confidence)}</span></div>
         <div class="trend-detail-meta" style="margin-top:4px">
           <span class="trend-score-pill">数据: ${lifecycleLabelText(trend.data_lifecycle)}</span>
           <span class="trend-score-pill">趋势: ${lifecycleLabelText(trend.trend_lifecycle)}</span>
@@ -1873,7 +1889,6 @@ function renderTrendDetail(trend) {
     <div class="trend-detail-actions">
       <button class="btn-ghost-sm" onclick="recordTrendAction('${trend.trend_id}','watching').then(()=>showToast('已标记为观察中'))"><i class="ti ti-eye"></i> 观察中</button>
       <button class="btn-ghost-sm" onclick="recordTrendAction('${trend.trend_id}','ignored').then(()=>showToast('已忽略该趋势'))"><i class="ti ti-x"></i> 忽略</button>
-      <button class="btn-primary-sm" onclick="recordTrendAction('${trend.trend_id}','accepted').then(()=>showToast('已采纳趋势'))"><i class="ti ti-circle-check"></i> 采纳</button>
       <button class="btn-primary-sm" onclick="pushTrendToQueue('${trend.trend_id}')"><i class="ti ti-rocket"></i> 爆款推送</button>
     </div>
     <div class="trend-signal-section">
@@ -1918,17 +1933,46 @@ async function recordTrendAction(trendId, action, note = '') {
 }
 
 async function pushTrendToQueue(trendId) {
+  showTrendPushConfirmModal(trendId);
+}
+
+function showTrendPushConfirmModal(trendId) {
+  const existing = document.getElementById('trend-push-confirm-modal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'trend-push-confirm-modal';
+  overlay.innerHTML = `
+    <div class="modal-content" style="max-width:420px;text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="width:36px;height:36px;border-radius:12px;background:#f2edf8;color:#8d79b8;display:flex;align-items:center;justify-content:center"><i class="ti ti-rocket"></i></span>
+        <h3 style="margin:0;font-size:18px">确认推送</h3>
+      </div>
+      <p style="margin:0 0 18px;color:#777;line-height:1.7">确认将该趋势推送到商户运营平台的爆款推送待上架队列？</p>
+      <div style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn-ghost-sm" onclick="document.getElementById('trend-push-confirm-modal')?.remove()">取消</button>
+        <button class="btn-primary-sm" onclick="confirmPushTrendToQueue('${escapeAttr(trendId)}')"><i class="ti ti-check"></i> 确认</button>
+      </div>
+    </div>`;
+  overlay.onclick = (event) => {
+    if (event.target === overlay) overlay.remove();
+  };
+  document.body.appendChild(overlay);
+}
+
+async function confirmPushTrendToQueue(trendId) {
+  document.getElementById('trend-push-confirm-modal')?.remove();
   if (!adminBackendAvailable) {
     showToast('后端未连接，无法推送到爆款队列');
     return;
   }
   try {
+    await recordTrendAction(trendId, 'accepted', 'push_to_queue');
     const result = await apiPost(`/trends/${trendId}/push-to-queue`, {
       merchant_id: 'demo_shop',
     });
     if (result?.pushed) {
-      showToast(result.message || '已加入爆款推送队列');
-      switchPage('push');
+      showTopSuccessBanner('已推送完成，由于内含生图请求，商户需稍等片刻后才能在待上架列表中查看哦～');
     } else {
       showToast(result?.message || '推送失败');
     }
@@ -2160,6 +2204,15 @@ function formatScore(value) {
   return Number.isFinite(num) ? num.toFixed(1) : '0.0';
 }
 
+function formatTrendScore100(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num) || num <= 0) return '0.0';
+  const max = Number(trendScoreScaleMax || 0);
+  if (!Number.isFinite(max) || max <= 0) return Math.min(TREND_DISPLAY_SCORE_MAX, num).toFixed(1);
+  const normalized = Math.max(0, Math.min(TREND_DISPLAY_SCORE_MAX, (num / max) * TREND_DISPLAY_SCORE_MAX));
+  return normalized.toFixed(1);
+}
+
 function formatCompact(value) {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return '0';
@@ -2321,6 +2374,10 @@ function toggleSelectAllPush(checked) {
 
 function updatePushDeleteUI(pendingCards) {
   const pending = pendingCards || pushCardsData.filter(card => !isPushListed(card));
+  const pendingIds = new Set(pending.map(card => card.push_id));
+  [...selectedPushIds].forEach(pushId => {
+    if (!pendingIds.has(pushId)) selectedPushIds.delete(pushId);
+  });
   const bar = document.getElementById('push-delete-bar');
   const toggle = document.getElementById('push-delete-toggle');
   const selectAll = document.getElementById('push-select-all');
@@ -2333,7 +2390,8 @@ function updatePushDeleteUI(pendingCards) {
 }
 
 async function confirmDeleteSelectedPush() {
-  const ids = [...selectedPushIds];
+  const pendingIds = new Set(pushCardsData.filter(card => !isPushListed(card)).map(card => card.push_id));
+  const ids = [...selectedPushIds].filter(pushId => pendingIds.has(pushId));
   if (!ids.length) { showToast('请先选择推送'); return; }
   if (!confirm(`确定删除选中的 ${ids.length} 条待上架推送？`)) return;
   try {
@@ -2431,6 +2489,7 @@ function renderPushSourceCard(post, idx) {
   const platform = post.platform || '';
   const relativeTime = post.relative_time || '';
   const link = post.url || '';
+  const summary = post.summary || post.comment_summary || '';
   const popoverId = `push-source-popover-${idx}`;
   return `
     <div
@@ -2457,6 +2516,7 @@ function renderPushSourceCard(post, idx) {
         <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.84)">点赞 ${likes}</div>
         <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.84)">收藏 ${favorites}  ↑ 3日增速${growth}%</div>
         <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.84)">评论 ${comments}</div>
+        ${summary ? `<div style="margin-top:10px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.78);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(summary)}</div>` : ''}
         <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:rgba(255,255,255,.8)">
           <span style="display:inline-flex;align-items:center;gap:5px;font-weight:600;color:#ffb4a8"><span style="width:7px;height:7px;border-radius:999px;background:#ef4444;display:inline-block;box-shadow:0 0 0 3px rgba(239,68,68,.12)"></span>${escapeHtml(status)}</span>
           ${platform ? `<span>${escapeHtml(platform)}</span>` : ''}
@@ -2500,15 +2560,21 @@ function selectedPushComposite(card) {
 function pushEditorImages(card) {
   const sourceImages = card.style_image_urls || [];
   const styleImage = sourceImages[0] || '';
+  const backendComposites = sourceImages.slice(1).filter(Boolean);
   const templateIds = [...selectedTemplateIds];
+  const count = Math.max(backendComposites.length, templateIds.length);
+  const composites = Array.from({ length: count }, (_, idx) => {
+    const templateId = templateIds[idx] || '';
+    return {
+      label: `合成效果图 ${idx + 1}`,
+      url: backendComposites[idx] || '',
+      template: templateId ? findTemplateInMemory(templateId) : null,
+      kind: 'composite',
+    };
+  });
   return [
     { label: '款式原图', url: styleImage, kind: 'style' },
-    ...templateIds.map((templateId, idx) => ({
-      label: `合成效果图 ${idx + 1}`,
-      url: sourceImages[idx + 1] || '',
-      template: findTemplateInMemory(templateId),
-      kind: 'composite',
-    })),
+    ...composites,
   ];
 }
 
@@ -3032,6 +3098,20 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
+function showTopSuccessBanner(msg) {
+  let banner = document.getElementById('global-success-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'global-success-banner';
+    banner.className = 'global-success-banner';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `<i class="ti ti-circle-check"></i><span>${escapeHtml(msg)}</span>`;
+  banner.classList.add('show');
+  clearTimeout(banner._hideTimer);
+  banner._hideTimer = setTimeout(() => banner.classList.remove('show'), 5200);
+}
+
 function renderNotifyBell() {
   const dot = document.getElementById('notify-bell-dot');
   if (!dot) return;
@@ -3118,7 +3198,7 @@ function renderBoostBudgetState() {
 
 function applyRuntimePushCardOverrides(cards) {
   return (cards || [])
-    .filter(card => !runtimeDemoState.removedPushIds.has(card.push_id) && !runtimeDemoState.removedStyleIds.has(card.style_id))
+    .filter(card => !runtimeDemoState.removedPushIds.has(card.push_id) && !(card.style_id && runtimeDemoState.removedStyleIds.has(card.style_id)))
     .map(card => {
       const demoOverride = demoPushCardOverrides[card.push_id] || {};
       const baseCard = { ...card, ...demoOverride };
@@ -3322,6 +3402,7 @@ function openLightbox(imageUrl) {
 
 // ===== 初始化 =====
 function init() {
+  applyPlatformChrome();
   renderStyleList();
   updateStyleDeleteUI();
   renderTemplates();

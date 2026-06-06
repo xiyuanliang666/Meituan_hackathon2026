@@ -18,6 +18,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue"
 .nav-right{display:flex;align-items:center;gap:10px}
 .nav-shop{font-size:13px;color:rgba(42,32,24,.58)}
 .nav-avatar{width:30px;height:30px;border-radius:50%;background:rgba(141,121,184,.13);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--accent)}
+body:not(.smart-ops-platform) .ops-nav-tab{display:none}
+body.smart-ops-platform .merchant-nav-tab,
+body.smart-ops-platform .nav-right{display:none}
+body.smart-ops-platform .nav-center{justify-content:flex-end}
+body.smart-ops-platform .nav-tabs{background:rgba(141,121,184,.08);border-color:rgba(141,121,184,.18)}
+body.smart-ops-platform .page-panel{max-width:1280px}
 
 /* ===== 页面面板 ===== */
 .page-panel{display:none;padding:20px 24px;max-width:1100px;margin:0 auto;animation:fadeIn .3s ease}
@@ -199,6 +205,10 @@ a.push-source-card,a.push-source-card:visited{position:relative;display:block;fl
 
 .push-two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .push-manager-card{margin-bottom:18px}
+.push-delete-controls{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.push-delete-bar{align-items:center;gap:8px;margin:0;padding:0;border:0;background:transparent}
+.push-delete-bar label{display:flex;align-items:center;gap:6px;font-size:12px;color:#555}
+.push-delete-bar input{accent-color:#8d79b8}
 .push-card-list{display:flex;flex-direction:column;gap:12px}
 .push-manage-item{min-height:104px}
 .push-manage-item .style-info{min-width:0}
@@ -507,6 +517,9 @@ a.push-source-card,a.push-source-card:visited{position:relative;display:block;fl
 /* ===== Toast通知 ===== */
 .global-toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-20px);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s}
 .global-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.global-success-banner{position:fixed;top:22px;left:50%;transform:translateX(-50%) translateY(-16px);display:flex;align-items:center;gap:8px;max-width:min(760px,calc(100vw - 40px));padding:10px 16px;border:1px solid #9bd7a6;border-radius:999px;background:#ecfdf3;color:#206a35;font-size:13px;font-weight:600;line-height:1.5;box-shadow:0 12px 30px rgba(32,106,53,.12);z-index:1000;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.global-success-banner i{font-size:16px;color:#2f9e44}
+.global-success-banner.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ===== 撤销按钮 ===== */
 .btn-undo{font-size:11px;color:#8d79b8;background:none;border:none;cursor:pointer;text-decoration:underline;margin-left:8px}

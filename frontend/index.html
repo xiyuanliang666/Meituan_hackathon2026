@@ -394,7 +394,7 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
   color: var(--text-mid); margin-top: 16px;
 }
 
-/* 双入口卡片 */
+/* 首页入口卡片 */
 .entry-row {
   display: flex; gap: 16px;
   flex-wrap: wrap; justify-content: center; width: 100%;
@@ -426,6 +426,7 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 }
 .eu::before { background: radial-gradient(ellipse, rgba(141,121,184,0.12) 0%, transparent 65%); }
 .ea::before { background: radial-gradient(ellipse, rgba(210,184,132,0.11) 0%, transparent 65%); }
+.eo::before { background: radial-gradient(ellipse, rgba(167,146,216,0.14) 0%, transparent 65%); }
 .ecard:hover { transform: translateY(-10px); border-color: rgba(141,121,184,0.28); box-shadow: 0 16px 48px rgba(130,100,70,0.10), 0 0 0 1px rgba(141,121,184,0.08); }
 .ecard:hover::before { opacity: 1; }
 
@@ -439,16 +440,20 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 }
 .eu .ico-wrap { background: rgba(141,121,184,0.12); border-color: rgba(141,121,184,0.22); }
 .ea .ico-wrap { background: rgba(210,184,132,0.12); border-color: rgba(210,184,132,0.20); }
+.eo .ico-wrap { background: rgba(167,146,216,0.12); border-color: rgba(167,146,216,0.24); }
 .ecard .ico-wrap i { font-size: 22px; }
 .eu .ico-wrap i { color: #8d79b8; }
 .ea .ico-wrap i { color: #9a7a52; }
+.eo .ico-wrap i { color: #8f76c7; }
 
 .ecard .ttl {
   font-family: "Noto Serif SC", serif;
   font-size: 16px; font-weight: 400;
   margin-bottom: 8px; letter-spacing: 0.05em;
 }
-.eu .ttl { color: #8d79b8; } .ea .ttl { color: #9a7a52; }
+.eu .ttl { color: #8d79b8; }
+.ea .ttl { color: #9a7a52; }
+.eo .ttl { color: #8f76c7; }
 
 .ecard .dsc {
   font-size: 12px; color: var(--text-mid);
@@ -463,6 +468,7 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
 .ecard:hover .arr { gap: 9px; }
 .eu:hover .arr { color: #8d79b8; }
 .ea:hover .arr { color: #9a7a52; }
+.eo:hover .arr { color: #8f76c7; }
 
 /* 页脚 */
 .bfooter {
@@ -546,6 +552,12 @@ svg.nail-clip-def { position: absolute; width: 0; height: 0; overflow: hidden; }
         <div class="ttl">用户体验</div>
         <div class="dsc">AI 虚拟试戴<br>智能推荐 · 手型分析</div>
         <div class="arr">开始体验 <i class="ti ti-arrow-narrow-right"></i></div>
+      </a>
+      <a class="ecard eo" href="admin/index.html?platform=ops#trend-agent">
+        <div class="ico-wrap"><i class="ti ti-sparkles"></i></div>
+        <div class="ttl">智能运营</div>
+        <div class="dsc">Agent助手 · UGC平台<br>趋势发现 · 数据聚合</div>
+        <div class="arr">进入运营台 <i class="ti ti-arrow-narrow-right"></i></div>
       </a>
       <a class="ecard ea" href="admin/index.html">
         <div class="ico-wrap"><i class="ti ti-chart-dots-3"></i></div>

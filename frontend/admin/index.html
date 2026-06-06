@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>美甲AI智能运营 - 商户后台</title>
+<title>Prism 商户运营台</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="admin-styles.css?v=report-suggestions-20260605-2">
 </head>
@@ -13,13 +13,13 @@
   <div class="nav-left"><div class="nav-logo"><span class="brand-en">Prism</span><span class="brand-cn">商户运营台</span></div></div>
   <div class="nav-center">
     <div class="nav-tabs">
-      <div class="nav-tab active" data-page="home" onclick="switchPage('home')"><i class="ti ti-home"></i> 首页</div>
-      <div class="nav-tab" data-page="assets" onclick="switchPage('assets')"><i class="ti ti-photo"></i> 素材管理</div>
-      <div class="nav-tab" data-page="trend-agent" onclick="switchPage('trend-agent')"><i class="ti ti-sparkles"></i> 趋势发现</div>
-      <div class="nav-tab" data-page="push" onclick="switchPage('push')"><i class="ti ti-rocket"></i> 爆款推送</div>
-      <div class="nav-tab" data-page="dashboard" onclick="switchPage('dashboard')"><i class="ti ti-chart-bar"></i> 数据看板</div>
-      <div class="nav-tab" data-page="report" onclick="switchPage('report')"><i class="ti ti-report-analytics"></i> 复盘报告</div>
-      <div class="nav-tab" data-page="boost" onclick="switchPage('boost')"><i class="ti ti-speakerphone"></i> 投流管理</div>
+      <div class="nav-tab merchant-nav-tab active" data-page="home" onclick="switchPage('home')"><i class="ti ti-home"></i> 首页</div>
+      <div class="nav-tab merchant-nav-tab" data-page="assets" onclick="switchPage('assets')"><i class="ti ti-photo"></i> 素材管理</div>
+      <div class="nav-tab ops-nav-tab" data-page="trend-agent" onclick="switchPage('trend-agent')"><i class="ti ti-sparkles"></i> 智能运营</div>
+      <div class="nav-tab merchant-nav-tab" data-page="push" onclick="switchPage('push')"><i class="ti ti-rocket"></i> 爆款推送</div>
+      <div class="nav-tab merchant-nav-tab" data-page="dashboard" onclick="switchPage('dashboard')"><i class="ti ti-chart-bar"></i> 数据看板</div>
+      <div class="nav-tab merchant-nav-tab" data-page="report" onclick="switchPage('report')"><i class="ti ti-report-analytics"></i> 复盘报告</div>
+      <div class="nav-tab merchant-nav-tab" data-page="boost" onclick="switchPage('boost')"><i class="ti ti-speakerphone"></i> 投流管理</div>
     </div>
   </div>
   <div class="nav-right">
@@ -41,7 +41,6 @@
   <h3 class="home-section-title">功能模块</h3>
   <div class="home-modules">
     <div class="home-module-card" onclick="switchPage('assets')"><div class="home-module-icon" style="background:#FAEEDA"><i class="ti ti-photo" style="color:#BA7517"></i></div><div class="home-module-info"><div class="home-module-name">素材管理</div><div class="home-module-desc">款式图、裸手模板、上传新款式</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
-    <div class="home-module-card" onclick="switchPage('trend-agent')"><div class="home-module-icon" style="background:#F5F2FF"><i class="ti ti-sparkles" style="color:#8D79B8"></i></div><div class="home-module-info"><div class="home-module-name">趋势发现</div><div class="home-module-desc">数据源接入、趋势识别、爆款依据追踪</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('push')"><div class="home-module-icon" style="background:#FCE4D6"><i class="ti ti-rocket" style="color:#993C1D"></i></div><div class="home-module-info"><div class="home-module-name">爆款推送</div><div class="home-module-desc">今日推送、编辑推荐语、一键上架</div></div><span class="home-module-badge" id="home-push-pending-badge">0 条待处理</span><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('dashboard')"><div class="home-module-icon" style="background:#E2EFDA"><i class="ti ti-chart-bar" style="color:#375623"></i></div><div class="home-module-info"><div class="home-module-name">数据看板</div><div class="home-module-desc">转化漏斗、AI助手播报、款式热度趋势</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
     <div class="home-module-card" onclick="switchPage('report')"><div class="home-module-icon" style="background:#EEEDFE"><i class="ti ti-report-analytics" style="color:#534AB7"></i></div><div class="home-module-info"><div class="home-module-name">复盘报告</div><div class="home-module-desc">AI助手周报/日报、运营建议、一键采纳</div></div><i class="ti ti-chevron-right" style="color:#ccc"></i></div>
@@ -160,9 +159,9 @@
   </div>
 </div>
 
-<!-- ===== 趋势发现 ===== -->
+<!-- ===== 智能运营 ===== -->
 <div class="page-panel" id="panel-trend-agent">
-  <div class="page-top"><div><h2 class="page-title">趋势发现</h2><p class="page-sub">数据源接入、运行趋势识别、查看趋势证据与转草稿</p></div></div>
+  <div class="page-top"><div><h2 class="page-title">智能运营</h2><p class="page-sub">Agent 助手、UGC 平台、趋势发现与数据聚合</p></div></div>
   <div class="trend-layout">
     <div class="trend-main">
       <div class="card">
@@ -259,14 +258,16 @@
   <div id="push-manager">
     <div class="page-top"><div><h2 class="page-title">爆款推送管理</h2><p class="page-sub">管理待上架与已上架的爆款推送卡片</p></div></div>
     <div class="card push-manager-card">
-      <div class="card-header"><div class="card-title"><i class="ti ti-rocket"></i> 待上架 <span class="count-badge" id="push-pending-count">0 条</span></div></div>
-      <div class="asset-actions" style="margin-bottom:12px">
-        <button class="btn-ghost-sm" id="push-delete-toggle" onclick="togglePushDeleteMode()"><i class="ti ti-trash"></i> 删除</button>
-      </div>
-      <div class="batch-delete-bar" id="push-delete-bar" style="display:none">
-        <label><input type="checkbox" id="push-select-all" onchange="toggleSelectAllPush(this.checked)"> 全选</label>
-        <button class="btn-danger-sm" onclick="confirmDeleteSelectedPush()">删除选中</button>
-        <button class="btn-ghost-sm" onclick="togglePushDeleteMode(false)">取消</button>
+      <div class="card-header">
+        <div class="card-title"><i class="ti ti-rocket"></i> 待上架 <span class="count-badge" id="push-pending-count">0 条</span></div>
+        <div class="push-delete-controls">
+          <button class="btn-ghost-sm" id="push-delete-toggle" onclick="togglePushDeleteMode()"><i class="ti ti-trash"></i> 删除</button>
+          <div class="batch-delete-bar push-delete-bar" id="push-delete-bar" style="display:none">
+            <label><input type="checkbox" id="push-select-all" onchange="toggleSelectAllPush(this.checked)"> 全选</label>
+            <button class="btn-danger-sm" onclick="confirmDeleteSelectedPush()">删除选中</button>
+            <button class="btn-ghost-sm" onclick="togglePushDeleteMode(false)">取消</button>
+          </div>
+        </div>
       </div>
       <div class="push-card-list" id="push-pending-list"></div>
     </div>

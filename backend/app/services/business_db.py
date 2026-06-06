@@ -250,12 +250,14 @@ def list_event_stats(limit: int = 50) -> list[dict[str, Any]]:
 
 def list_hot_push_candidates(limit: int = 10) -> list[dict[str, Any]]:
     with connect_db() as conn:
+        _create_tables(conn)
         rows = conn.execute(
             """
             SELECT push_id, style_id, merchant_id, status, selected_image_url,
                    selected_coupon_url, final_tagline, final_price, updated_at,
                    snapshot_style_name, snapshot_image_url, snapshot_tags_json,
-                   snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json
+                   snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json,
+                   snapshot_source_posts_json, snapshot_image_urls_json
             FROM push_audits
             WHERE status != 'rejected'
             ORDER BY updated_at DESC
@@ -278,6 +280,8 @@ def list_hot_push_candidates(limit: int = 10) -> list[dict[str, Any]]:
                     "life_cycle": snapshot["life_cycle"],
                     "tags": snapshot["tags"],
                     "signals": snapshot["signals"],
+                    "source_posts": snapshot.get("source_posts", []),
+                    "style_image_urls": snapshot.get("style_image_urls", []),
                     "event_stats": _event_stats_for_style(conn, audit["style_id"]) if audit["style_id"] else {},
                     "status": audit["status"],
                     "audit_details": audit,
@@ -391,45 +395,62 @@ def set_pending_push_trends(
                 found[trend_id] = _trend_payload(dict(row))
             else:
                 missing.append(trend_id)
+        trend_score_max = float(
+            conn.execute("SELECT MAX(trend_score) AS max_score FROM trends").fetchone()["max_score"] or 0.0
+        )
 
-        for trend_id, trend in found.items():
-            push_id = _push_id_for_trend(trend_id)
-            keywords = trend.get("keywords") or []
-            tags = {"style_tags": list(keywords)[:8]} if keywords else {}
-            signals: list[dict[str, Any]] = []
-            metrics = trend.get("metrics") or {}
-            for key in ("engagement_score", "support_score", "comment_signal_score", "coverage_confidence_score"):
-                if key in metrics:
-                    signals.append({"signal": key, "value": float(metrics[key]), "delta": 0.0, "weight": 0.25})
+    prepared = [
+        _trend_push_snapshot(
+            trend_id=trend_id,
+            trend=trend,
+            merchant_id=merchant_id,
+            trend_score_max=trend_score_max,
+        )
+        for trend_id, trend in found.items()
+    ]
+
+    with connect_db() as conn:
+        _create_tables(conn)
+        for item in prepared:
+            snapshot = item["snapshot"]
             conn.execute(
                 """
                 INSERT INTO push_audits
                 (push_id, style_id, merchant_id, status, selected_image_url, selected_coupon_url,
                  final_tagline, final_price, updated_at, snapshot_style_name, snapshot_image_url,
-                 snapshot_tags_json, snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json)
-                VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+                 snapshot_tags_json, snapshot_hot_score, snapshot_life_cycle, snapshot_signals_json,
+                 snapshot_source_posts_json, snapshot_image_urls_json)
+                VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(push_id) DO UPDATE SET
                     merchant_id = excluded.merchant_id,
-                    status = CASE WHEN push_audits.status IN ('rejected') THEN 'pending' ELSE push_audits.status END,
+                    status = 'pending',
+                    selected_image_url = NULL,
+                    selected_coupon_url = NULL,
+                    final_tagline = NULL,
+                    final_price = NULL,
                     updated_at = excluded.updated_at,
                     snapshot_style_name = excluded.snapshot_style_name,
                     snapshot_image_url = excluded.snapshot_image_url,
                     snapshot_tags_json = excluded.snapshot_tags_json,
                     snapshot_hot_score = excluded.snapshot_hot_score,
                     snapshot_life_cycle = excluded.snapshot_life_cycle,
-                    snapshot_signals_json = excluded.snapshot_signals_json
+                    snapshot_signals_json = excluded.snapshot_signals_json,
+                    snapshot_source_posts_json = excluded.snapshot_source_posts_json,
+                    snapshot_image_urls_json = excluded.snapshot_image_urls_json
                 """,
                 (
-                    push_id,
+                    item["push_id"],
                     "",
                     merchant_id,
                     now,
-                    trend.get("core_style") or "",
-                    trend.get("representative_image_url") or "",
-                    json.dumps(tags, ensure_ascii=False),
-                    trend.get("trend_score") or 0,
-                    trend.get("life_cycle") or "观察期",
-                    json.dumps(signals, ensure_ascii=False),
+                    snapshot["style_name"],
+                    snapshot["image_url"],
+                    json.dumps(snapshot["tags"], ensure_ascii=False),
+                    snapshot["hot_score"],
+                    snapshot["life_cycle"],
+                    json.dumps(snapshot["signals"], ensure_ascii=False),
+                    json.dumps(snapshot["source_posts"], ensure_ascii=False),
+                    json.dumps(snapshot["style_image_urls"], ensure_ascii=False),
                 ),
             )
 
@@ -446,6 +467,225 @@ def set_pending_push_trends(
         "missing_trend_ids": missing,
         "pending": [dict(row) for row in pending_rows],
     }
+
+
+def _trend_push_snapshot(
+    trend_id: str,
+    trend: dict[str, Any],
+    merchant_id: str,
+    trend_score_max: float = 0.0,
+) -> dict[str, Any]:
+    push_id = _push_id_for_trend(trend_id)
+    source_posts = _trend_source_posts(trend)
+    representative_image_url = _representative_post_image(trend, source_posts)
+    metrics = trend.get("metrics") if isinstance(trend.get("metrics"), dict) else {}
+    comment_summary = trend.get("comment_signal_summary") if isinstance(trend.get("comment_signal_summary"), dict) else {}
+
+    trend_score = float(trend.get("trend_score") or 0.0)
+    trend_score_display = _trend_display_score(trend_score, trend_score_max)
+    velocity_score = float(metrics.get("velocity_score") or metrics.get("velocity") or 0.0)
+    support_post_count = int(metrics.get("support_post_count") or len(source_posts) or 0)
+
+    search_heat = round(
+        min(100.0, 35 + trend_score_display * 0.45 + velocity_score * 12 + support_post_count * 1.2),
+        1,
+    )
+    demand_total = _signal_count_total(comment_summary, ("demand_signals", "user_demands", "purchase_intents"))
+    social_total = _signal_count_total(comment_summary, ("social_proof_signals", "social_proofs"))
+    comment_total = sum(int(post.get("metrics", {}).get("comments") or 0) for post in source_posts)
+    review_frequency = int(round(comment_total * 0.18 + demand_total * 6 + social_total * 4))
+    favorite_rate = _stable_mock_rate(push_id, min_rate=0.20, max_rate=0.50)
+
+    signals = [
+        {
+            "signal": "搜索热度",
+            "value": search_heat,
+            "delta": round(min(0.45, max(0.08, velocity_score * 0.12)), 2),
+            "weight": 0.34,
+        },
+        {
+            "signal": "评价词频",
+            "value": review_frequency,
+            "delta": round(min(0.35, max(0.06, (demand_total + social_total) / max(review_frequency, 1))), 2),
+            "weight": 0.32,
+        },
+        {
+            "signal": "试戴收藏率",
+            "value": favorite_rate,
+            "delta": _stable_mock_rate(f"{push_id}:delta", min_rate=0.10, max_rate=0.25),
+            "weight": 0.34,
+        },
+    ]
+
+    tags = _trend_push_tags(trend)
+    style_image_urls = [representative_image_url] if representative_image_url else []
+    style_image_urls.extend(_generate_trend_push_composites(push_id, representative_image_url, merchant_id))
+
+    return {
+        "push_id": push_id,
+        "snapshot": {
+            "style_name": trend.get("core_style") or "趋势爆款",
+            "image_url": representative_image_url,
+            "tags": tags,
+            "hot_score": trend_score_display,
+            "life_cycle": trend.get("life_cycle") or "观察期",
+            "signals": signals,
+            "source_posts": source_posts,
+            "style_image_urls": style_image_urls,
+        },
+    }
+
+
+def _trend_display_score(trend_score: float, trend_score_max: float) -> float:
+    if trend_score <= 0:
+        return 0.0
+    if trend_score_max <= 0:
+        return round(min(93.8, trend_score), 1)
+    return round(min(93.8, trend_score / trend_score_max * 93.8), 1)
+
+
+def _trend_push_tags(trend: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from app.data.nail_taxonomy_v2_seed import ARRAY_FIELD_KEYS
+        from app.services.taxonomy_store import get_approved_values_map
+
+        approved = get_approved_values_map()
+        metrics = trend.get("metrics") if isinstance(trend.get("metrics"), dict) else {}
+        candidates: list[str] = []
+        for value in trend.get("keywords") or []:
+            text = str(value).strip()
+            if text:
+                candidates.append(text)
+        for value in metrics.get("core_style_tags") or []:
+            text = str(value).strip()
+            if text:
+                candidates.append(text)
+        core_style = str(trend.get("core_style") or "").strip()
+        if core_style:
+            candidates.append(core_style)
+
+        deduped = list(dict.fromkeys(candidates))
+        tags: dict[str, list[str]] = {field_key: [] for field_key in ARRAY_FIELD_KEYS}
+        matched: set[str] = set()
+        for field_key in ARRAY_FIELD_KEYS:
+            allowed = approved.get(field_key, set())
+            values = [value for value in deduped if value in allowed]
+            if values:
+                tags[field_key] = values
+                matched.update(values)
+        unmatched = [value for value in deduped if value not in matched]
+        if unmatched:
+            tags["candidate_tags"] = unmatched[:8]
+        if any(tags.values()):
+            return tags
+    except Exception:
+        pass
+
+    keywords = trend.get("keywords") or []
+    return {"style_tags": list(keywords)[:8]} if isinstance(keywords, list) and keywords else {}
+
+
+def _trend_source_posts(trend: dict[str, Any]) -> list[dict[str, Any]]:
+    posts = trend.get("supporting_posts") if isinstance(trend.get("supporting_posts"), list) else []
+    normalized = [_normalize_trend_source_post(item) for item in posts if isinstance(item, dict)]
+    normalized.sort(key=_source_post_rank, reverse=True)
+    return normalized
+
+
+def _normalize_trend_source_post(post: dict[str, Any]) -> dict[str, Any]:
+    metrics = post.get("metrics") if isinstance(post.get("metrics"), dict) else {}
+    likes = int(post.get("like_count") or metrics.get("likes") or metrics.get("like_count") or 0)
+    favorites = int(post.get("favorite_count") or metrics.get("favorites") or metrics.get("favorite_count") or 0)
+    comments = int(post.get("comment_count") or metrics.get("comments") or metrics.get("comment_count") or 0)
+    image_urls = post.get("image_urls") if isinstance(post.get("image_urls"), list) else []
+    comment_insights = post.get("comment_insights") if isinstance(post.get("comment_insights"), dict) else {}
+    return {
+        "post_id": post.get("post_id") or "",
+        "title": post.get("title") or post.get("content") or "趋势来源帖",
+        "summary": post.get("summary") or comment_insights.get("summary") or comment_insights.get("comment_summary") or "",
+        "image_url": (
+            post.get("image_url")
+            or post.get("representative_image_url")
+            or post.get("cover_image_url")
+            or (image_urls[0] if image_urls else "")
+        ),
+        "url": post.get("source_url") or post.get("url") or "",
+        "platform": post.get("source") or "小红书",
+        "relative_time": post.get("relative_time") or "",
+        "metrics": {
+            "likes": likes,
+            "favorites": favorites,
+            "comments": comments,
+            "growth_3d": int(round(float(post.get("growth_3d") or metrics.get("growth_3d") or 0))),
+        },
+        "status": {"label": "趋势支撑"},
+    }
+
+
+def _source_post_rank(post: dict[str, Any]) -> float:
+    metrics = post.get("metrics") if isinstance(post.get("metrics"), dict) else {}
+    return (
+        float(metrics.get("likes") or 0) * 1.0
+        + float(metrics.get("favorites") or 0) * 1.4
+        + float(metrics.get("comments") or 0) * 1.8
+    )
+
+
+def _representative_post_image(trend: dict[str, Any], source_posts: list[dict[str, Any]]) -> str:
+    for post in source_posts:
+        image_url = str(post.get("image_url") or "").strip()
+        if image_url:
+            return image_url
+    return str(trend.get("representative_image_url") or trend.get("style_source_image_url") or "").strip()
+
+
+def _signal_count_total(summary: dict[str, Any], keys: tuple[str, ...]) -> int:
+    total = 0
+    for key in keys:
+        values = summary.get(key)
+        if isinstance(values, dict):
+            total += sum(int(value or 0) for value in values.values())
+        elif isinstance(values, list):
+            for item in values:
+                if isinstance(item, dict):
+                    total += int(item.get("count") or item.get("value") or 1)
+                elif item:
+                    total += 1
+    return total
+
+
+def _stable_mock_rate(seed: str, min_rate: float, max_rate: float) -> float:
+    span = max_rate - min_rate
+    if span <= 0:
+        return round(min_rate, 2)
+    seed_value = sum((index + 1) * ord(ch) for index, ch in enumerate(seed))
+    return round(min_rate + (seed_value % 1000) / 999 * span, 2)
+
+
+def _generate_trend_push_composites(push_id: str, style_image_url: str, merchant_id: str) -> list[str]:
+    if not style_image_url:
+        return []
+    output: list[str] = []
+    for template_id in list_selected_template_ids(merchant_id)[:4]:
+        template = get_template_by_id(template_id)
+        template_image_url = str((template or {}).get("hand_image_url") or "").strip()
+        if not template_image_url:
+            continue
+        try:
+            from app.schemas.style import CompositeRequest
+            from app.services.image_generation import generate_composite_image
+
+            generated = generate_composite_image(
+                CompositeRequest(
+                    style_image_url=style_image_url,
+                    template_image_url=template_image_url,
+                )
+            )
+            if generated.composite_image_url:
+                output.append(generated.composite_image_url)
+        except Exception:
+            continue
+    return output
 
 
 def upsert_push_audit(
@@ -2085,6 +2325,8 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             snapshot_hot_score REAL,
             snapshot_life_cycle TEXT,
             snapshot_signals_json TEXT NOT NULL DEFAULT '[]',
+            snapshot_source_posts_json TEXT NOT NULL DEFAULT '[]',
+            snapshot_image_urls_json TEXT NOT NULL DEFAULT '[]',
             updated_at TEXT NOT NULL,
             FOREIGN KEY(style_id) REFERENCES styles(style_id)
         );
@@ -2284,6 +2526,8 @@ def _ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "push_audits", "snapshot_hot_score", "REAL")
     _ensure_column(conn, "push_audits", "snapshot_life_cycle", "TEXT")
     _ensure_column(conn, "push_audits", "snapshot_signals_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "push_audits", "snapshot_source_posts_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "push_audits", "snapshot_image_urls_json", "TEXT NOT NULL DEFAULT '[]'")
 
 
 def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -2714,6 +2958,8 @@ def _build_push_snapshot(
 def _push_snapshot_from_audit(conn: sqlite3.Connection, audit: dict[str, Any]) -> dict[str, Any]:
     snapshot_tags = json.loads(audit.get("snapshot_tags_json") or "{}")
     snapshot_signals = json.loads(audit.get("snapshot_signals_json") or "[]")
+    snapshot_source_posts = json.loads(audit.get("snapshot_source_posts_json") or "[]")
+    snapshot_image_urls = json.loads(audit.get("snapshot_image_urls_json") or "[]")
     if audit.get("snapshot_style_name") or audit.get("snapshot_image_url") or snapshot_tags or snapshot_signals:
         return {
             "style_name": audit.get("snapshot_style_name") or "",
@@ -2722,5 +2968,7 @@ def _push_snapshot_from_audit(conn: sqlite3.Connection, audit: dict[str, Any]) -
             "hot_score": float(audit.get("snapshot_hot_score") or 0),
             "life_cycle": audit.get("snapshot_life_cycle") or "观察期",
             "signals": snapshot_signals if isinstance(snapshot_signals, list) else [],
+            "source_posts": snapshot_source_posts if isinstance(snapshot_source_posts, list) else [],
+            "style_image_urls": snapshot_image_urls if isinstance(snapshot_image_urls, list) else [],
         }
     return _build_push_snapshot(conn, str(audit.get("style_id") or ""))
