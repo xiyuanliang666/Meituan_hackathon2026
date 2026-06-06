@@ -1,0 +1,59 @@
+{
+  "push_id": "push-b567a4e3b0",
+  "sources": [
+    {
+      "image": "push-b567a4e3b0__source-1.jpg",
+      "title": "拥有了今年最喜欢的美甲！",
+      "platform": "小红书",
+      "url": "https://www.xiaohongshu.com/discovery/item/68bc084e000000001c008022?source=webshare&xhsshare=pc_web&xsec_token=ABBLkPCUUK5WISlYzTjfsK5Dc5wJt4oosDNZ4owHKW24g=&xsec_source=pc_share",
+      "published_at": "2025-09-09",
+      "relative_time": "约9个月前",
+      "metrics": {
+        "likes": 23000,
+        "favorites": 14000,
+        "comments": 460,
+        "growth_3d": 7
+      },
+      "status": {
+        "key": "hot",
+        "label": "爆款"
+      }
+    },
+    {
+      "image": "push-b567a4e3b0__source-2.jpg",
+      "title": "把彩色玻璃珠画手上了🧚",
+      "platform": "小红书",
+      "url": "https://www.xiaohongshu.com/discovery/item/69d7179f000000001f00788a?source=webshare&xhsshare=pc_web&xsec_token=AB95SEhcp_XGJaeGlqIVKIReHP1XRCrHIWB8KG-XdT47M=&xsec_source=pc_share",
+      "published_at": "2026-04-09",
+      "relative_time": "约2个月前",
+      "metrics": {
+        "likes": 14000,
+        "favorites": 11000,
+        "comments": 112,
+        "growth_3d": 15
+      },
+      "status": {
+        "key": "hot",
+        "label": "爆款"
+      }
+    },
+    {
+      "image": "push-b567a4e3b0__source-3.jpg",
+      "title": "彩色爆爆珠好好看",
+      "platform": "小红书",
+      "url": "https://www.xiaohongshu.com/discovery/item/68a6cabb000000001b03c8f3?source=webshare&xhsshare=pc_web&xsec_token=AB61Nn4SKRw6fdTarqQvoqZ5aBChULRj_k3F6dIZRJIsE=&xsec_source=pc_share",
+      "published_at": "2025-08-21",
+      "relative_time": "约10个月前",
+      "metrics": {
+        "likes": 3140,
+        "favorites": 3210,
+        "comments": 23,
+        "growth_3d": 5
+      },
+      "status": {
+        "key": "hot",
+        "label": "爆款"
+      }
+    }
+  ]
+}

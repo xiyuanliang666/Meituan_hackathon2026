@@ -1,0 +1,59 @@
+{
+  "push_id": "push-seed-022",
+  "sources": [
+    {
+      "image": "push-seed-022__source-1.png",
+      "title": "奶油渐变猫眼",
+      "platform": "小红书",
+      "url": "",
+      "published_at": "2026-06-05",
+      "relative_time": "3天前",
+      "metrics": {
+        "likes": 1243,
+        "favorites": 892,
+        "comments": 156,
+        "growth_3d": 15
+      },
+      "status": {
+        "key": "hot",
+        "label": "爆款"
+      }
+    },
+    {
+      "image": "push-seed-022__source-2.png",
+      "title": "",
+      "platform": "",
+      "url": "",
+      "published_at": "",
+      "relative_time": "",
+      "metrics": {
+        "likes": 0,
+        "favorites": 0,
+        "comments": 0,
+        "growth_3d": 0
+      },
+      "status": {
+        "key": "hot",
+        "label": "爆款"
+      }
+    },
+    {
+      "image": "push-seed-022__source-3.png",
+      "title": "",
+      "platform": "",
+      "url": "",
+      "published_at": "",
+      "relative_time": "",
+      "metrics": {
+        "likes": 0,
+        "favorites": 0,
+        "comments": 0,
+        "growth_3d": 0
+      },
+      "status": {
+        "key": "hot",
+        "label": "爆款"
+      }
+    }
+  ]
+}

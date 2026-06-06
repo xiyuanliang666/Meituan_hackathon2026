@@ -10,7 +10,5 @@ __pycache__
 *.pyc
 node_modules
 .claude/
-backend/storage/uploads/
-backend/storage/generated/
 backend/.playwright-xhs-profile/
 *.local_backup
