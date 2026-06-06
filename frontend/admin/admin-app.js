@@ -5,9 +5,19 @@ const IS_SMART_OPS_PLATFORM = new URLSearchParams(window.location.search).get('p
 
 function pageFromHash() {
   if (IS_SMART_OPS_PLATFORM) return 'trend-agent';
-  const page = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+  const page = pushHashPage();
   if (page === 'trend-agent') return 'home';
   return ADMIN_PAGES.has(page) ? page : 'home';
+}
+
+function pushHashPage() {
+  return decodeURIComponent((window.location.hash || '').replace(/^#/, '').split('?')[0] || '');
+}
+
+function pushHashParams() {
+  const hash = (window.location.hash || '').replace(/^#/, '');
+  const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+  return new URLSearchParams(query);
 }
 
 function switchPage(page, options = {}) {
@@ -27,7 +37,7 @@ function switchPage(page, options = {}) {
   }
   // 页面加载时从后端拉取数据
   if (page === 'dashboard') loadDashboardData();
-  if (page === 'trend-agent') { loadTrendRunsAndList(); loadDataHealth(); loadCandidateTaxonomyTerms(); }
+  if (page === 'trend-agent') { loadTrendRunsAndList(); loadCandidateTaxonomyTerms(); }
   if (page === 'push') loadPushData();
   if (page === 'boost') renderBoostBudgetState();
   if (page === 'notify') renderNotifyList();
@@ -1545,7 +1555,7 @@ async function runTrendAgent() {
 
 async function loadTrendRunsAndList() {
   restoreTrendSourceConfig();
-  await Promise.all([loadLatestTrendRun(), loadTrendList(), loadDataHealth(), loadCandidateTaxonomyTerms()]);
+  await Promise.all([loadLatestTrendRun(), loadTrendList(), loadCandidateTaxonomyTerms()]);
 }
 
 async function loadLatestTrendRun() {
@@ -1591,7 +1601,6 @@ function pollTrendRun(runId) {
         if (run.status === 'succeeded') {
           await Promise.all([
             loadTrendList(),
-            loadDataHealth(),
             loadCandidateTaxonomyTerms(),
           ]);
           showToast(`趋势任务完成，产出 ${run.generated_trends || 0} 条趋势`);
@@ -1628,35 +1637,35 @@ function renderTrendRunCard(run) {
     completed: '已完成',
     failed: '失败',
   }[run.stage] || run.stage || '处理中';
-  const recentLogs = Array.isArray(run.logs) ? run.logs.slice(-4) : [];
   const sourceMode = run?.payload?.source_mode || '';
   const nestedTrendRun = run?.payload?.trend_run || {};
   const discoveredPostCount = nestedTrendRun.total_posts || 0;
   const commentCompletedPosts = run.processed_posts || 0;
+  const dataSyncText = `${Number(run.imported_posts || 0)} 新增 / ${Number(run.updated_posts || 0)} 更新`;
+  const commentInsightText = commentCompletedPosts > 0 ? `${commentCompletedPosts} 篇已处理` : '复用已清洗数据';
+  const summaryText = run.status === 'succeeded'
+    ? `已基于 ${discoveredPostCount || run.total_posts || 0} 篇有效帖子生成 ${run.generated_trends || 0} 条趋势，帖子库完成 ${dataSyncText}。`
+    : run.status === 'failed'
+      ? '本次趋势识别未完成，请查看失败原因后重试。'
+      : `正在处理 ${run.total_posts || 0} 篇帖子，当前阶段为「${stageText}」。`;
   const needsLoginHint = sourceMode === 'seed_links' && run.stage === 'comment_pipeline' && (run.status === 'pending' || run.status === 'running');
   el.innerHTML = `
     <div class="trend-run-head">
       <div>
-        <div class="trend-run-title">Pipeline ${run.pipeline_run_id}</div>
-        <div class="trend-run-meta">触发方式：${run.triggered_by || 'manual'} · 当前阶段：${stageText} · 更新时间：${formatDateTime(run.updated_at || run.created_at)}</div>
+        <div class="trend-run-title">最近一次趋势识别</div>
+        <div class="trend-run-meta">任务编号：${run.pipeline_run_id} · 触发方式：${run.triggered_by || 'manual'} · 更新时间：${formatDateTime(run.updated_at || run.created_at)}</div>
       </div>
       <span class="lc-pill lc-${statusClass}">${statusText}</span>
     </div>
+    <div class="trend-run-summary">${escapeHtml(summaryText)}</div>
     <div class="trend-run-stats">
       <div class="trend-run-stat"><span>本次接入帖子</span><strong>${run.total_posts || 0}</strong></div>
-      <div class="trend-run-stat"><span>评论链路完成帖子</span><strong>${commentCompletedPosts}</strong></div>
+      <div class="trend-run-stat"><span>参与趋势识别</span><strong>${discoveredPostCount || run.total_posts || 0}</strong></div>
       <div class="trend-run-stat"><span>产出趋势</span><strong>${run.generated_trends || 0}</strong></div>
+      <div class="trend-run-stat"><span>帖子库更新</span><strong>${dataSyncText}</strong></div>
     </div>
-    <div class="trend-run-stats trend-run-stats-secondary">
-      <div class="trend-run-stat"><span>新增入库帖子</span><strong>${run.imported_posts || 0}</strong></div>
-      <div class="trend-run-stat"><span>更新已有帖子</span><strong>${run.updated_posts || 0}</strong></div>
-      <div class="trend-run-stat"><span>参与本轮识别帖子</span><strong>${discoveredPostCount}</strong></div>
-    </div>
-    <div class="trend-run-stats trend-run-stats-secondary">
-      <div class="trend-run-stat"><span>推送队列</span><strong>${run.converted_drafts || 0}</strong></div>
-    </div>
+    <div class="trend-run-note"><i class="ti ti-info-circle"></i><span>评论洞察：${escapeHtml(commentInsightText)}。爆款推送由趋势详情中的「爆款推送」单独触发，不计入本次识别任务。</span></div>
     ${needsLoginHint ? `<div class="trend-run-login-hint"><i class="ti ti-user-check"></i><span>当前正在抓取链接评论，需要本机 Playwright 浏览器登录小红书并保持页面可继续执行。</span></div>` : ''}
-    ${recentLogs.length ? `<div class="trend-run-logs">${recentLogs.map(item => `<div class="trend-run-log-line">${escapeHtml(item.message || '')}</div>`).join('')}</div>` : ''}
     ${run.error_message ? `<div class="trend-run-error">${run.error_message}</div>` : ''}
   `;
 }
@@ -1850,7 +1859,7 @@ function renderTrendDetail(trend) {
     ...chipGroup((signals.negative_feedbacks || []).slice(0, 4), 'negative'),
   ].join('');
 
-  el.innerHTML = `
+  el.innerHTML = `<div class="trend-detail-scroll">
     <div class="trend-detail-cover">
       <div class="trend-cover-fallback"><i class="ti ti-photo"></i></div>
       ${trend.representative_image_url ? `<img src="${staticUrl(trend.representative_image_url)}" alt="${escapeHtml(trend.core_style)}" onload="this.parentElement.classList.remove('is-fallback')">` : '<i class="ti ti-photo"></i>'}
@@ -1897,7 +1906,7 @@ function renderTrendDetail(trend) {
         ${supportPosts.length ? supportPosts.map(renderSupportingPostCard).join('') : '<div class="trend-empty-inline">暂无支撑帖子</div>'}
       </div>
     </div>
-  `;
+  </div>`;
 }
 
 function renderSupportingPostCard(post) {
@@ -2045,38 +2054,6 @@ function signalQualitySummary(dist) {
   if (dist.low_content) parts.push(`低内容 ${dist.low_content}`);
   if (!parts.length) return '';
   return `<span class="trend-score-pill">信号: ${parts.join(' / ')}</span>`;
-}
-
-// ===== 数据健康 (Fix 2) =====
-async function loadDataHealth() {
-  const grid = document.getElementById('trend-health-grid');
-  if (!grid) return;
-  if (!adminBackendAvailable) {
-    grid.innerHTML = '<div class="trend-run-empty">后端未连接</div>';
-    return;
-  }
-  try {
-    const health = await apiGet('/trends/data-health');
-    const ready = health.ready_for_trend_discovery;
-    const healthText = {
-      good: '良好',
-      needs_attention: '需关注',
-    }[health.health] || health.health;
-    const healthColor = health.health === 'good' ? '#375623' : '#CC2200';
-    grid.innerHTML = `
-      <div class="trend-health-stat"><span>总帖子</span><strong>${health.total_posts}</strong></div>
-      <div class="trend-health-stat"><span>已分类</span><strong>${health.classified}</strong></div>
-      <div class="trend-health-stat"><span>评论已完成</span><strong>${health.comments_done}</strong></div>
-      <div class="trend-health-stat"><span>抓取失败</span><strong style="color:${health.fetch_failed > 0 ? '#CC2200' : '#888'}">${health.fetch_failed}</strong></div>
-      <div class="trend-health-stat"><span>已过滤</span><strong>${health.filtered_out}</strong></div>
-      <div class="trend-health-stat"><span>空内容</span><strong style="color:${health.empty_content > 0 ? '#CC2200' : '#888'}">${health.empty_content}</strong></div>
-      <div class="trend-health-stat"><span>零互动</span><strong>${health.zero_interaction}</strong></div>
-      <div class="trend-health-stat" style="grid-column:span 2"><span>就绪可发现</span><strong style="color:${ready ? '#375623' : '#CC2200'}">${ready ? '是' : '否'}</strong></div>
-      <div class="trend-health-stat" style="grid-column:span 2"><span>健康状态</span><strong style="color:${healthColor}">${healthText}</strong></div>
-    `;
-  } catch (e) {
-    grid.innerHTML = `<div class="trend-run-empty">健康检查失败：${e.message}</div>`;
-  }
 }
 
 // ===== 候选标签词 (Fix 5) =====
@@ -2264,6 +2241,7 @@ async function loadPushData() {
   }
   updateHomePushPending(pushCardsData.filter(card => !isPushListed(card)).length);
   renderPushManager();
+  restorePushEditorFromHash();
 }
 
 function showPushManager() {
@@ -2271,9 +2249,12 @@ function showPushManager() {
   const editor = document.getElementById('push-editor');
   if (manager) manager.style.display = 'block';
   if (editor) editor.style.display = 'none';
+  if (pushHashPage() === 'push' && pushHashParams().has('push_id')) {
+    window.history.replaceState(null, '', '#push');
+  }
 }
 
-function openPushEditor(pushId) {
+function openPushEditor(pushId, options = {}) {
   const card = pushCardsData.find(item => item.push_id === pushId) || pushCardsData[0];
   if (!card) return;
   activePushCard = card;
@@ -2282,6 +2263,21 @@ function openPushEditor(pushId) {
   const editor = document.getElementById('push-editor');
   if (manager) manager.style.display = 'none';
   if (editor) editor.style.display = 'block';
+  if (options.updateHash !== false) {
+    const nextHash = `#push?push_id=${encodeURIComponent(card.push_id)}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', nextHash);
+    }
+  }
+}
+
+function restorePushEditorFromHash() {
+  if (pushHashPage() !== 'push') return;
+  const pushId = pushHashParams().get('push_id') || '';
+  if (!pushId) return;
+  if (pushCardsData.some(card => card.push_id === pushId)) {
+    openPushEditor(pushId, { updateHash: false });
+  }
 }
 
 function renderPushManager() {
@@ -2297,7 +2293,9 @@ function renderPushManager() {
   pendingList.innerHTML = pending.length ? pending.map(renderPushManageCard).join('') : renderPushEmpty('暂无待上架推送');
   listedList.innerHTML = listed.length ? listed.map(renderPushManageCard).join('') : renderPushEmpty('暂无已上架推送');
   updatePushDeleteUI(pending);
-  showPushManager();
+  if (!(pushHashPage() === 'push' && pushHashParams().has('push_id'))) {
+    showPushManager();
+  }
 }
 
 function updateHomePushPending(count) {
@@ -2432,7 +2430,7 @@ function renderPushEditor(card) {
 function renderPushSignals(card) {
   const box = document.querySelector('#push-editor .signal-pills');
   if (!box) return;
-  const signals = Array.isArray(card.signal_sources) ? card.signal_sources : [];
+  const signals = Array.isArray(card.signals || card.signal_sources) ? (card.signals || card.signal_sources) : [];
   const wanted = ['搜索热度', '评价词频', '试戴收藏率'];
   const ordered = wanted
     .map(name => signals.find(item => item.signal === name))
@@ -2648,11 +2646,28 @@ async function regenPushImg(btn) {
   const styleUrl = card.style_image_urls?.[0];
   if (!styleUrl) { showToast('缺少款式原图，暂不能生成'); return; }
 
+  // 确保模板已加载
+  if (selectedTemplateIds.size === 0) {
+    try { await renderTemplates(); } catch (e) { /* ignore */ }
+  }
+
   const images = pushEditorImages(card);
   let targetIdx = currentPushImageIndex();
   if (targetIdx === 0 && images.length > 1) targetIdx = 1;
-  const target = images[targetIdx];
-  const templateUrl = target?.template?.hand_image_url;
+  let target = images[targetIdx];
+  let templateUrl = target?.template?.hand_image_url;
+
+  // 当前 composite 无模板时，尝试用第一个有效的模板
+  if (!templateUrl && target?.kind === 'composite' && selectedTemplateIds.size > 0) {
+    for (const tid of selectedTemplateIds) {
+      const tpl = findTemplateInMemory(tid);
+      if (tpl?.hand_image_url) {
+        templateUrl = tpl.hand_image_url;
+        break;
+      }
+    }
+  }
+
   if (!target || target.kind !== 'composite' || !templateUrl) {
     showToast('请先在素材管理选择模板图');
     return;
