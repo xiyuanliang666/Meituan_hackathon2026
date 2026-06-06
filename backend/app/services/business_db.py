@@ -742,6 +742,18 @@ def upsert_push_audit(
     return dict(row) if row else {}
 
 
+def update_push_composites(push_id: str, image_urls: list[str]) -> bool:
+    """持久化推送卡片的合成图 URL 列表到 snapshot_image_urls_json。"""
+    now_str = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        cur = conn.execute(
+            "UPDATE push_audits SET snapshot_image_urls_json = ?, updated_at = ? WHERE push_id = ?",
+            (json.dumps(image_urls, ensure_ascii=False), now_str, push_id),
+        )
+        return cur.rowcount > 0
+
+
 def upsert_style_tags(
     style_id: str,
     tags: dict[str, list[str]],

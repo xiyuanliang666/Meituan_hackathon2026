@@ -2688,6 +2688,15 @@ async function regenPushImg(btn) {
   if (newComposites.length > 0) {
     card.style_image_urls = [styleUrl, ...newComposites];
     renderPushEditorImages(card, 1);
+    // 持久化到数据库
+    try {
+      await apiRequest(`/push-cards/${encodeURIComponent(card.push_id)}/composites`, {
+        method: 'PUT',
+        body: JSON.stringify({ image_urls: card.style_image_urls }),
+      });
+    } catch (e) {
+      console.warn('[合成图] 持久化失败:', e.message);
+    }
     showToast(`已生成 ${newComposites.length} 张合成图`);
   } else {
     showToast('所有合成图生成失败，请稍后重试');

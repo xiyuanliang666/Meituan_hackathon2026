@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.schemas.operations import (
     AuditPushCardRequest,
@@ -11,6 +12,7 @@ from app.schemas.operations import (
     SkillExecuteRequest,
     SkillExecuteResponse,
 )
+from app.services.business_db import update_push_composites
 from app.services.operations import (
     audit_push_card,
     execute_skill,
@@ -32,6 +34,18 @@ def audit(push_id: str, request: AuditPushCardRequest) -> AuditPushCardResponse:
     if request.action not in {"accepted", "rejected"}:
         raise HTTPException(status_code=400, detail="action must be accepted or rejected")
     return audit_push_card(push_id, request)
+
+
+class UpdatePushCompositesRequest(BaseModel):
+    image_urls: list[str]
+
+
+@router.put("/push-cards/{push_id}/composites")
+def update_composites(push_id: str, request: UpdatePushCompositesRequest):
+    ok = update_push_composites(push_id, request.image_urls)
+    if not ok:
+        raise HTTPException(status_code=404, detail="push card not found")
+    return {"push_id": push_id, "updated": True}
 
 
 @router.put("/push-cards/pending", response_model=PendingPushStylesResponse)
