@@ -2,7 +2,8 @@ import json
 import sqlite3
 from uuid import uuid4
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any, Iterator
 
