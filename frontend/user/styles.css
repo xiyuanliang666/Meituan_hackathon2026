@@ -309,13 +309,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .tune-preview-btn{font-size:12px;padding:5px 13px;background:#7a8e50;color:#f0f5e8;border-radius:14px;cursor:pointer;font-weight:500;white-space:nowrap}
 
 /* 款式图区 */
-.tune-nail-area{height:180px;flex-shrink:0;position:relative;overflow:hidden;background:#a8b870}
-.tune-nail-bg{width:100%;height:100%;display:flex;align-items:flex-end;justify-content:center;padding-bottom:28px;position:relative}
-.tune-nails-row{display:flex;align-items:flex-end;gap:5px;position:relative;z-index:1}
-.tune-ns{border-radius:38% 38% 18% 18%;border:1.5px solid rgba(255,255,255,0.45);cursor:pointer;transition:all 0.15s;position:relative;flex-shrink:0;background:#8a9a5b}
-.tune-ns:hover{border-color:rgba(255,255,255,0.9)}
-.tune-ns.sel{border:2px solid #fff;box-shadow:0 0 0 2.5px rgba(255,210,80,0.75)}
-.tune-ns-lbl{position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(255,255,255,0.85);white-space:nowrap;pointer-events:none}
+.tune-nail-area{height:300px;flex-shrink:0;position:relative;overflow:hidden;background:#ffffff}
+.tune-nail-bg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding-bottom:0;position:relative}
+.tune-nails-row{display:flex;align-items:flex-end;gap:5px;position:relative;z-index:1;margin-bottom:20px}
+.tune-ns{border-radius:38% 38% 18% 18%;border:1.5px dashed #cccccc;cursor:pointer;transition:all 0.15s;position:relative;flex-shrink:0;background:#f0f0f0;backdrop-filter:blur(2px)}
+.tune-ns:hover{border-color:#999999;background:#e0e0e0}
+.tune-ns.sel{border:2px solid #ffd452;box-shadow:0 0 0 3px rgba(255,212,82,0.4);background:#fff8e1}
+.tune-ns-lbl{position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font-size:9px;color:#333333;white-space:nowrap;pointer-events:none}
 .tune-fhint{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.38);color:#fff;font-size:10px;text-align:center;padding:4px;display:none}
 .tune-fhint.show{display:block}
 
@@ -329,16 +329,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .tune-ld-desc{font-size:12px;color:#3a5020;font-weight:500;text-align:center;padding:0 20px;line-height:1.5}
 .tune-ld-hint{font-size:10px;color:#6a7e40}
 
-/* 提示条 */
-.tune-tip-bar{display:flex;align-items:center;gap:7px;padding:7px 13px;background:#f4f7ec;border-bottom:.5px solid #d8e4b8;flex-shrink:0;font-size:10px;color:#4a5e2a}
-.tune-tip-bar i{font-size:13px;color:#7a8e50;flex-shrink:0}
+/* 提示条（轻量横幅） */
+.tune-tip-bar{display:flex;align-items:center;gap:7px;padding:6px 12px;background:#f0f4f8;border-bottom:1px solid #d1d8e0;flex-shrink:0;font-size:11px;color:#2c3e50;border-radius:8px 8px 0 0}
+.tune-tip-bar i{font-size:12px;color:#5d7ca5;flex-shrink:0}
 .tune-tip-bar span{flex:1;line-height:1.4}
-.tune-tip-close{font-size:14px;color:#8a9e5a;cursor:pointer;padding:0 2px;flex-shrink:0}
+.tune-tip-close{font-size:14px;color:#7d8fa3;cursor:pointer;padding:0 4px;flex-shrink:0;transition:color .15s}
+.tune-tip-close:hover{color:#4a5e7a}
 
-/* Tabs */
-.tune-tabs{display:flex;padding:0 14px;border-bottom:.5px solid #e8e4dc;flex-shrink:0;background:#fff}
-.tune-tab{padding:10px 14px 8px;font-size:13px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-.5px;transition:color .13s}
-.tune-tab.on{color:#1a1a1a;font-weight:500;border-color:#7a8e50}
+/* Tabs（分段控制器样式） */
+.tune-tabs{display:flex;padding:4px 14px;border-bottom:.5px solid #e8e4dc;flex-shrink:0;background:#fff;gap:4px}
+.tune-tab{padding:8px 16px;font-size:13px;color:#666;cursor:pointer;border-radius:8px;transition:all .15s;font-weight:500;background:#f5f5f5}
+.tune-tab.on{color:#fff;background:#4a5e7a;box-shadow:0 2px 6px rgba(74,94,122,0.3)}
 
 /* 滚动内容区 */
 .tune-sc{flex:1;overflow-y:auto;padding:12px 14px 6px;background:#fff}
@@ -348,18 +349,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 /* 操作区元素 */
 .tune-slbl{font-size:10px;font-weight:500;color:#888;margin-bottom:7px;letter-spacing:.04em;text-transform:uppercase}
 .tune-divider{height:.5px;background:#ede8e0;margin:10px 0}
-.tune-sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px}
-.tune-si{border:1.5px solid #e8e4dc;border-radius:9px;padding:6px 3px 5px;text-align:center;cursor:pointer;background:#fafafa;transition:all .12s}
-.tune-si:hover{border-color:#7a8e50}.tune-si.on{border-color:#7a8e50;background:#eef3e4}
-.tune-si svg{width:26px;height:34px;display:block;margin:0 auto}
-.tune-si span{font-size:9px;color:#888;display:block;margin-top:2px}
-.tune-ctabs{display:flex;gap:5px;margin-bottom:9px}
-.tune-ctab{padding:3px 10px;border-radius:11px;font-size:11px;cursor:pointer;background:#f4f1eb;color:#888;transition:all .12s}
-.tune-ctab.on{background:#7a8e50;color:#f0f5e8}
-.tune-swatches{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.tune-sw{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s;flex-shrink:0}
-.tune-sw:hover{transform:scale(1.12)}.tune-sw.on{border-color:#333;transform:scale(1.08)}
-.tune-sw-c{width:26px;height:26px;border-radius:50%;cursor:pointer;border:1.5px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:15px;color:#aaa;flex-shrink:0}
+.tune-sgrid{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;scrollbar-width:none;-ms-overflow-style:none}
+.tune-sgrid::-webkit-scrollbar{display:none}
+.tune-si{flex:0 0 auto;width:68px;border:1.5px solid #e8e4dc;border-radius:10px;padding:8px 4px 6px;text-align:center;cursor:pointer;background:#fafafa;transition:all .15s}
+.tune-si:hover{border-color:#7a8e50;transform:translateY(-2px)}
+.tune-si.on{border-color:#7a8e50;background:#eef3e4;box-shadow:0 2px 8px rgba(122,142,80,0.2)}
+.tune-si svg{width:32px;height:42px;display:block;margin:0 auto}
+.tune-si span{font-size:10px;color:#666;display:block;margin-top:4px;font-weight:500}
+.tune-ctabs{display:flex;gap:6px;margin-bottom:12px}
+.tune-ctab{padding:6px 14px;border-radius:12px;font-size:12px;cursor:pointer;background:#f0f0f0;color:#666;transition:all .15s;font-weight:500}
+.tune-ctab.on{background:#4a5e7a;color:#fff;box-shadow:0 2px 6px rgba(74,94,122,0.3)}
+.tune-swatches{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.tune-sw{width:38px;height:38px;border-radius:8px;cursor:pointer;border:3px solid transparent;transition:all .15s;flex-shrink:0;position:relative}
+.tune-sw:hover{transform:scale(1.1);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.tune-sw.on{border-color:#4a5e7a;box-shadow:0 0 0 2px #4a5e7a, 0 2px 10px rgba(74,94,122,0.3)}
+.tune-sw.on::after{content:'✓';position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:#4a5e7a;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:bold}
+.tune-sw-c{width:38px;height:38px;border-radius:8px;cursor:pointer;border:2px dashed #aaa;display:flex;align-items:center;justify-content:center;font-size:18px;color:#888;flex-shrink:0;transition:all .15s}
+.tune-sw-c:hover{border-color:#7a8e50;color:#7a8e50;background:#f5f8ee}
 .tune-fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 .tune-fi{border:1.5px solid #e8e4dc;border-radius:9px;padding:10px 4px 8px;text-align:center;cursor:pointer;background:#fafafa;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .12s}
 .tune-fi:hover{border-color:#7a8e50;background:#f5f8ee}.tune-fi.on{border-color:#7a8e50;background:#eef3e4}
@@ -375,10 +381,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 
 /* 确认生图按钮 */
 .tune-confirm-wrap{padding:10px 14px 4px;background:#fff;flex-shrink:0}
-.tune-confirm-btn{width:100%;padding:13px 0;border:none;border-radius:14px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:7px;background:#d0d8b8;color:#8a9e60}
-.tune-confirm-btn:not([disabled]){background:linear-gradient(135deg,#92a85a,#6a7e3a);color:#fff;box-shadow:0 2px 10px rgba(106,126,58,.28)}
-.tune-confirm-btn:not([disabled]):hover{transform:scale(1.01)}
-.tune-confirm-btn:not([disabled]):active{transform:scale(0.98)}
+.tune-confirm-btn{width:100%;padding:16px 0;border:none;border-radius:16px;font-size:16px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;background:#d0d8b8;color:#8a9e60}
+.tune-confirm-btn:not([disabled]){background:linear-gradient(135deg,#8d79b8,#6a5a9a);color:#fff;box-shadow:0 4px 16px rgba(141,121,184,0.35)}
+.tune-confirm-btn:not([disabled]):hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(141,121,184,0.45)}
+.tune-confirm-btn:not([disabled]):active{transform:translateY(0);box-shadow:0 2px 8px rgba(141,121,184,0.3)}
+
+/* 步骤指示器 */
+.tune-step-indicator{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;background:#fff;border-bottom:.5px solid #ede8e0;flex-shrink:0}
+.tune-step{font-size:12px;color:#999;font-weight:500;transition:color .2s}
+.tune-step.active{color:#4a5e7a;font-weight:600}
+.tune-step-arrow{font-size:12px;color:#ccc}
 
 /* 底部文本输入 */
 .tune-ibar{border-top:.5px solid #ede8e0;padding:7px 12px;display:flex;gap:8px;align-items:center;flex-shrink:0;background:#fff}

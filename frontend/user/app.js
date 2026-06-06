@@ -501,15 +501,16 @@ function openAiTunePanel() {
     // 清除旧背景图
     const oldImg = bg.querySelector('.tune-bg-img');
     if (oldImg) oldImg.remove();
-    if (item.image_url) {
-      const img = document.createElement('img');
-      img.id = 'tuneStyleImg';
-      img.className = 'tune-bg-img';
-      img.src = staticUrl(item.image_url);
-      img.alt = item.name;
-      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:12px;z-index:0;pointer-events:none';
-      bg.insertBefore(img, bg.firstChild);
-    }
+    // 不再添加美甲背景图，只显示五个手指头
+    // if (item.image_url) {
+    //   const img = document.createElement('img');
+    //   img.id = 'tuneStyleImg';
+    //   img.className = 'tune-bg-img';
+    //   img.src = staticUrl(item.image_url);
+    //   img.alt = item.name;
+    //   img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:12px;z-index:0;pointer-events:none';
+    //   bg.insertBefore(img, bg.firstChild);
+    // }
   }
 
   navigateTo('tune');
@@ -530,6 +531,13 @@ function _tuneResetUI() {
 
   // 重置指甲高亮
   document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
+
+  // 清除任何可能的美甲背景图
+  const bg = document.getElementById('tuneNailBg');
+  if (bg) {
+    const oldImg = bg.querySelector('.tune-bg-img');
+    if (oldImg) oldImg.remove();
+  }
 
   // 重置确认按钮
   _tuneUpdateConfirmBtn();
@@ -559,8 +567,9 @@ function _tuneResetUI() {
   if (tipBar) tipBar.style.display = '';
 
   // 显示款式图（背景色用款式 bg）
-  const bg = document.getElementById('tuneNailBg');
-  if (bg && tuneStyleItem) bg.style.background = tuneStyleItem.bg || '#a8b870';
+  // 移除背景色，使用纯白色背景
+  // if (bg && tuneStyleItem) bg.style.background = tuneStyleItem.bg || '#a8b870';
+  if (bg) bg.style.background = 'transparent';
 }
 
 function _tuneUpdateConfirmBtn() {
@@ -844,11 +853,11 @@ async function tuneConfirmGenerate() {
 }
 
 function _tuneUpdateStyleImage(imageUrl) {
-  // 更新微调页的款式图展示
-  const imgEl = document.getElementById('tuneStyleImg');
-  if (imgEl && imageUrl) {
-    imgEl.src = imageUrl;
-  }
+  // 更新微调页的款式图展示（已移除背景图，只保留手指头）
+  // const imgEl = document.getElementById('tuneStyleImg');
+  // if (imgEl && imageUrl) {
+  //   imgEl.src = imageUrl;
+  // }
   // 同步更新详情页的试戴主图（供"试戴预览"使用）
   if (tuneStyleItem && imageUrl) {
     // 存入 tryonHistory 作为微调后的参考图

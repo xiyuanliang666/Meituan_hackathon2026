@@ -82,6 +82,11 @@
 
     <!-- 款式图展示区 -->
     <div class="tune-nail-area" id="tuneNailArea">
+      <div class="tune-tip-bar" id="tuneTipBar">
+        <i class="ti ti-info-circle"></i>
+        <span>每次调整约需 <b>30 秒</b>生成，选好后点击「<b>确认生图</b>」开始</span>
+        <span class="tune-tip-close" onclick="document.getElementById('tuneTipBar').style.display='none'">×</span>
+      </div>
       <div class="tune-nail-bg" id="tuneNailBg">
         <!-- 五指热区（单指模式下显示） -->
         <div class="tune-nails-row" id="tuneNailsRow">
@@ -101,17 +106,21 @@
       </div>
     </div>
 
-    <!-- 首次提示条 -->
-    <div class="tune-tip-bar" id="tuneTipBar">
-      <i class="ti ti-info-circle"></i>
-      <span>每次调整约需 <b>30 秒</b>生成，选好后点击「<b>确认生图</b>」开始</span>
-      <span class="tune-tip-close" onclick="document.getElementById('tuneTipBar').style.display='none'">×</span>
-    </div>
+
 
     <!-- Tab 切换 -->
     <div class="tune-tabs">
       <div class="tune-tab on" id="tuneTab0" onclick="tuneSetMode(0)">整体调整</div>
       <div class="tune-tab" id="tuneTab1" onclick="tuneSetMode(1)">单指微调</div>
+    </div>
+
+    <!-- 步骤指示器 -->
+    <div class="tune-step-indicator">
+      <span class="tune-step active">1. 选甲型</span>
+      <span class="tune-step-arrow">→</span>
+      <span class="tune-step">2. 选颜色</span>
+      <span class="tune-step-arrow">→</span>
+      <span class="tune-step">3. 生成</span>
     </div>
 
     <!-- 操作区（可滚动） -->
@@ -196,7 +205,7 @@
 
     <!-- 底部自由文本输入 -->
     <div class="tune-ibar">
-      <input class="tune-ifield" id="tuneTextField" placeholder="也可以直接描述想法…"/>
+      <input class="tune-ifield" id="tuneTextField" placeholder="描述其他想法（选填）…"/>
       <div class="tune-isend" onclick="tuneSubmitText()">
         <i class="ti ti-arrow-up"></i>
       </div>
