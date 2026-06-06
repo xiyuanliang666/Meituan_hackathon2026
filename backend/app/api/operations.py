@@ -12,7 +12,7 @@ from app.schemas.operations import (
     SkillExecuteRequest,
     SkillExecuteResponse,
 )
-from app.services.business_db import update_push_composites
+from app.services.business_db import update_push_composites, update_push_draft
 from app.services.operations import (
     audit_push_card,
     execute_skill,
@@ -43,6 +43,27 @@ class UpdatePushCompositesRequest(BaseModel):
 @router.put("/push-cards/{push_id}/composites")
 def update_composites(push_id: str, request: UpdatePushCompositesRequest):
     ok = update_push_composites(push_id, request.image_urls)
+    if not ok:
+        raise HTTPException(status_code=404, detail="push card not found")
+    return {"push_id": push_id, "updated": True}
+
+
+class UpdatePushDraftRequest(BaseModel):
+    selected_image_url: str | None = None
+    selected_coupon_url: str | None = None
+    final_tagline: str | None = None
+    final_price: float | None = None
+
+
+@router.put("/push-cards/{push_id}/draft")
+def update_draft(push_id: str, request: UpdatePushDraftRequest):
+    ok = update_push_draft(
+        push_id,
+        selected_image_url=request.selected_image_url,
+        selected_coupon_url=request.selected_coupon_url,
+        final_tagline=request.final_tagline,
+        final_price=request.final_price,
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="push card not found")
     return {"push_id": push_id, "updated": True}

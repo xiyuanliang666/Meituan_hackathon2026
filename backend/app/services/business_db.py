@@ -754,6 +754,39 @@ def update_push_composites(push_id: str, image_urls: list[str]) -> bool:
         return cur.rowcount > 0
 
 
+def update_push_draft(
+    push_id: str,
+    selected_image_url: str | None = None,
+    selected_coupon_url: str | None = None,
+    final_tagline: str | None = None,
+    final_price: float | None = None,
+) -> bool:
+    """Update push editor draft fields without changing status."""
+    now_str = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        sets: list[str] = ["updated_at = ?"]
+        params: list = [now_str]
+        if selected_image_url is not None:
+            sets.append("selected_image_url = ?")
+            params.append(selected_image_url)
+        if selected_coupon_url is not None:
+            sets.append("selected_coupon_url = ?")
+            params.append(selected_coupon_url)
+        if final_tagline is not None:
+            sets.append("final_tagline = ?")
+            params.append(final_tagline)
+        if final_price is not None:
+            sets.append("final_price = ?")
+            params.append(final_price)
+        params.append(push_id)
+        cur = conn.execute(
+            f"UPDATE push_audits SET {', '.join(sets)} WHERE push_id = ?",
+            params,
+        )
+        return cur.rowcount > 0
+
+
 def upsert_style_tags(
     style_id: str,
     tags: dict[str, list[str]],

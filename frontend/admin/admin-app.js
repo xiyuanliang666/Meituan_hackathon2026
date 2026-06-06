@@ -2416,10 +2416,27 @@ function renderPushEditor(card) {
   if (card?.push_id && !pushEditorViewIndexById.has(card.push_id)) {
     pushEditorViewIndexById.set(card.push_id, 0);
   }
+  // 从持久化数据恢复已选的合成图
+  const auditDetail = card?.audit_details || {};
+  if (card?.push_id && auditDetail.selected_image_url && !pushSelectedCompositeIndexById.has(card.push_id)) {
+    const images = pushEditorImages(card);
+    const savedIdx = images.findIndex(img => img.kind === 'composite' && img.url === auditDetail.selected_image_url);
+    if (savedIdx >= 0) pushSelectedCompositeIndexById.set(card.push_id, savedIdx);
+  }
   document.getElementById('push-hot-score').textContent = `${Math.round(card.hot_score || 0)}分`;
   document.querySelector('#push-editor .signal-time').textContent = pushCardTime(card);
   document.querySelector('#push-editor .push-style-name').textContent = card.style_name || '未命名款式';
-  document.getElementById('push-tagline').textContent = card.tagline || taglines[0];
+  document.getElementById('push-tagline').textContent = auditDetail.final_tagline || card.tagline || taglines[0];
+  // 恢复已选优惠券
+  if (auditDetail.selected_coupon_url) {
+    const couponEntry = Object.entries(coupons).find(([, c]) => c.name === auditDetail.selected_coupon_url);
+    if (couponEntry) {
+      const selectEl = document.getElementById('coupon-select');
+      if (selectEl) selectEl.value = couponEntry[0];
+      document.getElementById('coupon-name').textContent = couponEntry[1].name;
+      document.getElementById('coupon-price').textContent = couponEntry[1].price;
+    }
+  }
   renderPushSignals(card);
   renderPushSourceThumbs(card);
   renderPushEditorTags(card);
@@ -2616,6 +2633,18 @@ const taglines = ['秋冬约会必备！奶油渐变猫眼，光线下超有氛�
 let taglineIdx = 0;
 const coupons = {'1':{name:'全贴甲片简约款',price:'¥168',desc:'可做渐变·猫眼·晕染'},'2':{name:'半贴甲片基础款',price:'¥128',desc:'半贴为主'},'3':{name:'猫眼渐变升级款',price:'¥218',desc:'专攻猫眼渐变'}};
 
+async function _saveDraft(pushId, fields) {
+  if (!pushId || !adminBackendAvailable) return;
+  try {
+    await apiRequest(`/push-cards/${encodeURIComponent(pushId)}/draft`, {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    });
+  } catch (e) {
+    console.warn('[草稿] 保存失败:', e.message);
+  }
+}
+
 function selectPushImg(idx) {
   const card = activePushCard || pushCardsData[0] || {};
   if (card?.push_id) pushEditorViewIndexById.set(card.push_id, idx);
@@ -2632,6 +2661,7 @@ function selectPushComposite(idx) {
   if (!image || image.kind !== 'composite') return;
   pushSelectedCompositeIndexById.set(card.push_id, idx);
   renderPushThumbs(pushEditorImages(card), currentPushViewIndex(card));
+  _saveDraft(card.push_id, { selected_image_url: image.url || null });
 }
 
 function currentPushImageIndex() {
@@ -2707,11 +2737,12 @@ async function regenPushImg(btn) {
 }
 async function regenTagline() {
   const l = document.getElementById('tagline-regen-label');
+  if (!l) return;
   l.textContent = '生成中...';
-  
-  if (adminBackendAvailable && pushCardsData.length > 0) {
+  const card = activePushCard || pushCardsData[0];
+
+  if (adminBackendAvailable && card) {
     try {
-      const card = activePushCard || pushCardsData[0];
       const result = await apiPost('/report', {
         merchant_id: 'demo_shop',
         period: 'this_week',
@@ -2720,7 +2751,9 @@ async function regenTagline() {
       if (result && result.report_summary) {
         // 从报告摘要中提取第一句作为推荐语
         const firstLine = result.report_summary.split('\n').find(s => s.trim()) || taglines[0];
-        document.getElementById('push-tagline').textContent = firstLine.slice(0, 50);
+        const tagline = firstLine.slice(0, 50);
+        document.getElementById('push-tagline').textContent = tagline;
+        _saveDraft(card.push_id, { final_tagline: tagline });
         l.textContent = '重新生成推荐语';
         return;
       }
@@ -2728,15 +2761,27 @@ async function regenTagline() {
       console.warn('[推荐语] LLM 生成失败:', e.message);
     }
   }
-  
+
   // fallback: 本地轮换
   setTimeout(() => {
     taglineIdx = (taglineIdx + 1) % taglines.length;
-    document.getElementById('push-tagline').textContent = taglines[taglineIdx];
+    const tagline = taglines[taglineIdx];
+    document.getElementById('push-tagline').textContent = tagline;
+    if (card) _saveDraft(card.push_id, { final_tagline: tagline });
     l.textContent = '重新生成推荐语';
   }, 900);
 }
-function updateCoupon() { const v=document.getElementById('coupon-select').value; const c=coupons[v]; document.getElementById('coupon-name').textContent=c.name; document.getElementById('coupon-price').textContent=c.price; }
+function updateCoupon() {
+  const v = document.getElementById('coupon-select').value;
+  const c = coupons[v];
+  document.getElementById('coupon-name').textContent = c.name;
+  document.getElementById('coupon-price').textContent = c.price;
+  const card = activePushCard || pushCardsData[0];
+  if (card) {
+    const price = Number(String(c.price).replace(/[^\d.]/g, '')) || 0;
+    _saveDraft(card.push_id, { selected_coupon_url: c.name, final_price: price });
+  }
+}
 
 function selectedCouponPrice() {
   const coupon = coupons[document.getElementById('coupon-select')?.value || '1'] || coupons['1'];

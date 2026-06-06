@@ -328,7 +328,7 @@ def _push_card_from_candidate(candidate: dict) -> dict:
         "source_posts": source_posts,
         "signal_sources": signal_sources,
         "hot_score": hot_score,
-        "life_cycle": _life_cycle(candidate["life_cycle"], hot_score, event_stats),
+        "life_cycle": candidate["life_cycle"] if is_trend_card else _life_cycle(candidate["life_cycle"], hot_score, event_stats),
         "life_cycle_trend": _mock_trend(hot_score),
         "coupon_url": f"https://i.meituan.com/coupon/{style_id}" if style_id else "",
         "coupon_price": _coupon_price(style_id) if style_id else 0,

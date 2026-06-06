@@ -192,16 +192,6 @@
 
       <div class="card">
         <div class="card-header">
-          <div class="card-title"><i class="ti ti-heartbeat"></i> 数据健康</div>
-          <button class="btn-ghost-sm" onclick="loadDataHealth()"><i class="ti ti-refresh"></i> 刷新</button>
-        </div>
-        <div class="trend-health-grid" id="trend-health-grid">
-          <div class="trend-run-empty">点击刷新查看数据健康状态</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
           <div class="card-title"><i class="ti ti-player-play"></i> 运行状态</div>
           <div style="display:flex;gap:8px">
             <button class="btn-ghost-sm" onclick="loadTrendRunsAndList()"><i class="ti ti-refresh"></i> 刷新</button>
@@ -213,7 +203,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card trend-pool-card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-flame"></i> 趋势池 <span class="count-badge" id="trend-count">0 条</span></div>
           <div class="trend-filter-row">
