@@ -12,7 +12,11 @@ from app.services.hand_standardizer import (
     standardize_hand,
     sync_user_hands,
 )
-from app.services.hand_nail_regions import get_hand_nail_region_payload, get_hand_nail_region_status
+from app.services.hand_nail_regions import (
+    get_hand_nail_region_payload,
+    get_hand_nail_region_status,
+    resolve_hand_nail_region_json_path,
+)
 
 router = APIRouter()
 
@@ -43,10 +47,11 @@ def sync_hands(request: SyncHandsRequest) -> UserHandsResponse:
 def user_hand_nail_regions(hand_id: str) -> dict:
     status = get_hand_nail_region_status(hand_id)
     payload = get_hand_nail_region_payload(hand_id)
+    resolved_path = resolve_hand_nail_region_json_path(hand_id, str(status.get("json_path") or ""))
     return {
         "hand_id": hand_id,
         "status": status.get("status", "pending"),
-        "json_path": status.get("json_path", ""),
+        "json_path": str(resolved_path) if resolved_path else "",
         "error": status.get("error", ""),
         "nail_regions": payload.get("nail_regions", {}) if payload else {},
         "processed_at": payload.get("processed_at", "") if payload else "",

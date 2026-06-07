@@ -7,14 +7,22 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.business_db import (
+    find_demo_tune_record_by_output,
     find_style_id_by_image_url,
     get_user_demo_state,
     get_user_hand_asset,
     get_user_tune_history_item,
+    save_demo_tune_record,
     save_user_tune_history,
     upsert_user_demo_state,
+    update_user_hand_nail_region_status,
 )
-from app.services.hand_nail_regions import get_hand_nail_region_payload
+from app.services.hand_standardizer import extract_and_store_hand_nail_regions
+from app.services.hand_nail_regions import (
+    get_hand_nail_region_payload,
+    get_hand_nail_region_status,
+    resolve_hand_nail_region_json_path,
+)
 from app.services.tryon_history import get_tryon_record
 from app.services.image_tuning import get_tune_options, tune_nail_image
 
@@ -28,6 +36,7 @@ DEMO_USER_ID = "demo_user"
 class TuneOverallRequest(BaseModel):
     style_image_url: str = Field(..., description="款式图 URL（平面图）")
     nail_shape_id: str | None = Field(default=None, description="甲型素材清单中的 ID")
+    french_style_id: str | None = Field(default=None, description="法式素材清单中的 ID")
     color: str | None = Field(default=None, description="目标颜色，十六进制或描述文字，如「#b5a89a」或「莫兰迪灰绿」")
     user_text: str | None = Field(default=None, description="用户自由文字描述")
     hand_id: str | None = Field(default=None, description="当前试戴所对应的用户手图 ID")
@@ -39,7 +48,7 @@ class TuneSingleRequest(BaseModel):
     finger_index: int = Field(..., ge=1, le=5, description="从左到右手指编号 1-5")
     action: str = Field(..., description="操作类型：color / french / decoration")
     color: str | None = Field(default=None, description="目标颜色（action=color 时使用）")
-    french_style: str | None = Field(default=None, description="法式款式名（action=french 时使用）")
+    french_style_id: str | None = Field(default=None, description="法式素材清单中的 ID（action=french 时使用）")
     decoration: str | None = Field(default=None, description="装饰品类型（action=decoration 时使用）")
     hand_id: str | None = Field(default=None, description="当前试戴所对应的用户手图 ID")
     tryon_record_id: str | None = Field(default=None, description="当前试戴记录 ID")
@@ -65,8 +74,8 @@ def tune_overall(request: TuneOverallRequest) -> TuneResponse:
     """整体调整：换甲型 / 换颜色 / 自由文字描述"""
     if not request.style_image_url:
         raise HTTPException(status_code=400, detail="style_image_url is required")
-    if not request.nail_shape_id and not request.color:
-        raise HTTPException(status_code=400, detail="至少选择甲型或颜色")
+    if not request.nail_shape_id and not request.french_style_id and not request.color and not (request.user_text or "").strip():
+        raise HTTPException(status_code=400, detail="至少选择甲型、法式风格、颜色或输入文字需求")
     _ensure_tune_hand_ready(
         style_image_url=request.style_image_url,
         hand_id=request.hand_id,
@@ -78,19 +87,21 @@ def tune_overall(request: TuneOverallRequest) -> TuneResponse:
             style_image_url=request.style_image_url,
             mode="overall",
             nail_shape_id=request.nail_shape_id,
+            french_style_id=request.french_style_id,
             color=request.color,
             user_text=request.user_text,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _persist_tune_result(
+    saved = _persist_tune_result(
         style_image_url=request.style_image_url,
         tuned_image_url=result.get("tuned_image_url", ""),
         generation_mode=str(result.get("generation_mode") or "mock"),
         nail_shape_id=request.nail_shape_id,
         color=request.color,
-        user_text=request.user_text,
+        user_text=_overall_action_summary(request),
     )
+    _persist_demo_tune_record_overall(request=request, tuned_image_url=result.get("tuned_image_url", ""), generation_mode=str(result.get("generation_mode") or "mock"), saved_tune=saved)
     return TuneResponse(**result)
 
 
@@ -114,12 +125,54 @@ def _ensure_tune_hand_ready(*, style_image_url: str, hand_id: str | None, tryon_
     if hand_asset is None:
         raise HTTPException(status_code=400, detail="未找到当前手图记录，请重新上传手图后再试")
 
-    status = str(hand_asset.get("nail_region_status") or "pending")
-    error = str(hand_asset.get("nail_region_error") or "").strip()
-    json_path = str(hand_asset.get("nail_region_json_path") or "").strip()
-    if status != "done" or not json_path or not Path(json_path).exists():
+    asset_status = str(hand_asset.get("nail_region_status") or "pending")
+    asset_error = str(hand_asset.get("nail_region_error") or "").strip()
+    region_status = get_hand_nail_region_status(resolved_hand_id)
+    status = str(region_status.get("status") or asset_status or "pending")
+    error = str(region_status.get("error") or asset_error or "").strip()
+    resolved_json_path = resolve_hand_nail_region_json_path(
+        resolved_hand_id,
+        str(hand_asset.get("nail_region_json_path") or region_status.get("json_path") or ""),
+    )
+    if status != "done" or resolved_json_path is None or not resolved_json_path.exists():
+        refreshed = _try_refresh_hand_nail_regions(resolved_hand_id, hand_asset)
+        if refreshed:
+            status = str(refreshed.get("status") or status or "pending")
+            error = str(refreshed.get("error") or error or "").strip()
+            resolved_json_path = resolve_hand_nail_region_json_path(
+                resolved_hand_id,
+                str(refreshed.get("json_path") or hand_asset.get("nail_region_json_path") or ""),
+            )
+    if status != "done" or resolved_json_path is None or not resolved_json_path.exists():
         detail = error or "当前手图甲面解析失败，请重新上传更清晰的手图后再使用 AI 微调"
         raise HTTPException(status_code=400, detail=detail)
+
+
+def _try_refresh_hand_nail_regions(hand_id: str, hand_asset: dict) -> dict | None:
+    image_url = str(hand_asset.get("image_url") or "").strip()
+    if not image_url:
+        return None
+    try:
+        refreshed = extract_and_store_hand_nail_regions(
+            hand_id=hand_id,
+            image_url=image_url,
+            hand_label=hand_id,
+        )
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "json_path": "",
+            "error": str(exc),
+        }
+
+    update_user_hand_nail_region_status(
+        DEMO_USER_ID,
+        hand_id,
+        status=str(refreshed.get("status") or "pending"),
+        json_path=str(refreshed.get("json_path") or ""),
+        error=str(refreshed.get("error") or ""),
+    )
+    return refreshed
 
 
 def _same_image_reference(left: str, right: str) -> bool:
@@ -158,8 +211,8 @@ def tune_single(request: TuneSingleRequest) -> TuneResponse:
 
     if request.action == "color" and not request.color:
         raise HTTPException(status_code=400, detail="action=color 时 color 字段不能为空")
-    if request.action == "french" and not request.french_style:
-        raise HTTPException(status_code=400, detail="action=french 时 french_style 字段不能为空")
+    if request.action == "french" and not request.french_style_id:
+        raise HTTPException(status_code=400, detail="action=french 时 french_style_id 字段不能为空")
     if request.action == "decoration" and not request.decoration:
         raise HTTPException(status_code=400, detail="action=decoration 时 decoration 字段不能为空")
     _ensure_tune_hand_ready(
@@ -174,18 +227,19 @@ def tune_single(request: TuneSingleRequest) -> TuneResponse:
         finger_index=request.finger_index,
         action=request.action,
         color=request.color,
-        french_style=request.french_style,
+        french_style_id=request.french_style_id,
         decoration=request.decoration,
         guide_image_url=request.guide_image_url,
         finger_region=_get_finger_region(request.hand_id, request.tryon_record_id, request.finger_index),
     )
-    _persist_tune_result(
+    saved = _persist_tune_result(
         style_image_url=request.style_image_url,
         tuned_image_url=result.get("tuned_image_url", ""),
         generation_mode=str(result.get("generation_mode") or "mock"),
         color=request.color,
         user_text=_single_action_summary(request),
     )
+    _persist_demo_tune_record_single(request=request, tuned_image_url=result.get("tuned_image_url", ""), generation_mode=str(result.get("generation_mode") or "mock"), saved_tune=saved)
     return TuneResponse(**result)
 
 
@@ -212,9 +266,9 @@ def _persist_tune_result(
     nail_shape_id: str | None = None,
     color: str | None = None,
     user_text: str | None = None,
-) -> None:
+) -> dict:
     if not tuned_image_url or generation_mode == "local_svg_fallback":
-        return
+        return {}
     source_style_id = find_style_id_by_image_url(style_image_url)
     if not source_style_id:
         state = get_user_demo_state(DEMO_USER_ID) or {}
@@ -240,13 +294,143 @@ def _persist_tune_result(
     )
     if saved.get("tune_id"):
         upsert_user_demo_state(DEMO_USER_ID, current_tune_id=saved["tune_id"])
+    return saved
 
 
 def _single_action_summary(request: TuneSingleRequest) -> str:
     if request.action == "color":
         return f"single-finger color={request.color or ''} finger={request.finger_index}"
     if request.action == "french":
-        return f"single-finger french={request.french_style or ''} finger={request.finger_index}"
+        return f"single-finger french={request.french_style_id or ''} finger={request.finger_index}"
     if request.action == "decoration":
         return f"single-finger decoration={request.decoration or ''} finger={request.finger_index}"
     return f"single-finger action={request.action} finger={request.finger_index}"
+
+
+def _overall_action_summary(request: TuneOverallRequest) -> str:
+    return (
+        f"overall shape={request.nail_shape_id or ''} "
+        f"french={request.french_style_id or ''} "
+        f"color={request.color or ''} "
+        f"text={request.user_text or ''}"
+    ).strip()
+
+
+def _shape_label(shape_id: str | None) -> str:
+    return {
+        "doudou": "豆豆甲",
+        "short_trapezoid": "短梯形",
+        "medium_trapezoid": "中梯形",
+        "long_trapezoid": "长梯形",
+        "short_oval": "短椭圆",
+        "medium_oval": "中椭圆",
+        "long_oval": "长椭圆",
+        "medium_square": "中方形",
+    }.get(str(shape_id or ""), "")
+
+
+def _french_label(french_style_id: str | None) -> str:
+    return {
+        "cross_french": "交叉法式",
+        "standard_french": "标准法式",
+        "diagonal_french": "斜法式",
+        "outline_french": "轮廓法式",
+    }.get(str(french_style_id or ""), "")
+
+
+def _persist_demo_tune_record_overall(*, request: TuneOverallRequest, tuned_image_url: str, generation_mode: str, saved_tune: dict) -> None:
+    if not request.tryon_record_id or not tuned_image_url or generation_mode == "local_svg_fallback":
+        return
+    root = get_tryon_record(request.tryon_record_id)
+    if not root:
+        return
+    parent = find_demo_tune_record_by_output(request.style_image_url)
+    shape_label = _shape_label(request.nail_shape_id)
+    french_label = _french_label(request.french_style_id)
+    raw_user_text = str(request.user_text or "").strip()
+    operation_mode = "text_only" if not request.nail_shape_id and not request.french_style_id and not request.color and raw_user_text else "overall"
+    operation_payload = {
+        "nail_shape_id": request.nail_shape_id,
+        "nail_shape_label": shape_label,
+        "french_style_id": request.french_style_id,
+        "french_style_label": french_label,
+        "color": request.color,
+        "user_text": raw_user_text or None,
+    }
+    if operation_mode == "text_only":
+        operation_payload = {"user_text": raw_user_text}
+        operation_summary = f"文字微调 · {_extract_visible_tune_text(raw_user_text)}"
+    else:
+        summary_parts = ["整体"]
+        if shape_label:
+            summary_parts.append(f"甲型={shape_label}")
+        if french_label:
+            summary_parts.append(f"法式={french_label}")
+        if request.color:
+            summary_parts.append(f"颜色={request.color}")
+        operation_summary = " · ".join(summary_parts)
+    save_demo_tune_record(
+        tune_record_id=str(saved_tune.get("tune_id") or ""),
+        root_tryon_record_id=str(root.get("record_id") or request.tryon_record_id),
+        parent_tune_record_id=parent.get("tune_record_id") if parent else None,
+        root_hand_id=str(root.get("hand_id") or request.hand_id or ""),
+        root_style_id=str(root.get("style_id") or ""),
+        root_tryon_image_url=str(root.get("result_image_url") or ""),
+        input_image_url=request.style_image_url,
+        output_image_url=tuned_image_url,
+        operation_mode=operation_mode,
+        operation_payload=operation_payload,
+        operation_summary=operation_summary,
+        generation_mode=generation_mode,
+        created_at=str(saved_tune.get("created_at") or ""),
+    )
+
+
+def _persist_demo_tune_record_single(*, request: TuneSingleRequest, tuned_image_url: str, generation_mode: str, saved_tune: dict) -> None:
+    if not request.tryon_record_id or not tuned_image_url or generation_mode == "local_svg_fallback":
+        return
+    root = get_tryon_record(request.tryon_record_id)
+    if not root:
+        return
+    parent = find_demo_tune_record_by_output(request.style_image_url)
+    french_label = _french_label(request.french_style_id)
+    operation_payload = {
+        "finger_index": request.finger_index,
+        "action": request.action,
+        "color": request.color,
+        "french_style_id": request.french_style_id,
+        "french_style_label": french_label,
+        "decoration": request.decoration,
+        "user_text": None,
+    }
+    if request.action == "color":
+        operation_summary = f"单指 · 第{request.finger_index}指 · 颜色={request.color or ''}"
+    elif request.action == "french":
+        operation_summary = f"单指 · 第{request.finger_index}指 · 法式={french_label or request.french_style_id or ''}"
+    else:
+        operation_summary = f"单指 · 第{request.finger_index}指 · 装饰={request.decoration or ''}"
+    save_demo_tune_record(
+        tune_record_id=str(saved_tune.get("tune_id") or ""),
+        root_tryon_record_id=str(root.get("record_id") or request.tryon_record_id),
+        parent_tune_record_id=parent.get("tune_record_id") if parent else None,
+        root_hand_id=str(root.get("hand_id") or request.hand_id or ""),
+        root_style_id=str(root.get("style_id") or ""),
+        root_tryon_image_url=str(root.get("result_image_url") or ""),
+        input_image_url=request.style_image_url,
+        output_image_url=tuned_image_url,
+        operation_mode="single",
+        operation_payload=operation_payload,
+        operation_summary=operation_summary,
+        generation_mode=generation_mode,
+        created_at=str(saved_tune.get("created_at") or ""),
+    )
+
+
+def _extract_visible_tune_text(raw_text: str) -> str:
+    text = str(raw_text or "").strip()
+    if "用户原始需求：" in text:
+        text = text.split("用户原始需求：", 1)[1]
+    if "请将用户需求理解为" in text:
+        text = text.split("请将用户需求理解为", 1)[0]
+    text = text.strip().strip("。")
+    return text[:24] if text else "文字描述"

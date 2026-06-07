@@ -67,6 +67,38 @@ def hand_nail_regions_failure_path(hand_id: str) -> Path:
     return hand_nail_regions_output_dir() / "_failures" / f"{hand_id}.json"
 
 
+def resolve_hand_nail_region_json_path(hand_id: str, stored_path: str = "") -> Path | None:
+    canonical_success = hand_nail_regions_output_path(hand_id)
+    if canonical_success.exists():
+        return canonical_success
+
+    canonical_failure = hand_nail_regions_failure_path(hand_id)
+    if canonical_failure.exists():
+        return canonical_failure
+
+    raw = str(stored_path or "").strip()
+    if not raw:
+        return None
+
+    candidate = Path(raw)
+    if candidate.exists():
+        return candidate
+
+    basename = candidate.name
+    if not basename:
+        return None
+
+    remapped_success = hand_nail_regions_output_dir() / basename
+    if remapped_success.exists():
+        return remapped_success
+
+    remapped_failure = hand_nail_regions_output_dir() / "_failures" / basename
+    if remapped_failure.exists():
+        return remapped_failure
+
+    return None
+
+
 def get_hand_nail_region_status(hand_id: str) -> dict[str, Any]:
     success_path = hand_nail_regions_output_path(hand_id)
     failure_path = hand_nail_regions_failure_path(hand_id)

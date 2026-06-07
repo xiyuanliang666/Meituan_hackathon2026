@@ -77,7 +77,6 @@
     <header class="nav-bar tune-nav">
       <div class="back-btn" onclick="closeTunePage()"><i class="ti ti-chevron-left"></i> 返回</div>
       <span class="nav-title">款式微调</span>
-      <div class="tune-preview-btn" onclick="submitTuneToTryon()">试戴预览</div>
     </header>
 
     <!-- 款式图展示区 -->
@@ -117,15 +116,6 @@
       <div class="tune-tab" id="tuneTab1" onclick="tuneSetMode(1)">单指微调</div>
     </div>
 
-    <!-- 步骤指示器 -->
-    <div class="tune-step-indicator">
-      <span class="tune-step active">1. 选甲型</span>
-      <span class="tune-step-arrow">→</span>
-      <span class="tune-step">2. 选颜色</span>
-      <span class="tune-step-arrow">→</span>
-      <span class="tune-step">3. 生成</span>
-    </div>
-
     <!-- 操作区（可滚动） -->
     <div class="tune-sc" id="tuneSc">
 
@@ -133,6 +123,9 @@
       <div class="tune-pane on" id="tunePaneWhole">
         <div class="tune-slbl">甲型</div>
         <div class="tune-sgrid" id="tuneSgWhole"></div>
+        <div class="tune-divider"></div>
+        <div class="tune-slbl">法式风格</div>
+        <div class="tune-sgrid" id="tuneFgWhole"></div>
         <div class="tune-divider"></div>
         <div class="tune-slbl">颜色</div>
         <div class="tune-ctabs" id="tuneCtWhole">
@@ -168,7 +161,7 @@
 
         <div id="tuneSingleFrenchSection" style="display:none">
           <div class="tune-slbl">法式风格</div>
-          <div class="tune-pills" id="tuneSingleFrenchPills"></div>
+          <div class="tune-sgrid" id="tuneFgSingle"></div>
         </div>
 
         <div id="tuneSingleDecorationSection" style="display:none">
@@ -188,7 +181,8 @@
 
     <!-- 底部自由文本输入 -->
     <div class="tune-ibar">
-      <input class="tune-ifield" id="tuneTextField" placeholder="补充要求（选填，不会覆盖甲型和颜色）…" oninput="_tuneUpdateConfirmBtn()"/>
+      <input class="tune-ifield" id="tuneTextField" placeholder="也可以用语言描述你的需求" oninput="tuneSubmitText()"/>
+      <button type="button" class="tune-isend" id="tuneTextSendBtn" onclick="tuneSendTextPrompt()"><i class="ti ti-arrow-up"></i></button>
     </div>
   </div>
 
@@ -254,11 +248,17 @@
     <div class="cta-wrap"><button class="cta-btn" onclick="navigateTo('upload')"><i class="ti ti-plus"></i><span class="cta-main">上传新手图</span></button></div>
   </div>
 
+  <!-- ===== 微调记录页 ===== -->
+  <div class="page" id="page-tune-records">
+    <header class="nav-bar"><span class="nav-title">微调记录</span><i class="ti ti-x nav-icon" onclick="navigateTo('mine')"></i></header>
+    <div class="tune-records-body" id="tune-records-body" style="flex:1;overflow-y:auto;padding:14px"></div>
+  </div>
+
   <!-- ===== 我的页 ===== -->
   <div class="page" id="page-mine">
     <header class="nav-bar"><span class="nav-title">我的</span><i class="ti ti-x nav-icon" onclick="navigateTo('home')"></i></header>
     <div class="mine-profile"><div class="mine-avatar">U</div><div class="mine-name">未登录</div></div>
-    <div class="mine-menu"><div class="mine-item"><span>📋 我的订单</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tryon-history')"><span>⏱ 试戴记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('hands')"><span>🤚 手图管理</span><span>›</span></div><div class="mine-item"><span>⚙️ 设置</span><span>›</span></div></div>
+    <div class="mine-menu"><div class="mine-item"><span>📋 我的订单</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tryon-history')"><span>⏱ 试戴记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tune-records')"><span>🪄 微调记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('hands')"><span>🤚 手图管理</span><span>›</span></div><div class="mine-item"><span>⚙️ 设置</span><span>›</span></div></div>
   </div>
 
 </div>

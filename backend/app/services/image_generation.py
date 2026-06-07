@@ -2,6 +2,7 @@ import base64
 import io
 import logging
 import struct
+import time
 from hashlib import sha1
 from html import escape
 from urllib.parse import unquote_to_bytes
@@ -18,6 +19,13 @@ from app.schemas.style import CompositeRequest, CompositeResponse, TryOnRequest,
 from app.services.image_storage import write_static_bytes, write_static_text
 
 logger = logging.getLogger(__name__)
+_IMAGE_EDIT_RETRYABLE_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.ReadTimeout,
+    httpx.RemoteProtocolError,
+    httpx.WriteError,
+)
 
 
 def choose_generation_size(width: int, height: int) -> str:
@@ -188,14 +196,33 @@ def _call_image_edit(
 
     last_detail = ""
     last_code = 0
+    last_exception: Exception | None = None
     for attempt_size in sizes_to_try:
         for use_fidelity in fidelity_modes_to_try:
             req_data = dict(data)
             req_data["size"] = attempt_size
             if not use_fidelity:
                 req_data.pop("input_fidelity", None)
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(endpoint, headers=headers, data=req_data, files=files)
+            response = None
+            for request_attempt in range(3):
+                try:
+                    with httpx.Client(timeout=timeout) as client:
+                        response = client.post(endpoint, headers=headers, data=req_data, files=files)
+                    last_exception = None
+                    break
+                except _IMAGE_EDIT_RETRYABLE_EXCEPTIONS as exc:
+                    last_exception = exc
+                    wait_seconds = 1.5 * (request_attempt + 1)
+                    logger.warning(
+                        "image edit request failed with retryable transport error (attempt %s/3, size=%s, fidelity=%s): %s",
+                        request_attempt + 1,
+                        attempt_size,
+                        use_fidelity,
+                        exc,
+                    )
+                    if request_attempt == 2:
+                        raise RuntimeError(f"image edit transport error after retries: {exc}") from exc
+                    time.sleep(wait_seconds)
             if response.status_code < 400:
                 last_code = 0
                 break
@@ -212,6 +239,8 @@ def _call_image_edit(
             break
     if last_code >= 400:
         raise RuntimeError(f"HTTP {last_code}: {last_detail}")
+    if response is None and last_exception is not None:
+        raise RuntimeError(f"image edit transport error: {last_exception}") from last_exception
 
     payload = response.json()
     image_payload = payload.get("data", [{}])[0]
