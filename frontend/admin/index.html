@@ -176,11 +176,11 @@
         <div class="trend-source-summary">推荐日常使用“人工链接种子”；如果 raw 与 clean 已经准备好，再用“使用现有清洗结果”快速重跑趋势识别。</div>
         <div class="trend-source-panel active" id="trend-source-links">
           <div class="trend-source-actions">
-            <button class="btn-ghost-sm" onclick="loadSampleXhsLinks()"><i class="ti ti-link"></i> 载入示例链接</button>
-            <button class="btn-primary-sm" onclick="saveTrendSeedLinks()"><i class="ti ti-device-floppy"></i> 保存链接种子</button>
+            <button class="btn-primary-sm" onclick="saveTrendSeedLinksAndRun()"><i class="ti ti-player-play"></i> 保存并运行趋势识别</button>
           </div>
           <textarea class="trend-textarea" id="trend-link-seeds" placeholder="一行一个小红书链接，用于后续抓取正文、图片和评论。"></textarea>
-          <div class="trend-source-hint" id="trend-link-status">会先追加更新 raw 帖子库，再自动清洗生成 clean 视图，之后继续评论抓取、摘要和趋势识别。</div>
+          <div class="trend-seed-batch-meta" id="trend-latest-seed-batch">尚未保存链接批次</div>
+          <div class="trend-source-hint" id="trend-link-status">填写链接后直接点击“保存并运行趋势识别”。系统会先追加更新 raw 帖子库，再自动清洗生成 clean 视图，之后继续评论抓取、摘要和趋势识别。</div>
         </div>
         <div class="trend-source-panel" id="trend-source-clean" style="display:none">
           <div class="trend-source-actions">
@@ -207,6 +207,9 @@
         <div class="card-header">
           <div class="card-title"><i class="ti ti-flame"></i> 趋势池 <span class="count-badge" id="trend-count">0 条</span></div>
           <div class="trend-filter-row">
+            <select class="coupon-select trend-filter-select" id="trend-run-filter" onchange="switchTrendResultRun(this.value)">
+              <option value="">当前最新趋势池</option>
+            </select>
             <select class="coupon-select trend-filter-select" id="trend-status-filter" onchange="loadTrendList()">
               <option value="">全部状态</option>
               <option value="promote">优先推广</option>

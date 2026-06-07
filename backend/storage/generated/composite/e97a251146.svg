@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <rect width="1200" height="760" fill="#fff7f6"/>
+  <text x="60" y="72" font-size="34" font-family="Arial, sans-serif" font-weight="700" fill="#28202a">AI 合成图预览</text>
+  <text x="60" y="112" font-size="18" font-family="Arial, sans-serif" fill="#7a6674">本地兜底预览：真实生成模型未启用或调用失败时返回，保证 Demo 可展示。</text>
+  <rect x="60" y="150" width="510" height="510" rx="18" fill="#ffffff" stroke="#e6c9d6" stroke-width="2"/>
+  <rect x="630" y="150" width="510" height="510" rx="18" fill="#ffffff" stroke="#e6c9d6" stroke-width="2"/>
+  <image href="http://p0.meituan.net/pilotimages/b9632e3a699fdb63a1a6139bbfd6bf0d2159483.png" x="90" y="180" width="450" height="420" preserveAspectRatio="xMidYMid meet"/>
+  <image href="http://127.0.0.1:8000/static/ugc_posts/2d2c1bc59b71c3f707bfe789a3d9facca0f2213a.jpg" x="660" y="180" width="450" height="420" preserveAspectRatio="xMidYMid meet"/>
+  <text x="315" y="625" font-size="24" text-anchor="middle" font-family="Arial, sans-serif" fill="#4a3b46">裸手模板</text>
+  <text x="885" y="625" font-size="24" text-anchor="middle" font-family="Arial, sans-serif" fill="#4a3b46">款式参考</text>
+  <path d="M570 405 C595 380, 605 380, 630 405" fill="none" stroke="#d45a8c" stroke-width="8" stroke-linecap="round"/>
+  <path d="M614 382 L640 405 L614 428" fill="none" stroke="#d45a8c" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -58,6 +58,7 @@ class TrendPipelineRunCreateRequest(BaseModel):
     convert_limit: int = Field(default=3, ge=1, le=20)
     merchant_id: str = Field(default="demo_shop", min_length=1)
     use_trend_tags: bool = True
+    seed_batch_id: str | None = None
 
 
 class TrendPipelineRunResponse(BaseModel):
@@ -82,6 +83,28 @@ class TrendPipelineRunResponse(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str
+
+
+class TrendSeedBatchCreateRequest(BaseModel):
+    merchant_id: str = Field(default="demo_shop", min_length=1)
+    seed_links: list[str] = Field(default_factory=list)
+    source_mode: str = Field(default="manual_links")
+    note: str = ""
+
+
+class TrendSeedBatchItem(BaseModel):
+    seed_batch_id: str
+    merchant_id: str
+    source_mode: str = "manual_links"
+    seed_links: list[str] = Field(default_factory=list)
+    seed_link_count: int = 0
+    note: str = ""
+    created_at: str
+    updated_at: str
+
+
+class TrendSeedBatchListResponse(BaseModel):
+    batches: list[TrendSeedBatchItem] = Field(default_factory=list)
 
 
 class TrendListItem(BaseModel):

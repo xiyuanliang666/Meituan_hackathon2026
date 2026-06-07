@@ -27,6 +27,7 @@ def main() -> None:
     parser.add_argument("--comment-limit", type=int, default=20, help="Max comments per post for browser capture")
     parser.add_argument("--login-wait-seconds", type=int, default=60, help="Auto-wait time when login is required but no interactive TTY is available")
     parser.add_argument("--provider", choices=("auto", "qwen", "gemini", "mock"), default="auto")
+    parser.add_argument("--post-id", action="append", default=[], help="Only process the specified post_id; can repeat")
     parser.add_argument("--force", action="store_true", help="Re-run summary even if comment_insights is already done")
     parser.add_argument("--resume", action="store_true", help="Continue from already-written progress")
     parser.add_argument("--from-start", action="store_true", help="Re-run the whole pipeline from the beginning")
@@ -60,7 +61,13 @@ def main() -> None:
         )
 
     posts = load_posts(output_path if output_path.exists() else input_path)
-    post_ids = select_post_ids(posts, limit=args.limit, resume=args.resume, from_start=args.from_start)
+    post_ids = select_post_ids(
+        posts,
+        limit=args.limit,
+        resume=args.resume,
+        from_start=args.from_start,
+        requested_post_ids=args.post_id,
+    )
 
     if not post_ids:
         print("No posts need processing.")
@@ -121,11 +128,20 @@ def load_posts(path: Path) -> list[dict]:
     return [post for post in posts if isinstance(post, dict)]
 
 
-def select_post_ids(posts: list[dict], limit: int | None, resume: bool, from_start: bool) -> list[str]:
+def select_post_ids(
+    posts: list[dict],
+    limit: int | None,
+    resume: bool,
+    from_start: bool,
+    requested_post_ids: list[str] | None = None,
+) -> list[str]:
+    requested = {str(item).strip() for item in (requested_post_ids or []) if str(item).strip()}
     selected: list[str] = []
     for post in posts:
         post_id = str(post.get("post_id") or "")
         if not post_id:
+            continue
+        if requested and post_id not in requested:
             continue
         fetch_status = str(post.get("comment_fetch_status") or "pending")
         summary_status = str((post.get("comment_insights") or {}).get("status") or "pending")

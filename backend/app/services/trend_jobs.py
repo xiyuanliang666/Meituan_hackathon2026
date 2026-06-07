@@ -39,7 +39,7 @@ def execute_trend_run(run_id: str, min_support: int, max_trends: int) -> None:
             processed_posts=0,
             created_trends=0,
             error_message="",
-            payload={"data_health": health},
+            payload={"data_health": health, "stage_hint": "posts_loaded"},
         )
 
         # ---------- Fix 5: pass taxonomy_store to discovery ----------
@@ -50,20 +50,58 @@ def execute_trend_run(run_id: str, min_support: int, max_trends: int) -> None:
             taxonomy_store=taxonomy_store,
             candidate_pool=[],
         )
+        update_trend_run(
+            run_id,
+            processed_posts=int(payload.get("candidate_post_count") or 0),
+            created_trends=int(payload.get("trend_count") or 0),
+            payload={
+                "data_health": health,
+                "stage_hint": "trends_discovered",
+            },
+        )
 
         # ---------- Fix 5: persist candidate taxonomy terms ----------
         candidate_terms = payload.get("candidate_taxonomy_terms") or []
         if candidate_terms:
             upsert_candidate_taxonomy_terms(candidate_terms, run_id=run_id)
+        update_trend_run(
+            run_id,
+            payload={
+                "data_health": health,
+                "stage_hint": "candidate_terms_stored",
+                "candidate_taxonomy_terms_stored": len(candidate_terms),
+            },
+        )
 
         replace_trends(payload["trends"], run_id=run_id)
+        update_trend_run(
+            run_id,
+            payload={
+                "data_health": health,
+                "stage_hint": "trends_replaced",
+                "candidate_taxonomy_terms_stored": len(candidate_terms),
+            },
+        )
 
         # 将 promote 趋势写入爆款推送队列（待上架）
         promote_trend_ids = [
             t["trend_id"] for t in payload["trends"]
             if t.get("status") == "promote"
         ]
-        push_result = set_pending_push_trends(promote_trend_ids) if promote_trend_ids else {"pending": []}
+        update_trend_run(
+            run_id,
+            payload={
+                "data_health": health,
+                "stage_hint": "push_queue_preparing",
+                "candidate_taxonomy_terms_stored": len(candidate_terms),
+                "promote_trend_count": len(promote_trend_ids),
+            },
+        )
+        push_result = (
+            set_pending_push_trends(promote_trend_ids, generate_composites=False)
+            if promote_trend_ids
+            else {"pending": []}
+        )
 
         update_trend_run(
             run_id,
@@ -74,6 +112,7 @@ def execute_trend_run(run_id: str, min_support: int, max_trends: int) -> None:
             error_message="",
             payload={
                 **payload,
+                "stage_hint": "completed",
                 "candidate_taxonomy_terms_stored": len(candidate_terms),
                 "pushed_to_queue": len(promote_trend_ids),
                 "push_result": push_result,

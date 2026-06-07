@@ -29,6 +29,10 @@ USER_PROMPT_TEMPLATE = """请分析以下帖子，输出 JSON。
 3. 自然UGC且美甲相关时，clean_status=kept，trend_weight=1 或接近 1。
 4. 如果帖子是美甲内容，但文字里混入门店推广、团购导流、品牌广告、商单口吻，也应标记 is_promotional=true。
 5. 不要因为互动量高就默认不是广告。
+6. 如历史样本与当前帖子高度相似，应优先保持与既有分类口径一致；但如果当前帖子证据明显不同，也可以与历史样本不同。
+
+历史已分类样本（用于保持口径一致，不要逐字复述）：
+{historical_examples}
 
 帖子数据：
 - source_url: {source_url}

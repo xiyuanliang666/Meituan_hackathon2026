@@ -7,12 +7,18 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="admin/admin-styles.css?v=trend-agent-standalone-1">
 <style>
-/* ── 独立页面覆盖 ── */
+/* ── 独立页面覆盖：隐藏无关模块，只展示趋势发现 ── */
 body { background: #F7F5F0; }
-.top-nav { position: sticky; top: 0; z-index: 100; }
-.merchant-nav-tab { display: none !important; }
-#backend-status-bar { display: none !important; }
 
+/* 顶部导航：保留品牌，简化 */
+.top-nav {
+  position: sticky; top: 0; z-index: 100;
+}
+
+/* 隐藏所有商户侧导航 tab，只保留智能运营 */
+.merchant-nav-tab { display: none !important; }
+
+/* 返回首页链接 */
 .back-to-home {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: #888; text-decoration: none;
@@ -21,59 +27,10 @@ body { background: #F7F5F0; }
 }
 .back-to-home:hover { background: #F0EDE8; color: #3a3028; }
 
+/* 主体内容区 */
 .standalone-main {
   max-width: 1280px; margin: 0 auto;
   padding: 20px 24px 48px;
-}
-
-/* ── 数据总览 banner ── */
-.stats-banner {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.stats-banner-item {
-  background: rgba(255,255,255,.72);
-  border: 1px solid rgba(141,121,184,.12);
-  border-radius: 16px;
-  padding: 16px 20px;
-  display: flex; align-items: center; gap: 14px;
-  box-shadow: 0 4px 16px rgba(130,100,70,.06);
-  backdrop-filter: blur(10px);
-}
-.stats-banner-icon {
-  width: 44px; height: 44px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; flex-shrink: 0;
-}
-.stats-banner-icon.purple { background: #f2edf8; color: #8d79b8; }
-.stats-banner-icon.green  { background: #eaf5e9; color: #4a8c42; }
-.stats-banner-icon.orange { background: #fef3e8; color: #c07828; }
-.stats-banner-val { font-size: 24px; font-weight: 700; color: #1a1a1a; line-height: 1; margin-bottom: 4px; }
-.stats-banner-label { font-size: 12px; color: #888; }
-
-/* ── 数据源接入折叠 ── */
-.source-collapse-btn {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: #8d79b8; background: none; border: none;
-  cursor: pointer; padding: 0; transition: color .15s;
-}
-.source-collapse-btn:hover { color: #6f5e96; }
-.source-collapse-body { overflow: hidden; transition: all .3s ease; }
-.source-collapse-body.collapsed { display: none; }
-
-/* ── 候选标签折叠 ── */
-.trend-candidate-card { display: none !important; }
-
-/* ── 生命周期颜色增强 ── */
-.lc-上升期 { background: #eaf5e9 !important; color: #2e6b28 !important; border-color: #b5dbb2 !important; }
-.lc-峰值期 { background: #fff3e8 !important; color: #a05818 !important; border-color: #f0c898 !important; }
-.lc-衰退期 { background: #f5f5f5 !important; color: #888 !important; border-color: #ddd !important; }
-.lc-观察期 { background: #f2edf8 !important; color: #6f5e96 !important; border-color: #d9cdea !important; }
-
-@media(max-width: 640px) {
-  .stats-banner { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -111,68 +68,37 @@ body { background: #F7F5F0; }
       <h2 class="page-title">智能运营</h2>
       <p class="page-sub">Agent 助手 · UGC 抓取 · 趋势发现与数据聚合</p>
     </div>
-    <div id="backend-status-bar"></div>
-  </div>
-
-  <!-- 数据总览 banner -->
-  <div class="stats-banner">
-    <div class="stats-banner-item">
-      <div class="stats-banner-icon purple"><i class="ti ti-flame"></i></div>
-      <div>
-        <div class="stats-banner-val" id="banner-trend-count">—</div>
-        <div class="stats-banner-label">趋势池条数</div>
-      </div>
-    </div>
-    <div class="stats-banner-item">
-      <div class="stats-banner-icon green"><i class="ti ti-trending-up"></i></div>
-      <div>
-        <div class="stats-banner-val" id="banner-new-count">—</div>
-        <div class="stats-banner-label">本周新增趋势</div>
-      </div>
-    </div>
-    <div class="stats-banner-item">
-      <div class="stats-banner-icon orange"><i class="ti ti-file-text"></i></div>
-      <div>
-        <div class="stats-banner-val" id="banner-post-count">—</div>
-        <div class="stats-banner-label">帖子库总量</div>
-      </div>
-    </div>
+    <div id="backend-status-bar" style="font-size:12px;color:#888;display:flex;align-items:center;gap:6px"></div>
   </div>
 
   <div class="trend-layout">
     <!-- 主列 -->
     <div class="trend-main">
 
-      <!-- 数据源接入（默认折叠） -->
+      <!-- 数据源接入 -->
       <div class="card">
-        <div class="card-header" style="margin-bottom:0;border-bottom:none;padding-bottom:0">
+        <div class="card-header">
           <div class="card-title"><i class="ti ti-database-import"></i> 数据源接入</div>
-          <button class="source-collapse-btn" onclick="toggleSourcePanel(this)">
-            <i class="ti ti-chevron-down" id="source-chevron"></i> 展开配置
-          </button>
+          <span class="card-sub">统一归一到 UGC posts 后进入同一条 Trend Agent Pipeline</span>
         </div>
-        <div class="source-collapse-body collapsed" id="source-collapse-body">
-          <div style="margin-top:16px;padding-top:14px;border-top:.5px solid #F0EDE8">
-            <div class="trend-source-tabs">
-              <button class="asset-tab active" data-source-mode="links" onclick="switchTrendSourceMode('links', this)">人工链接种子</button>
-              <button class="asset-tab" data-source-mode="clean" onclick="switchTrendSourceMode('clean', this)">使用现有清洗结果</button>
-            </div>
-            <div class="trend-source-summary">推荐日常使用"人工链接种子"；如果 raw 与 clean 已经准备好，再用"使用现有清洗结果"快速重跑趋势识别。</div>
-            <div class="trend-source-panel active" id="trend-source-links">
-              <div class="trend-source-actions">
-                <button class="btn-ghost-sm" onclick="loadSampleXhsLinks()"><i class="ti ti-link"></i> 载入示例链接</button>
-                <button class="btn-primary-sm" onclick="saveTrendSeedLinks()"><i class="ti ti-device-floppy"></i> 保存链接种子</button>
-              </div>
-              <textarea class="trend-textarea" id="trend-link-seeds" placeholder="一行一个小红书链接，用于后续抓取正文、图片和评论。"></textarea>
-              <div class="trend-source-hint" id="trend-link-status">会先追加更新 raw 帖子库，再自动清洗生成 clean 视图，之后继续评论抓取、摘要和趋势识别。</div>
-            </div>
-            <div class="trend-source-panel" id="trend-source-clean" style="display:none">
-              <div class="trend-source-actions">
-                <button class="btn-primary-sm" onclick="setTrendSourceStatus('trend-clean-status', '将直接复用 backend/mock_data/ugc_posts_from_links_clean.json，跳过评论抓取，重新导入并运行趋势识别。')"><i class="ti ti-refresh"></i> 准备重跑</button>
-              </div>
-              <div class="trend-source-hint" id="trend-clean-status">适合 raw 与 clean 都已经准备好，只想基于现有 clean 文件快速更新趋势池。</div>
-            </div>
+        <div class="trend-source-tabs">
+          <button class="asset-tab active" data-source-mode="links" onclick="switchTrendSourceMode('links', this)">人工链接种子</button>
+          <button class="asset-tab" data-source-mode="clean" onclick="switchTrendSourceMode('clean', this)">使用现有清洗结果</button>
+        </div>
+        <div class="trend-source-summary">推荐日常使用"人工链接种子"；如果 raw 与 clean 已经准备好，再用"使用现有清洗结果"快速重跑趋势识别。</div>
+        <div class="trend-source-panel active" id="trend-source-links">
+          <div class="trend-source-actions">
+            <button class="btn-primary-sm" onclick="saveTrendSeedLinksAndRun()"><i class="ti ti-player-play"></i> 保存并运行趋势识别</button>
           </div>
+          <textarea class="trend-textarea" id="trend-link-seeds" placeholder="一行一个小红书链接，用于后续抓取正文、图片和评论。"></textarea>
+          <div class="trend-seed-batch-meta" id="trend-latest-seed-batch">尚未保存链接批次</div>
+          <div class="trend-source-hint" id="trend-link-status">填写链接后直接点击“保存并运行趋势识别”。系统会先追加更新 raw 帖子库，再自动清洗生成 clean 视图，之后继续评论抓取、摘要和趋势识别。</div>
+        </div>
+        <div class="trend-source-panel" id="trend-source-clean" style="display:none">
+          <div class="trend-source-actions">
+            <button class="btn-primary-sm" onclick="setTrendSourceStatus('trend-clean-status', '将直接复用 backend/mock_data/ugc_posts_from_links_clean.json，跳过评论抓取，重新导入并运行趋势识别。')"><i class="ti ti-refresh"></i> 准备重跑</button>
+          </div>
+          <div class="trend-source-hint" id="trend-clean-status">适合 raw 与 clean 都已经准备好，只想基于现有 clean 文件快速更新趋势池。</div>
         </div>
       </div>
 
@@ -195,6 +121,9 @@ body { background: #F7F5F0; }
         <div class="card-header">
           <div class="card-title"><i class="ti ti-flame"></i> 趋势池 <span class="count-badge" id="trend-count">0 条</span></div>
           <div class="trend-filter-row">
+            <select class="coupon-select trend-filter-select" id="trend-run-filter" onchange="switchTrendResultRun(this.value)">
+              <option value="">当前最新趋势池</option>
+            </select>
             <select class="coupon-select trend-filter-select" id="trend-status-filter" onchange="loadTrendList()">
               <option value="">全部状态</option>
               <option value="promote">优先推广</option>
@@ -284,83 +213,35 @@ body { background: #F7F5F0; }
 <script src="api-config.js"></script>
 <script src="admin/admin-app.js?v=trend-agent-standalone-1"></script>
 <script>
-// ── 独立页面初始化：直接加载趋势数据，无需页面切换 ──
-document.addEventListener('DOMContentLoaded', () => {
-  // 检测后端
-  initAdminBackend().then(() => {
-    loadTrendRunsAndList();
-    loadCandidateTaxonomyTerms();
-    updateStatsBanner();
-  });
+// ── 独立页面初始化：先检测后端，再自动加载趋势数据 ──
+document.addEventListener('DOMContentLoaded', async () => {
+  // 等待 init() 中的 initAdminBackend 完成（admin-app.js 已调用 init()，但它是 async 的）
+  // 如果 adminBackendAvailable 尚未设置，手动再检测一次
+  if (!adminBackendAvailable) {
+    await initAdminBackend();
+  }
 
-  // 后端状态显示
+  // 后端已检测完毕，自动加载数据
+  loadTrendRunsAndList();
+  loadCandidateTaxonomyTerms();
   updateBackendStatusBar();
 });
 
 function updateBackendStatusBar() {
   const bar = document.getElementById('backend-status-bar');
   if (!bar) return;
-  setTimeout(() => {
-    if (adminBackendAvailable) {
-      bar.innerHTML = '<span style="color:#5a9a70"><i class="ti ti-circle-check"></i> 后端已连接</span>';
-    } else {
-      bar.innerHTML = '<span style="color:#b07830"><i class="ti ti-wifi-off"></i> 后端未连接，展示本地数据</span>';
-    }
-  }, 800);
+  if (adminBackendAvailable) {
+    bar.innerHTML = '<span style="color:#5a9a70"><i class="ti ti-circle-check"></i> 后端已连接</span>';
+  } else {
+    bar.innerHTML = '<span style="color:#b07830"><i class="ti ti-wifi-off"></i> 后端未连接，展示本地数据</span>';
+  }
 }
 
-// 覆盖 switchPage，在独立页面中不做任何跳转
+// 覆盖 switchPage，在独立页面中不做任何跳转，刷新按钮会直接调用对应函数
 function switchPage(page) {
   if (page === 'trend-agent') {
     loadTrendRunsAndList();
     loadCandidateTaxonomyTerms();
-    updateStatsBanner();
-  }
-}
-
-// 数据源面板折叠/展开
-function toggleSourcePanel(btn) {
-  const body = document.getElementById('source-collapse-body');
-  const chevron = document.getElementById('source-chevron');
-  const isCollapsed = body.classList.contains('collapsed');
-  if (isCollapsed) {
-    body.classList.remove('collapsed');
-    chevron.className = 'ti ti-chevron-up';
-    btn.lastChild.textContent = ' 收起';
-  } else {
-    body.classList.add('collapsed');
-    chevron.className = 'ti ti-chevron-down';
-    btn.lastChild.textContent = ' 展开配置';
-  }
-}
-
-// 填充顶部 banner 数据
-async function updateStatsBanner() {
-  try {
-    // 趋势池数量
-    const trends = await apiGet('/trends');
-    const trendArr = Array.isArray(trends) ? trends : (trends.trends || trends.items || []);
-    document.getElementById('banner-trend-count').textContent = trendArr.length;
-
-    // 本周新增（identified_at 在 7 天内）
-    const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-    const newCount = trendArr.filter(t => t.identified_at && new Date(t.identified_at) > weekAgo).length;
-    document.getElementById('banner-new-count').textContent = newCount;
-  } catch(e) {
-    document.getElementById('banner-trend-count').textContent = '—';
-    document.getElementById('banner-new-count').textContent = '—';
-  }
-
-  try {
-    // 帖子库总量
-    const posts = await apiGet('/trends/ugc-stats');
-    document.getElementById('banner-post-count').textContent = posts.total || '—';
-  } catch(e) {
-    // 尝试从 run 结果里拿
-    try {
-      const run = await apiGet('/trends/latest-run');
-      document.getElementById('banner-post-count').textContent = run?.total_posts || run?.post_count || '—';
-    } catch { document.getElementById('banner-post-count').textContent = '119'; }
   }
 }
 </script>

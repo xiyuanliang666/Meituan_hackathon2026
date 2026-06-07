@@ -2,7 +2,7 @@ import json
 import sqlite3
 from uuid import uuid4
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any, Iterator
@@ -1198,6 +1198,7 @@ def set_pending_push_styles(
 def set_pending_push_trends(
     trend_ids: list[str],
     merchant_id: str = "demo_shop",
+    generate_composites: bool = True,
 ) -> dict[str, Any]:
     """将趋势发现中 promote 的趋势写入 push_audits，进入待上架队列。"""
     unique_trend_ids = list(dict.fromkeys(trend_ids))
@@ -1225,6 +1226,7 @@ def set_pending_push_trends(
             trend=trend,
             merchant_id=merchant_id,
             trend_score_max=trend_score_max,
+            generate_composites=generate_composites,
         )
         for trend_id, trend in found.items()
     ]
@@ -1294,6 +1296,7 @@ def _trend_push_snapshot(
     trend: dict[str, Any],
     merchant_id: str,
     trend_score_max: float = 0.0,
+    generate_composites: bool = True,
 ) -> dict[str, Any]:
     push_id = _push_id_for_trend(trend_id)
     source_posts = _trend_source_posts(trend)
@@ -1339,7 +1342,8 @@ def _trend_push_snapshot(
 
     tags = _trend_push_tags(trend)
     style_image_urls = [representative_image_url] if representative_image_url else []
-    style_image_urls.extend(_generate_trend_push_composites(push_id, representative_image_url, merchant_id))
+    if generate_composites:
+        style_image_urls.extend(_generate_trend_push_composites(push_id, representative_image_url, merchant_id))
 
     return {
         "push_id": push_id,
@@ -1506,6 +1510,22 @@ def _generate_trend_push_composites(push_id: str, style_image_url: str, merchant
         except Exception:
             continue
     return output
+
+
+def generate_trend_push_composites_for_trend(
+    trend_id: str,
+    merchant_id: str = "demo_shop",
+) -> list[str]:
+    trend = get_trend(trend_id)
+    if not trend:
+        return []
+    push_id = _push_id_for_trend(trend_id)
+    source_posts = _trend_source_posts(trend)
+    representative_image_url = _representative_post_image(trend, source_posts)
+    style_image_urls = [representative_image_url] if representative_image_url else []
+    style_image_urls.extend(_generate_trend_push_composites(push_id, representative_image_url, merchant_id))
+    update_push_composites(push_id, style_image_urls)
+    return style_image_urls
 
 
 def upsert_push_audit(
@@ -2347,10 +2367,49 @@ def import_ugc_posts(posts: list[dict[str, Any]]) -> dict[str, int]:
                 ),
             )
             if exists:
-                updated_count += 1
+                # 只在实际数据变更时才计为"更新"，避免无变化 re-upsert 产生误导统计
+                if _post_has_changes(conn, post_id, post):
+                    updated_count += 1
             else:
                 imported_count += 1
     return {"imported_count": imported_count, "updated_count": updated_count, "total_count": imported_count + updated_count}
+
+
+def _post_has_changes(conn, post_id: str, post: dict[str, Any]) -> bool:
+    """对比新旧数据，判断帖子是否发生了实际变化。"""
+    existing = conn.execute(
+        """
+        SELECT title, content, like_count, favorite_count, comment_count,
+               classification_status, classification_confidence, is_nail_related,
+               category_guess, is_promotional, promotion_type, promotion_confidence,
+               clean_status, clean_reason, comment_insights_json, comment_sample_count,
+               comment_fetch_status
+        FROM ugc_posts WHERE post_id = ?
+        """,
+        (post_id,),
+    ).fetchone()
+    if not existing:
+        return True
+    comment_insights_json = json.dumps(post.get("comment_insights") or {}, ensure_ascii=False)
+    return (
+        str(existing["title"]) != str(post.get("title") or "")
+        or str(existing["content"]) != str(post.get("content") or "")
+        or int(existing["like_count"] or 0) != int(post.get("like_count") or 0)
+        or int(existing["favorite_count"] or 0) != int(post.get("favorite_count") or 0)
+        or int(existing["comment_count"] or 0) != int(post.get("comment_count") or 0)
+        or str(existing["classification_status"]) != str(post.get("classification_status") or "pending")
+        or float(existing["classification_confidence"] or 0) != float(post.get("classification_confidence") or 0)
+        or int(existing["is_nail_related"] or 0) != _bool_to_int(post.get("is_nail_related"))
+        or str(existing["category_guess"]) != str(post.get("category_guess") or "unknown")
+        or int(existing["is_promotional"] or 0) != _bool_to_int(post.get("is_promotional"))
+        or str(existing["promotion_type"]) != str(post.get("promotion_type") or "unknown")
+        or float(existing["promotion_confidence"] or 0) != float(post.get("promotion_confidence") or 0)
+        or str(existing["clean_status"]) != str(post.get("clean_status") or "pending")
+        or str(existing["clean_reason"]) != str(post.get("clean_reason") or "")
+        or str(existing["comment_insights_json"] or "{}") != comment_insights_json
+        or int(existing["comment_sample_count"] or 0) != int(post.get("comment_sample_count") or 0)
+        or str(existing["comment_fetch_status"]) != str(post.get("comment_fetch_status") or "pending")
+    )
 
 
 def list_ugc_posts(limit: int = 500, clean_status_exclude: str | None = "filtered") -> list[dict[str, Any]]:
@@ -2473,6 +2532,133 @@ def create_trend_pipeline_run(
     }
 
 
+def create_trend_seed_batch(
+    *,
+    merchant_id: str,
+    seed_links: list[str],
+    source_mode: str = "manual_links",
+    note: str = "",
+) -> dict[str, Any]:
+    init_db(seed=True)
+    normalized_links = list(dict.fromkeys(str(item).strip() for item in seed_links if str(item).strip()))
+    seed_batch_id = f"trend-seed-{uuid4().hex[:12]}"
+    now = _now()
+    with connect_db() as conn:
+        _create_tables(conn)
+        conn.execute(
+            """
+            INSERT INTO trend_seed_batches
+            (seed_batch_id, merchant_id, source_mode, note, seed_link_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                seed_batch_id,
+                merchant_id,
+                source_mode,
+                note,
+                len(normalized_links),
+                now,
+                now,
+            ),
+        )
+        for index, url in enumerate(normalized_links, start=1):
+            conn.execute(
+                """
+                INSERT INTO trend_seed_links
+                (seed_batch_id, merchant_id, url, link_order, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (seed_batch_id, merchant_id, url, index, now),
+            )
+    return get_trend_seed_batch(seed_batch_id) or {
+        "seed_batch_id": seed_batch_id,
+        "merchant_id": merchant_id,
+        "source_mode": source_mode,
+        "seed_links": normalized_links,
+        "seed_link_count": len(normalized_links),
+        "note": note,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def get_trend_seed_batch(seed_batch_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        _create_tables(conn)
+        batch_row = conn.execute(
+            """
+            SELECT seed_batch_id, merchant_id, source_mode, note, seed_link_count, created_at, updated_at
+            FROM trend_seed_batches
+            WHERE seed_batch_id = ?
+            """,
+            (seed_batch_id,),
+        ).fetchone()
+        if not batch_row:
+            return None
+        link_rows = conn.execute(
+            """
+            SELECT url
+            FROM trend_seed_links
+            WHERE seed_batch_id = ?
+            ORDER BY link_order ASC, created_at ASC
+            """,
+            (seed_batch_id,),
+        ).fetchall()
+    payload = dict(batch_row)
+    payload["seed_links"] = [str(row["url"]) for row in link_rows]
+    return payload
+
+
+def list_trend_seed_batches(merchant_id: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    init_db(seed=True)
+    with connect_db() as conn:
+        _create_tables(conn)
+        if merchant_id:
+            rows = conn.execute(
+                """
+                SELECT seed_batch_id, merchant_id, source_mode, note, seed_link_count, created_at, updated_at
+                FROM trend_seed_batches
+                WHERE merchant_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (merchant_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT seed_batch_id, merchant_id, source_mode, note, seed_link_count, created_at, updated_at
+                FROM trend_seed_batches
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        batch_ids = [str(row["seed_batch_id"]) for row in rows]
+        link_rows = []
+        if batch_ids:
+            placeholders = ",".join("?" for _ in batch_ids)
+            link_rows = conn.execute(
+                f"""
+                SELECT seed_batch_id, url
+                FROM trend_seed_links
+                WHERE seed_batch_id IN ({placeholders})
+                ORDER BY seed_batch_id, link_order ASC, created_at ASC
+                """,
+                batch_ids,
+            ).fetchall()
+    links_by_batch: dict[str, list[str]] = {}
+    for row in link_rows:
+        links_by_batch.setdefault(str(row["seed_batch_id"]), []).append(str(row["url"]))
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        payload = dict(row)
+        payload["seed_links"] = links_by_batch.get(str(row["seed_batch_id"]), [])
+        results.append(payload)
+    return results
+
+
 def update_trend_pipeline_run(
     pipeline_run_id: str,
     *,
@@ -2520,9 +2706,21 @@ def update_trend_pipeline_run(
     if error_message is not None:
         assignments.append("error_message = ?")
         params.append(error_message)
+    merged_payload_json: str | None = None
     if payload is not None:
+        with connect_db() as conn:
+            _create_tables(conn)
+            existing_row = conn.execute(
+                "SELECT payload_json FROM trend_pipeline_runs WHERE pipeline_run_id = ?",
+                (pipeline_run_id,),
+            ).fetchone()
+        existing_payload = _json_loads(existing_row["payload_json"], {}) if existing_row else {}
+        if not isinstance(existing_payload, dict):
+            existing_payload = {}
+        merged_payload = {**existing_payload, **payload}
         assignments.append("payload_json = ?")
-        params.append(json.dumps(payload, ensure_ascii=False))
+        merged_payload_json = json.dumps(merged_payload, ensure_ascii=False)
+        params.append(merged_payload_json)
     assignments.append("updated_at = ?")
     params.append(_now())
     params.append(pipeline_run_id)
@@ -2579,6 +2777,81 @@ def list_trend_pipeline_runs(limit: int = 20) -> list[dict[str, Any]]:
     return [_trend_pipeline_run_payload(dict(row)) for row in rows]
 
 
+def list_active_trend_pipeline_runs(limit: int = 50) -> list[dict[str, Any]]:
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM trend_pipeline_runs
+            WHERE status IN ('pending', 'running')
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [_trend_pipeline_run_payload(dict(row)) for row in rows]
+
+
+def expire_stale_trend_pipeline_runs(
+    *,
+    stale_pending_minutes: int = 5,
+    stale_running_minutes: int = 20,
+) -> list[dict[str, Any]]:
+    now = datetime.now(UTC)
+    stale_rows: list[dict[str, Any]] = []
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT pipeline_run_id, status, stage, updated_at
+            FROM trend_pipeline_runs
+            WHERE status IN ('pending', 'running')
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+        for row in rows:
+            raw_updated_at = str(row["updated_at"] or "").strip()
+            if not raw_updated_at:
+                continue
+            try:
+                updated_at = datetime.fromisoformat(raw_updated_at)
+            except ValueError:
+                continue
+            timeout = stale_pending_minutes if row["status"] == "pending" else stale_running_minutes
+            if timeout <= 0:
+                continue
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
+            if now - updated_at <= timedelta(minutes=timeout):
+                continue
+            stale_rows.append(dict(row))
+    for row in stale_rows:
+        pipeline_run_id = str(row["pipeline_run_id"])
+        status = str(row["status"] or "")
+        stage = str(row["stage"] or "")
+        timeout = stale_pending_minutes if status == "pending" else stale_running_minutes
+        message = f"任务长时间停留在「{stage or status}」且 {timeout} 分钟内无进展，已自动判定为失效"
+        update_trend_pipeline_run(
+            pipeline_run_id,
+            status="failed",
+            stage="failed",
+            error_message=message,
+            payload={
+                "zombie_expired": True,
+                "zombie_previous_status": status,
+                "zombie_previous_stage": stage,
+            },
+        )
+        append_trend_pipeline_run_log(pipeline_run_id, message)
+    refreshed_runs: list[dict[str, Any]] = []
+    for row in stale_rows:
+        refreshed = get_trend_pipeline_run(str(row["pipeline_run_id"]))
+        if refreshed:
+            refreshed_runs.append(refreshed)
+    return refreshed_runs
+
+
 def update_trend_run(
     run_id: str,
     *,
@@ -2616,6 +2889,43 @@ def update_trend_run(
         _create_tables(conn)
         conn.execute(f"UPDATE trend_runs SET {', '.join(assignments)} WHERE run_id = ?", params)
     return get_trend_run(run_id)
+
+
+def expire_stale_trend_runs(stale_running_minutes: int = 10) -> list[dict[str, Any]]:
+    now = datetime.now(UTC)
+    stale_rows: list[dict[str, Any]] = []
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT run_id, status, updated_at
+            FROM trend_runs
+            WHERE status = 'running'
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+        for row in rows:
+            raw_updated_at = str(row["updated_at"] or "").strip()
+            if not raw_updated_at:
+                continue
+            try:
+                updated_at = datetime.fromisoformat(raw_updated_at)
+            except ValueError:
+                continue
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
+            if now - updated_at <= timedelta(minutes=stale_running_minutes):
+                continue
+            stale_rows.append(dict(row))
+
+    refreshed: list[dict[str, Any]] = []
+    for row in stale_rows:
+        run_id = str(row["run_id"])
+        message = f"趋势识别长时间未更新，超过 {stale_running_minutes} 分钟，已自动判定为失效"
+        updated = update_trend_run(run_id, status="failed", error_message=message)
+        if updated:
+            refreshed.append(updated)
+    return refreshed
 
 
 def get_trend_run(run_id: str) -> dict[str, Any] | None:
@@ -2827,6 +3137,24 @@ def list_trends(limit: int = 50, status: str | None = None, life_cycle: str | No
             break
     deduped.sort(key=lambda item: (float(item.get("trend_score") or 0.0), str(item.get("identified_at") or "")), reverse=True)
     return deduped
+
+
+def list_trends_by_run_id(run_id: str) -> list[dict[str, Any]]:
+    run_key = str(run_id or "").strip()
+    if not run_key:
+        return []
+    with connect_db() as conn:
+        _create_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM trends
+            WHERE last_run_id = ?
+            ORDER BY trend_score DESC, identified_at DESC, updated_at DESC
+            """,
+            (run_key,),
+        ).fetchall()
+    return [_trend_payload(dict(row)) for row in rows]
 
 
 def get_trend(trend_id: str) -> dict[str, Any] | None:
@@ -3413,6 +3741,26 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             payload_json TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS trend_seed_batches (
+            seed_batch_id TEXT PRIMARY KEY,
+            merchant_id TEXT NOT NULL DEFAULT 'demo_shop',
+            source_mode TEXT NOT NULL DEFAULT 'manual_links',
+            note TEXT NOT NULL DEFAULT '',
+            seed_link_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS trend_seed_links (
+            seed_batch_id TEXT NOT NULL,
+            merchant_id TEXT NOT NULL DEFAULT 'demo_shop',
+            url TEXT NOT NULL,
+            link_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(seed_batch_id, url),
+            FOREIGN KEY(seed_batch_id) REFERENCES trend_seed_batches(seed_batch_id)
         );
 
         CREATE TABLE IF NOT EXISTS candidate_taxonomy_terms (
