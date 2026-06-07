@@ -1,5 +1,6 @@
 import base64
 import json
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -18,6 +19,10 @@ def is_gemini_enabled() -> bool:
 
 def is_qwen_vl_enabled() -> bool:
     return get_settings().has_qwen_credentials
+
+
+def is_nail_region_vlm_enabled() -> bool:
+    return get_settings().has_nail_region_vlm_credentials
 
 
 def analyze_image_json_with_gemini(image_url: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
@@ -78,6 +83,21 @@ def analyze_image_json_with_qwen_vl(image_url: str, system_prompt: str, user_pro
     )
 
 
+def analyze_image_json_with_nail_region_vlm(image_url: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.has_nail_region_vlm_credentials:
+        raise MultimodalModelError("NAIL_REGION_VLM_API_KEY is not configured")
+    return _analyze_image_json_openai_compatible(
+        image_url=image_url,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        base_url=settings.nail_region_vlm_base_url,
+        api_key=settings.nail_region_vlm_api_key,
+        model_name=settings.nail_region_vlm_model_name,
+        timeout_seconds=settings.model_timeout_seconds,
+    )
+
+
 def _generate_text_json_openai_compatible(
     system_prompt: str,
     user_prompt: str,
@@ -121,6 +141,10 @@ def _resolve_image_url(image_url: str, timeout_seconds: float) -> str:
     We download the image ourselves and embed it as a data URI instead.
     """
     host = (urlparse(image_url).hostname or "").lower()
+    local_file_data_uri = _resolve_local_static_file_to_data_uri(image_url)
+    if local_file_data_uri:
+        return local_file_data_uri
+
     if host not in _LOCAL_HOSTS and not host.startswith("192.168.") and not host.startswith("10."):
         return image_url
 
@@ -134,6 +158,44 @@ def _resolve_image_url(image_url: str, timeout_seconds: float) -> str:
     content_type = resp.headers.get("content-type", "image/png")
     b64 = base64.b64encode(resp.content).decode("ascii")
     return f"data:{content_type};base64,{b64}"
+
+
+def _resolve_local_static_file_to_data_uri(image_url: str) -> str | None:
+    parsed = urlparse(image_url)
+    host = (parsed.hostname or "").lower()
+    if host and host not in _LOCAL_HOSTS:
+        return None
+    if not parsed.path.startswith("/static/"):
+        return None
+
+    rel_path = parsed.path.removeprefix("/static/").lstrip("/")
+    if not rel_path:
+        return None
+
+    settings = get_settings()
+    candidate = (Path(settings.storage_dir) / rel_path).resolve()
+    storage_root = Path(settings.storage_dir).resolve()
+    try:
+        candidate.relative_to(storage_root)
+    except ValueError:
+        return None
+    if not candidate.exists() or not candidate.is_file():
+        return None
+
+    mime = _guess_mime_type(candidate)
+    b64 = base64.b64encode(candidate.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def _guess_mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        return "image/png"
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".webp":
+        return "image/webp"
+    return "image/png"
 
 
 def _analyze_image_json_openai_compatible(

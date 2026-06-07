@@ -34,45 +34,66 @@ def _shape_dir() -> Path:
     return storage_root() / "tune_references" / "shapes"
 
 
-def _load_shape_manifest() -> list[dict[str, str]]:
-    manifest_path = _shape_dir() / "manifest.json"
+def _french_dir() -> Path:
+    return storage_root() / "tune_references" / "french"
+
+
+def _load_reference_manifest(base_dir: Path, *, key: str, default_prompt_builder) -> list[dict[str, str]]:
+    manifest_path = base_dir / "manifest.json"
     if not manifest_path.exists():
         return []
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("甲型素材清单 manifest.json 无法读取") from exc
+        raise ValueError(f"{key} 素材清单 manifest.json 无法读取") from exc
 
-    shapes = payload.get("shapes")
-    if not isinstance(shapes, list):
-        raise ValueError("甲型素材清单必须包含 shapes 数组")
+    records = payload.get(key)
+    if not isinstance(records, list):
+        raise ValueError(f"{key} 素材清单必须包含 {key} 数组")
 
     valid: list[dict[str, str]] = []
     seen: set[str] = set()
-    for item in shapes:
+    for item in records:
         if not isinstance(item, dict):
             continue
-        shape_id = str(item.get("id") or "").strip()
+        item_id = str(item.get("id") or "").strip()
         label = str(item.get("label") or "").strip()
         image_name = str(item.get("image") or "").strip()
         prompt = str(item.get("prompt") or "").strip()
-        if not shape_id or not label or not image_name or shape_id in seen:
+        if not item_id or not label or not image_name or item_id in seen:
             continue
-        image_path = (_shape_dir() / image_name).resolve()
-        if image_path.parent != _shape_dir().resolve() or not image_path.is_file():
+        image_path = (base_dir / image_name).resolve()
+        if image_path.parent != base_dir.resolve() or not image_path.is_file():
             continue
-        seen.add(shape_id)
+        seen.add(item_id)
         valid.append({
-            "id": shape_id,
+            "id": item_id,
             "label": label,
             "image": image_name,
-            "prompt": prompt or f"将全部指甲调整为参考图中的{label}",
+            "prompt": prompt or default_prompt_builder(label),
         })
     return valid
 
 
+def _load_shape_manifest() -> list[dict[str, str]]:
+    return _load_reference_manifest(
+        _shape_dir(),
+        key="shapes",
+        default_prompt_builder=lambda label: f"将全部指甲调整为参考图中的{label}",
+    )
+
+
+def _load_french_manifest() -> list[dict[str, str]]:
+    return _load_reference_manifest(
+        _french_dir(),
+        key="styles",
+        default_prompt_builder=lambda label: f"将法式边缘、走向和留白样式调整为参考图中的{label}",
+    )
+
+
 def get_tune_options() -> dict:
     shapes = _load_shape_manifest()
+    french_styles = _load_french_manifest()
     return {
         "shapes": [
             {
@@ -81,7 +102,15 @@ def get_tune_options() -> dict:
                 "image_url": public_url(f"tune_references/shapes/{item['image']}"),
             }
             for item in shapes
-        ]
+        ],
+        "french_styles": [
+            {
+                "id": item["id"],
+                "label": item["label"],
+                "image_url": public_url(f"tune_references/french/{item['image']}"),
+            }
+            for item in french_styles
+        ],
     }
 
 
@@ -92,6 +121,15 @@ def _find_shape(shape_id: str | None) -> dict[str, str] | None:
     if not shape:
         raise ValueError(f"未找到甲型素材：{shape_id}")
     return shape
+
+
+def _find_french_style(french_style_id: str | None) -> dict[str, str] | None:
+    if not french_style_id:
+        return None
+    style = next((item for item in _load_french_manifest() if item["id"] == french_style_id), None)
+    if not style:
+        raise ValueError(f"未找到法式素材：{french_style_id}")
+    return style
 
 
 def _normalize_hex_color(color: str) -> str:
@@ -121,6 +159,7 @@ def _create_color_card(color: str) -> str:
 
 def _build_overall_prompt(
     shape: dict[str, str] | None,
+    french_style: dict[str, str] | None,
     color: str | None,
     user_text: str | None,
 ) -> str:
@@ -131,25 +170,35 @@ def _build_overall_prompt(
         lines.append(f"图片{image_index}是目标甲型参考图，只参考其中的甲型轮廓、长度和比例。")
         actions.append(f"将图片1中的全部指甲调整为图片{image_index}所示甲型")
         image_index += 1
+    if french_style:
+        lines.append(f"图片{image_index}是目标法式参考图，只参考其中的法式边缘走向、留白比例和法式样式。")
+        actions.append(f"将图片1中的全部指甲法式风格调整为图片{image_index}所示样式")
+        image_index += 1
     if color:
         lines.append(f"图片{image_index}是目标颜色色卡，请严格匹配色卡中的颜色。")
         actions.append(f"将图片1中的全部指甲颜色替换为图片{image_index}的色卡颜色")
-
-    lines.append("，并".join(actions) + "。")
-    lines.append("保留图片1原有的图案、装饰、纹理、光泽、手部姿势、皮肤、背景和构图。")
+    if actions:
+        lines.append("，并".join(actions) + "。")
+    elif user_text and user_text.strip():
+        lines.append("请仅根据用户的文字描述对图片1中的美甲进行调整。")
+    lines.append("保留图片1原有的装饰细节、纹理、光泽、手部姿势、皮肤、背景和构图，除非上面的参考图明确要求修改对应指甲样式。")
     if shape:
         lines.append(f"甲型要求：{shape['prompt']}。")
+    if french_style:
+        lines.append(f"法式要求：{french_style['prompt']}。仅吸收法式样式本身，不复制参考图中的背景、皮肤、文字或其他无关元素。")
     if user_text and user_text.strip():
-        lines.append(f"用户补充要求：{user_text.strip()}。补充要求不得覆盖甲型和色卡参考。")
-    lines.append("不要复制参考图的背景、皮肤、文字、水印或其他无关内容。只修改指甲部分，输出尺寸与图片1一致。")
+        lines.append(f"用户补充要求：{user_text.strip()}。补充要求不得覆盖甲型、法式参考和色卡参考；若没有参考图，则将该描述视为本次美甲微调的主要编辑指令。")
+    lines.append("不要复制任何参考图的背景、皮肤、文字、水印或其他无关内容。只修改指甲部分，输出尺寸与图片1一致。")
     return "\n".join(lines)
 
 
 def _build_single_prompt(
     finger_index: int,
     action: str,
+    has_guide_image: bool = False,
+    finger_region: list[list[float]] | None = None,
     color: str | None = None,
-    french_style: str | None = None,
+    french_style: dict[str, str] | None = None,
     decoration: str | None = None,
 ) -> str:
     finger_desc = _FINGER_NAMES.get(finger_index, f"第{finger_index}根")
@@ -159,12 +208,22 @@ def _build_single_prompt(
         color_desc = _hex_to_desc(color) if color.startswith("#") else color
         prompt = f"将{base}颜色替换为{color_desc}，其余手指保持完全不变，保持原甲型和装饰不变。"
     elif action == "french" and french_style:
-        prompt = f"在{base}上添加{french_style}法式纹样，保持甲型和底色不变，其余手指完全不变。"
+        prompt = f"仅将{base}的法式风格调整为参考法式样式，保持该指甲原有甲型、长度和整体构图自然，其余手指完全不变。"
     elif action == "decoration" and decoration:
         prompt = f"在{base}上添加{decoration}装饰，位置自然美观，保持甲型和颜色不变，其余手指完全不变。"
     else:
         prompt = f"对{base}进行微调。"
 
+    if has_guide_image:
+        prompt += " 图片2是单指选区标注图，只有高亮虚线框中的那一根指甲允许修改，其余任何指甲都不能变化。"
+        if action == "french" and french_style:
+            prompt += " 图片3是法式参考图，只参考其中的法式边缘样式、留白比例和走向，不复制其余内容。"
+    elif finger_region:
+        prompt += f" 该指甲区域的四边形归一化坐标为：{json.dumps(finger_region, ensure_ascii=False)}。请严格将修改限制在这个区域内。"
+        if action == "french" and french_style:
+            prompt += " 图片2是法式参考图，只参考其中的法式边缘样式、留白比例和走向，不复制其余内容。"
+    elif action == "french" and french_style:
+        prompt += " 图片2是法式参考图，只参考其中的法式边缘样式、留白比例和走向，不复制其余内容。"
     prompt += "请保持手的姿势、皮肤和背景完全不变，只修改指定手指的指甲。输出图片与原图尺寸一致。"
     return prompt
 
@@ -240,12 +299,15 @@ def tune_nail_image(
     style_image_url: str,
     mode: str,
     nail_shape_id: str | None = None,
+    french_style_id: str | None = None,
     color: str | None = None,
     user_text: str | None = None,
     finger_index: int | None = None,
     action: str | None = None,
     french_style: str | None = None,
     decoration: str | None = None,
+    guide_image_url: str | None = None,
+    finger_region: list[list[float]] | None = None,
 ) -> dict:
     """
     执行美甲微调，返回 dict(tuned_image_url, generation_mode, warnings)
@@ -257,22 +319,32 @@ def tune_nail_image(
     input_image_urls = [style_image_url]
     if mode == "overall":
         shape = _find_shape(nail_shape_id)
+        french_style = _find_french_style(french_style_id)
         normalized_color = _normalize_hex_color(color) if color else None
         if shape:
             input_image_urls.append(public_url(f"tune_references/shapes/{shape['image']}"))
+        if french_style:
+            input_image_urls.append(public_url(f"tune_references/french/{french_style['image']}"))
         if normalized_color:
             input_image_urls.append(_create_color_card(normalized_color))
-        prompt_text = _build_overall_prompt(shape, normalized_color, user_text)
-        op_desc = f"整体微调({nail_shape_id or ''}{normalized_color or ''}{user_text or ''})"
+        prompt_text = _build_overall_prompt(shape, french_style, normalized_color, user_text)
+        op_desc = f"整体微调(shape={nail_shape_id or ''},french={french_style_id or ''},color={normalized_color or ''})"
     else:
+        french_style = _find_french_style(french_style_id) if action == "french" else None
+        if guide_image_url:
+            input_image_urls.append(guide_image_url)
+        if french_style:
+            input_image_urls.append(public_url(f"tune_references/french/{french_style['image']}"))
         prompt_text = _build_single_prompt(
             finger_index=finger_index or 1,
             action=action or "color",
+            has_guide_image=bool(guide_image_url),
+            finger_region=finger_region,
             color=color,
             french_style=french_style,
             decoration=decoration,
         )
-        op_desc = f"单指微调(finger={finger_index},action={action})"
+        op_desc = f"单指微调(finger={finger_index},action={action},french={french_style_id or ''})"
 
     logger.info("[tune] %s prompt=%s...", op_desc, prompt_text[:80])
 

@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-06-07T09:23:29.861533+00:00",
+  "count": 2,
+  "items": [
+    {
+      "style_id": "style-seed-001",
+      "style_name": "裸色系纯色简约",
+      "image_url": "http://p0.meituan.net/pilotimages/87797733466cfd525625a5947767e2ff1794125.png",
+      "analysis_mode": "qwen-vl-plus",
+      "prompt_version": "nail-region-v1",
+      "processed_at": "2026-06-07T09:22:26.078687+00:00",
+      "file": "style-seed-001.json",
+      "status": "done"
+    },
+    {
+      "style_id": "style-seed-002",
+      "style_name": "大地色系纯色温柔",
+      "image_url": "http://p0.meituan.net/pilotimages/162afb52255bd908ba3ec418fd61824a2254875.png",
+      "analysis_mode": "qwen-vl-plus",
+      "prompt_version": "nail-region-v1",
+      "processed_at": "2026-06-07T09:23:04.093621+00:00",
+      "file": "style-seed-002.json",
+      "status": "done"
+    }
+  ]
+}

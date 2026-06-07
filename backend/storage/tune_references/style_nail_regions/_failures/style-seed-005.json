@@ -1,0 +1,49 @@
+{
+  "style_id": "style-seed-005",
+  "style_name": "白色系纯色个性",
+  "image_url": "http://p1.meituan.net/pilotimages/3c0d090e20f0cb56f70fcb56c54dd6582416974.png",
+  "failed_at": "2026-06-07T09:23:29.861161+00:00",
+  "error": "finger 1 must contain exactly 4 corner points",
+  "model_output": {
+    "1": [
+      [
+        0.3,
+        0.35,
+        0.38,
+        0.42
+      ]
+    ],
+    "2": [
+      [
+        0.4,
+        0.3,
+        0.48,
+        0.38
+      ]
+    ],
+    "3": [
+      [
+        0.5,
+        0.25,
+        0.58,
+        0.33
+      ]
+    ],
+    "4": [
+      [
+        0.6,
+        0.22,
+        0.68,
+        0.3
+      ]
+    ],
+    "5": [
+      [
+        0.7,
+        0.2,
+        0.78,
+        0.28
+      ]
+    ]
+  }
+}

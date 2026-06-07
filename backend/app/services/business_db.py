@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any, Iterator
+from urllib.parse import urlparse
 
 from app.config import get_settings
+from app.services.hand_nail_regions import resolve_hand_nail_region_json_path
 from app.data.nail_taxonomy_v2_seed import STYLE_TAG_FIELD_KEYS, TAXONOMY_V2_OPTIONS
 from app.services.dataset_loader import load_evaluation_dataset
 from app.services.image_storage import mirror_remote_image
@@ -60,6 +62,7 @@ def get_db_summary(conn: sqlite3.Connection | None = None) -> dict[str, int]:
         "user_hand_profiles",
         "user_recommendation_snapshots",
         "user_tune_history",
+        "demo_tune_records",
         "user_demo_state",
         "ugc_posts",
         "trend_runs",
@@ -275,7 +278,8 @@ def list_user_hand_assets(user_id: str) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                   nail_art_detected, processing_note, created_at, updated_at
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
             FROM user_hand_assets
             WHERE user_id = ?
             ORDER BY selected DESC, updated_at DESC, created_at DESC
@@ -292,7 +296,8 @@ def get_user_hand_asset(hand_id: str, user_id: str | None = None) -> dict[str, A
             row = conn.execute(
                 """
                 SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                       nail_art_detected, processing_note, created_at, updated_at
+                       nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                       nail_region_error, created_at, updated_at
                 FROM user_hand_assets
                 WHERE user_id = ? AND hand_id = ?
                 """,
@@ -302,7 +307,8 @@ def get_user_hand_asset(hand_id: str, user_id: str | None = None) -> dict[str, A
             row = conn.execute(
                 """
                 SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                       nail_art_detected, processing_note, created_at, updated_at
+                       nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                       nail_region_error, created_at, updated_at
                 FROM user_hand_assets
                 WHERE hand_id = ?
                 ORDER BY updated_at DESC
@@ -319,7 +325,8 @@ def get_user_hand_asset_by_image(user_id: str, image_url: str) -> dict[str, Any]
         row = conn.execute(
             """
             SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                   nail_art_detected, processing_note, created_at, updated_at
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
             FROM user_hand_assets
             WHERE user_id = ? AND image_url = ?
             ORDER BY updated_at DESC
@@ -383,13 +390,49 @@ def save_user_hand_asset(
         row = conn.execute(
             """
             SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                   nail_art_detected, processing_note, created_at, updated_at
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
             FROM user_hand_assets
             WHERE user_id = ? AND hand_id = ?
             """,
             (user_id, hand_id),
         ).fetchone()
     return _user_hand_asset_payload(dict(row))
+
+
+def update_user_hand_nail_region_status(
+    user_id: str,
+    hand_id: str,
+    *,
+    status: str,
+    json_path: str = "",
+    error: str = "",
+) -> dict[str, Any] | None:
+    init_db(seed=True)
+    now = _now()
+    with connect_db() as conn:
+        conn.execute(
+            """
+            UPDATE user_hand_assets
+            SET nail_region_status = ?,
+                nail_region_json_path = ?,
+                nail_region_error = ?,
+                updated_at = ?
+            WHERE user_id = ? AND hand_id = ?
+            """,
+            (status, json_path, error, now, user_id, hand_id),
+        )
+        row = conn.execute(
+            """
+            SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
+            FROM user_hand_assets
+            WHERE user_id = ? AND hand_id = ?
+            """,
+            (user_id, hand_id),
+        ).fetchone()
+    return _user_hand_asset_payload(dict(row)) if row else None
 
 
 def sync_user_hand_assets(user_id: str, hands: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -701,6 +744,234 @@ def get_latest_user_tune(user_id: str, source_style_id: str | None = None) -> di
                 (user_id,),
             ).fetchone()
     return dict(row) if row else None
+
+
+def save_demo_tune_record(
+    *,
+    root_tryon_record_id: str,
+    parent_tune_record_id: str | None,
+    root_hand_id: str | None,
+    root_style_id: str | None,
+    root_tryon_image_url: str,
+    input_image_url: str,
+    output_image_url: str,
+    operation_mode: str,
+    operation_payload: dict[str, Any],
+    operation_summary: str,
+    generation_mode: str,
+    tune_record_id: str | None = None,
+    created_at: str | None = None,
+) -> dict[str, Any]:
+    init_db(seed=True)
+    record_id = tune_record_id or ("demo-tune-" + uuid4().hex[:12])
+    created = created_at or _now()
+    existing = find_demo_tune_record_by_output(output_image_url)
+    if existing:
+        return existing
+    with connect_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO demo_tune_records
+            (tune_record_id, root_tryon_record_id, parent_tune_record_id, root_hand_id, root_style_id,
+             root_tryon_image_url, input_image_url, output_image_url, operation_mode,
+             operation_payload_json, operation_summary, generation_mode, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record_id,
+                root_tryon_record_id,
+                parent_tune_record_id,
+                root_hand_id,
+                root_style_id,
+                root_tryon_image_url,
+                input_image_url,
+                output_image_url,
+                operation_mode,
+                json.dumps(operation_payload, ensure_ascii=False),
+                operation_summary,
+                generation_mode,
+                created,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT tune_record_id, root_tryon_record_id, parent_tune_record_id, root_hand_id, root_style_id,
+                   root_tryon_image_url, input_image_url, output_image_url, operation_mode,
+                   operation_payload_json, operation_summary, generation_mode, created_at
+            FROM demo_tune_records
+            WHERE tune_record_id = ?
+            """,
+            (record_id,),
+        ).fetchone()
+    return _demo_tune_record_payload(dict(row)) if row else {}
+
+
+def find_demo_tune_record_by_output(output_image_url: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT tune_record_id, root_tryon_record_id, parent_tune_record_id, root_hand_id, root_style_id,
+                   root_tryon_image_url, input_image_url, output_image_url, operation_mode,
+                   operation_payload_json, operation_summary, generation_mode, created_at
+            FROM demo_tune_records
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+    for item in row:
+        payload = _demo_tune_record_payload(dict(item))
+        if _same_image_reference(payload["output_image_url"], output_image_url):
+            return payload
+    return None
+
+
+def get_demo_tune_record_group(root_tryon_record_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    bootstrap_demo_tune_records_from_history()
+    with connect_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT tune_record_id, root_tryon_record_id, parent_tune_record_id, root_hand_id, root_style_id,
+                   root_tryon_image_url, input_image_url, output_image_url, operation_mode,
+                   operation_payload_json, operation_summary, generation_mode, created_at
+            FROM demo_tune_records
+            WHERE root_tryon_record_id = ?
+            ORDER BY created_at ASC
+            """,
+            (root_tryon_record_id,),
+        ).fetchall()
+    if not rows:
+        return None
+    records = [_demo_tune_record_payload(dict(row)) for row in rows]
+    first = records[0]
+    return {
+        "root_tryon_record_id": root_tryon_record_id,
+        "root_tryon_image_url": first["root_tryon_image_url"],
+        "root_style_id": first["root_style_id"],
+        "root_style_name": _style_name_for_id(first["root_style_id"]),
+        "root_hand_id": first["root_hand_id"],
+        "record_count": len(records),
+        "latest_created_at": records[-1]["created_at"],
+        "records": records,
+    }
+
+
+def list_demo_tune_record_groups() -> list[dict[str, Any]]:
+    init_db(seed=True)
+    bootstrap_demo_tune_records_from_history()
+    with connect_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT root_tryon_record_id, MAX(created_at) AS latest_created_at, COUNT(*) AS record_count
+            FROM demo_tune_records
+            GROUP BY root_tryon_record_id
+            ORDER BY latest_created_at DESC
+            """
+        ).fetchall()
+    groups: list[dict[str, Any]] = []
+    for row in rows:
+        group = get_demo_tune_record_group(str(row["root_tryon_record_id"]))
+        if group:
+            groups.append(group)
+    return groups
+
+
+def bootstrap_demo_tune_records_from_history() -> None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        tune_rows = conn.execute(
+            """
+            SELECT tune_id, user_id, source_style_id, source_style_image_url, tuned_image_url,
+                   nail_shape_id, color, user_text, generation_mode, created_at
+            FROM user_tune_history
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+        if not tune_rows:
+            return
+        tryon_rows = conn.execute(
+            """
+            SELECT record_id, hand_id, style_id, result_image_url
+            FROM user_tryon_history
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+        planned_records: list[dict[str, Any]] = []
+
+        def _find_parent_by_output(image_url: str) -> dict[str, Any] | None:
+            for candidate in planned_records:
+                if _same_image_reference(candidate["output_image_url"], image_url):
+                    return candidate
+            return None
+
+        def _find_root_tryon(image_url: str) -> dict[str, Any] | None:
+            for candidate in tryon_rows:
+                if _same_image_reference(str(candidate["result_image_url"] or ""), image_url):
+                    return dict(candidate)
+            return None
+
+        for row in tune_rows:
+            row_payload = dict(row)
+            input_image_url = str(row_payload.get("source_style_image_url") or "")
+            parent = _find_parent_by_output(input_image_url)
+            root_tryon = _find_root_tryon(input_image_url) if parent is None else None
+            if parent is None and root_tryon is None:
+                continue
+            operation_mode, operation_payload, operation_summary = _infer_demo_tune_operation(row_payload)
+            planned_records.append({
+                "tune_record_id": str(row_payload["tune_id"]),
+                "root_tryon_record_id": parent["root_tryon_record_id"] if parent else str(root_tryon["record_id"]),
+                "parent_tune_record_id": parent["tune_record_id"] if parent else None,
+                "root_hand_id": parent["root_hand_id"] if parent else str(root_tryon.get("hand_id") or ""),
+                "root_style_id": parent["root_style_id"] if parent else str(root_tryon.get("style_id") or ""),
+                "root_tryon_image_url": parent["root_tryon_image_url"] if parent else str(root_tryon.get("result_image_url") or ""),
+                "input_image_url": input_image_url,
+                "output_image_url": str(row_payload.get("tuned_image_url") or ""),
+                "operation_mode": operation_mode,
+                "operation_payload": operation_payload,
+                "operation_summary": operation_summary,
+                "generation_mode": str(row_payload.get("generation_mode") or "mock"),
+                "created_at": str(row_payload.get("created_at") or _now()),
+            })
+
+        for item in planned_records:
+            conn.execute(
+                """
+                INSERT INTO demo_tune_records
+                (tune_record_id, root_tryon_record_id, parent_tune_record_id, root_hand_id, root_style_id,
+                 root_tryon_image_url, input_image_url, output_image_url, operation_mode,
+                 operation_payload_json, operation_summary, generation_mode, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tune_record_id) DO UPDATE SET
+                    root_tryon_record_id = excluded.root_tryon_record_id,
+                    parent_tune_record_id = excluded.parent_tune_record_id,
+                    root_hand_id = excluded.root_hand_id,
+                    root_style_id = excluded.root_style_id,
+                    root_tryon_image_url = excluded.root_tryon_image_url,
+                    input_image_url = excluded.input_image_url,
+                    output_image_url = excluded.output_image_url,
+                    operation_mode = excluded.operation_mode,
+                    operation_payload_json = excluded.operation_payload_json,
+                    operation_summary = excluded.operation_summary,
+                    generation_mode = excluded.generation_mode,
+                    created_at = excluded.created_at
+                """,
+                (
+                    item["tune_record_id"],
+                    item["root_tryon_record_id"],
+                    item["parent_tune_record_id"],
+                    item["root_hand_id"],
+                    item["root_style_id"],
+                    item["root_tryon_image_url"],
+                    item["input_image_url"],
+                    item["output_image_url"],
+                    item["operation_mode"],
+                    json.dumps(item["operation_payload"], ensure_ascii=False),
+                    item["operation_summary"],
+                    item["generation_mode"],
+                    item["created_at"],
+                ),
+            )
 
 
 def get_user_demo_state(user_id: str) -> dict[str, Any] | None:
@@ -2961,6 +3232,9 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             quality_issues_json TEXT NOT NULL DEFAULT '[]',
             nail_art_detected INTEGER NOT NULL DEFAULT 0,
             processing_note TEXT NOT NULL DEFAULT '',
+            nail_region_status TEXT NOT NULL DEFAULT 'pending',
+            nail_region_json_path TEXT NOT NULL DEFAULT '',
+            nail_region_error TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             PRIMARY KEY(user_id, hand_id)
@@ -2999,6 +3273,22 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             nail_shape_id TEXT,
             color TEXT,
             user_text TEXT,
+            generation_mode TEXT NOT NULL DEFAULT 'mock',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS demo_tune_records (
+            tune_record_id TEXT PRIMARY KEY,
+            root_tryon_record_id TEXT NOT NULL,
+            parent_tune_record_id TEXT,
+            root_hand_id TEXT NOT NULL DEFAULT '',
+            root_style_id TEXT NOT NULL DEFAULT '',
+            root_tryon_image_url TEXT NOT NULL,
+            input_image_url TEXT NOT NULL,
+            output_image_url TEXT NOT NULL,
+            operation_mode TEXT NOT NULL DEFAULT 'overall',
+            operation_payload_json TEXT NOT NULL DEFAULT '{}',
+            operation_summary TEXT NOT NULL DEFAULT '',
             generation_mode TEXT NOT NULL DEFAULT 'mock',
             created_at TEXT NOT NULL
         );
@@ -3186,6 +3476,9 @@ def _ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "user_hand_assets", "quality_issues_json", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "user_hand_assets", "nail_art_detected", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "user_hand_assets", "processing_note", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "user_hand_assets", "nail_region_status", "TEXT NOT NULL DEFAULT 'pending'")
+    _ensure_column(conn, "user_hand_assets", "nail_region_json_path", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "user_hand_assets", "nail_region_error", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "user_hand_assets", "created_at", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "user_hand_assets", "updated_at", "TEXT NOT NULL DEFAULT ''")
 
@@ -3204,6 +3497,10 @@ def _bool_to_int(value: Any) -> int | None:
 
 
 def _user_hand_asset_payload(row: dict[str, Any]) -> dict[str, Any]:
+    resolved_region_path = resolve_hand_nail_region_json_path(
+        row["hand_id"],
+        row.get("nail_region_json_path") or "",
+    )
     return {
         "user_id": row["user_id"],
         "hand_id": row["hand_id"],
@@ -3213,6 +3510,9 @@ def _user_hand_asset_payload(row: dict[str, Any]) -> dict[str, Any]:
         "quality_issues": _json_loads(row.get("quality_issues_json"), []),
         "nail_art_detected": bool(row.get("nail_art_detected")),
         "processing_note": row.get("processing_note") or "",
+        "nail_region_status": row.get("nail_region_status") or "pending",
+        "nail_region_json_path": str(resolved_region_path) if resolved_region_path else (row.get("nail_region_json_path") or ""),
+        "nail_region_error": row.get("nail_region_error") or "",
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
     }
@@ -3235,6 +3535,24 @@ def _user_hand_profile_payload(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _demo_tune_record_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tune_record_id": row["tune_record_id"],
+        "root_tryon_record_id": row["root_tryon_record_id"],
+        "parent_tune_record_id": row.get("parent_tune_record_id"),
+        "root_hand_id": row.get("root_hand_id") or "",
+        "root_style_id": row.get("root_style_id") or "",
+        "root_tryon_image_url": row.get("root_tryon_image_url") or "",
+        "input_image_url": row.get("input_image_url") or "",
+        "output_image_url": row.get("output_image_url") or "",
+        "operation_mode": row.get("operation_mode") or "overall",
+        "operation_payload": _json_loads(row.get("operation_payload_json"), {}),
+        "operation_summary": row.get("operation_summary") or "",
+        "generation_mode": row.get("generation_mode") or "mock",
+        "created_at": row.get("created_at") or "",
+    }
+
+
 def _recommendation_snapshot_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "snapshot_id": row["snapshot_id"],
@@ -3253,6 +3571,139 @@ def _json_loads(value: Any, default: Any) -> Any:
         return json.loads(value)
     except (TypeError, json.JSONDecodeError):
         return default
+
+
+def _same_image_reference(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    left_path = urlparse(str(left or "")).path or str(left or "")
+    right_path = urlparse(str(right or "")).path or str(right or "")
+    return bool(left_path and right_path and (
+        left_path == right_path or left_path.endswith(right_path) or right_path.endswith(left_path)
+    ))
+
+
+def _style_name_for_id(style_id: str | None) -> str:
+    if not style_id:
+        return ""
+    style = get_style(str(style_id))
+    return str(style.get("style_name") or "") if style else ""
+
+
+def _french_label_for_id(french_style_id: str | None) -> str:
+    mapping = {
+        "cross_french": "交叉法式",
+        "standard_french": "标准法式",
+        "diagonal_french": "斜法式",
+        "outline_french": "轮廓法式",
+    }
+    return mapping.get(str(french_style_id or ""), "")
+
+
+def _shape_label_for_id(shape_id: str | None) -> str:
+    mapping = {
+        "doudou": "豆豆甲",
+        "short_trapezoid": "短梯形",
+        "medium_trapezoid": "中梯形",
+        "long_trapezoid": "长梯形",
+        "short_oval": "短椭圆",
+        "medium_oval": "中椭圆",
+        "long_oval": "长椭圆",
+        "medium_square": "中方形",
+    }
+    return mapping.get(str(shape_id or ""), "")
+
+
+def _infer_demo_tune_operation(row: dict[str, Any]) -> tuple[str, dict[str, Any], str]:
+    user_text = str(row.get("user_text") or "")
+    color = str(row.get("color") or "") or None
+    nail_shape_id = str(row.get("nail_shape_id") or "") or None
+    if user_text.startswith("single-finger color="):
+        finger = user_text.split("finger=")[-1].strip()
+        payload = {"finger_index": int(finger or "1"), "action": "color", "color": color, "user_text": None}
+        return "single", payload, f"单指 · 第{payload['finger_index']}指 · 颜色={color or ''}"
+    if user_text.startswith("single-finger decoration="):
+        decoration = user_text.split("single-finger decoration=")[-1].split(" finger=")[0].strip()
+        finger = user_text.split("finger=")[-1].strip()
+        payload = {"finger_index": int(finger or "1"), "action": "decoration", "decoration": decoration, "user_text": None}
+        return "single", payload, f"单指 · 第{payload['finger_index']}指 · 装饰={decoration}"
+    if user_text.startswith("single-finger french="):
+        french_style_id = user_text.split("single-finger french=")[-1].split(" finger=")[0].strip()
+        finger = user_text.split("finger=")[-1].strip()
+        french_label = _french_label_for_id(french_style_id)
+        payload = {
+            "finger_index": int(finger or "1"),
+            "action": "french",
+            "french_style_id": french_style_id,
+            "french_style_label": french_label,
+            "user_text": None,
+        }
+        return "single", payload, f"单指 · 第{payload['finger_index']}指 · 法式={french_label or french_style_id}"
+    if user_text.startswith("overall "):
+        overall_text = user_text.replace("overall ", "", 1)
+        parsed: dict[str, str] = {}
+        text_value = ""
+        if "text=" in overall_text:
+            overall_prefix, text_suffix = overall_text.split("text=", 1)
+            text_value = text_suffix.strip()
+        else:
+            overall_prefix = overall_text
+        for part in overall_prefix.split():
+            if "=" in part:
+                key, value = part.split("=", 1)
+                parsed[key] = value
+        french_style_id = parsed.get("french") or None
+        french_label = _french_label_for_id(french_style_id)
+        shape_label = _shape_label_for_id(nail_shape_id)
+        payload = {
+            "nail_shape_id": nail_shape_id,
+            "nail_shape_label": shape_label,
+            "french_style_id": french_style_id,
+            "french_style_label": french_label,
+            "color": color,
+            "user_text": text_value or None,
+        }
+        summary_parts = ["整体"]
+        if shape_label:
+            summary_parts.append(f"甲型={shape_label}")
+        if french_label:
+            summary_parts.append(f"法式={french_label}")
+        if color:
+            summary_parts.append(f"颜色={color}")
+        visible_text = _extract_visible_tune_text(payload["user_text"] or "")
+        is_text_only = not shape_label and not french_label and not color and payload["user_text"]
+        if is_text_only:
+            return "text_only", {"user_text": payload["user_text"]}, f"文字微调 · {visible_text}"
+        return "overall", payload, " · ".join(summary_parts)
+    if not nail_shape_id and not color and user_text:
+        visible_text = _extract_visible_tune_text(user_text)
+        payload = {"user_text": user_text}
+        return "text_only", payload, f"文字微调 · {visible_text}"
+    shape_label = _shape_label_for_id(nail_shape_id)
+    payload = {
+        "nail_shape_id": nail_shape_id,
+        "nail_shape_label": shape_label,
+        "french_style_id": None,
+        "french_style_label": "",
+        "color": color,
+        "user_text": user_text or None,
+    }
+    summary_parts = ["整体"]
+    if shape_label:
+        summary_parts.append(f"甲型={shape_label}")
+    if color:
+        summary_parts.append(f"颜色={color}")
+    return "overall", payload, " · ".join(summary_parts)
+
+
+def _extract_visible_tune_text(raw_text: str) -> str:
+    text = str(raw_text or "").strip()
+    if "用户原始需求：" in text:
+        text = text.split("用户原始需求：", 1)[1]
+    if "请将用户需求理解为" in text:
+        text = text.split("请将用户需求理解为", 1)[0]
+    text = text.strip().strip("。")
+    return text[:24] if text else "文字描述"
 
 
 def _ugc_post_payload(row: dict[str, Any]) -> dict[str, Any]:

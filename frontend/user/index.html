@@ -77,7 +77,6 @@
     <header class="nav-bar tune-nav">
       <div class="back-btn" onclick="closeTunePage()"><i class="ti ti-chevron-left"></i> 返回</div>
       <span class="nav-title">款式微调</span>
-      <div class="tune-preview-btn" onclick="submitTuneToTryon()">试戴预览</div>
     </header>
 
     <!-- 款式图展示区 -->
@@ -89,16 +88,17 @@
       </div>
       <div class="tune-nail-bg" id="tuneNailBg">
         <img id="tuneStyleImg" class="tune-style-preview" alt="当前微调款式">
+        <div class="tune-finger-overlay" id="tuneFingerOverlay" aria-hidden="true"></div>
         <div class="tune-preview-caption">
           <span id="tunePreviewName">当前款式</span>
           <span>生成结果会在此更新</span>
         </div>
       </div>
-      <div class="tune-finger-disabled-zone" aria-disabled="true">
+      <div class="tune-finger-disabled-zone" id="tuneFingerHint">
         <div class="tune-finger-icons" aria-hidden="true">
           <span></span><span></span><span></span><span></span><span></span>
         </div>
-        <span>单指框选开发中</span>
+        <span id="tuneFingerHintText">切换到单指微调后，可点选某一根指甲进行局部调整</span>
       </div>
       <!-- 生图 Loading 覆盖层 -->
       <div class="tune-ldlay" id="tuneLdlay">
@@ -113,16 +113,7 @@
     <!-- Tab 切换 -->
     <div class="tune-tabs">
       <div class="tune-tab on" id="tuneTab0" onclick="tuneSetMode(0)">整体调整</div>
-      <div class="tune-tab disabled" id="tuneTab1" aria-disabled="true">单指微调 · 框选开发中</div>
-    </div>
-
-    <!-- 步骤指示器 -->
-    <div class="tune-step-indicator">
-      <span class="tune-step active">1. 选甲型</span>
-      <span class="tune-step-arrow">→</span>
-      <span class="tune-step">2. 选颜色</span>
-      <span class="tune-step-arrow">→</span>
-      <span class="tune-step">3. 生成</span>
+      <div class="tune-tab" id="tuneTab1" onclick="tuneSetMode(1)">单指微调</div>
     </div>
 
     <!-- 操作区（可滚动） -->
@@ -133,6 +124,9 @@
         <div class="tune-slbl">甲型</div>
         <div class="tune-sgrid" id="tuneSgWhole"></div>
         <div class="tune-divider"></div>
+        <div class="tune-slbl">法式风格</div>
+        <div class="tune-sgrid" id="tuneFgWhole"></div>
+        <div class="tune-divider"></div>
         <div class="tune-slbl">颜色</div>
         <div class="tune-ctabs" id="tuneCtWhole">
           <div class="tune-ctab on" onclick="tuneSetCTab(this,'tuneCtWhole','tuneSwWhole','morandi')">莫兰迪</div>
@@ -140,6 +134,40 @@
           <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtWhole','tuneSwWhole','custom')">自定义</div>
         </div>
         <div class="tune-swatches" id="tuneSwWhole"></div>
+        <div class="tune-picked-colors" id="tunePickedColors"></div>
+      </div>
+
+      <div class="tune-pane" id="tunePaneSingle">
+        <div class="tune-slbl">当前选中</div>
+        <div class="tune-single-target" id="tuneSingleTarget">请先点击预览图中的某一根指甲</div>
+
+        <div class="tune-divider"></div>
+        <div class="tune-slbl">操作类型</div>
+        <div class="tune-pills" id="tuneSingleActionPills">
+          <button type="button" class="tune-pill" onclick="tuneSetSingleAction('color')">颜色</button>
+          <button type="button" class="tune-pill" onclick="tuneSetSingleAction('french')">法式</button>
+          <button type="button" class="tune-pill" onclick="tuneSetSingleAction('decoration')">装饰品</button>
+        </div>
+
+        <div id="tuneSingleColorSection">
+          <div class="tune-slbl">颜色</div>
+          <div class="tune-ctabs" id="tuneCtSingle">
+            <div class="tune-ctab on" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','morandi')">莫兰迪</div>
+            <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','macaron')">马卡龙</div>
+            <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','custom')">自定义</div>
+          </div>
+          <div class="tune-swatches" id="tuneSwSingle"></div>
+        </div>
+
+        <div id="tuneSingleFrenchSection" style="display:none">
+          <div class="tune-slbl">法式风格</div>
+          <div class="tune-sgrid" id="tuneFgSingle"></div>
+        </div>
+
+        <div id="tuneSingleDecorationSection" style="display:none">
+          <div class="tune-slbl">装饰品</div>
+          <div class="tune-pills" id="tuneSingleDecorationPills"></div>
+        </div>
       </div>
 
     </div><!-- /tune-sc -->
@@ -153,7 +181,8 @@
 
     <!-- 底部自由文本输入 -->
     <div class="tune-ibar">
-      <input class="tune-ifield" id="tuneTextField" placeholder="补充要求（选填，不会覆盖甲型和颜色）…" oninput="_tuneUpdateConfirmBtn()"/>
+      <input class="tune-ifield" id="tuneTextField" placeholder="也可以用语言描述你的需求" oninput="tuneSubmitText()"/>
+      <button type="button" class="tune-isend" id="tuneTextSendBtn" onclick="tuneSendTextPrompt()"><i class="ti ti-arrow-up"></i></button>
     </div>
   </div>
 
@@ -219,11 +248,17 @@
     <div class="cta-wrap"><button class="cta-btn" onclick="navigateTo('upload')"><i class="ti ti-plus"></i><span class="cta-main">上传新手图</span></button></div>
   </div>
 
+  <!-- ===== 微调记录页 ===== -->
+  <div class="page" id="page-tune-records">
+    <header class="nav-bar"><span class="nav-title">微调记录</span><i class="ti ti-x nav-icon" onclick="navigateTo('mine')"></i></header>
+    <div class="tune-records-body" id="tune-records-body" style="flex:1;overflow-y:auto;padding:14px"></div>
+  </div>
+
   <!-- ===== 我的页 ===== -->
   <div class="page" id="page-mine">
     <header class="nav-bar"><span class="nav-title">我的</span><i class="ti ti-x nav-icon" onclick="navigateTo('home')"></i></header>
     <div class="mine-profile"><div class="mine-avatar">U</div><div class="mine-name">未登录</div></div>
-    <div class="mine-menu"><div class="mine-item"><span>📋 我的订单</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tryon-history')"><span>⏱ 试戴记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('hands')"><span>🤚 手图管理</span><span>›</span></div><div class="mine-item"><span>⚙️ 设置</span><span>›</span></div></div>
+    <div class="mine-menu"><div class="mine-item"><span>📋 我的订单</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tryon-history')"><span>⏱ 试戴记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('tune-records')"><span>🪄 微调记录</span><span>›</span></div><div class="mine-item" onclick="navigateTo('hands')"><span>🤚 手图管理</span><span>›</span></div><div class="mine-item"><span>⚙️ 设置</span><span>›</span></div></div>
   </div>
 
 </div>

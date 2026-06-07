@@ -24,6 +24,8 @@ class StandardizeHandResponse(BaseModel):
     quality_issues: list[str] = Field(default_factory=list)
     nail_art_detected: bool = False
     processing_note: str = ""
+    nail_region_status: str = "pending"
+    nail_region_error: str = ""
 
 
 # ── multi-hand management ──
