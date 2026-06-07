@@ -699,6 +699,8 @@ let tuneStyleItem = null;
 let tunePendingShape = null;
 let tunePendingColor = null;
 let tuneShapeOptions = [];
+let tuneColorSystem = 'morandi';
+let tuneCustomColors = [];
 
 async function openAiTunePanel() {
   const item = nailStyles.find(s => s.id === currentDetailId);
@@ -709,6 +711,8 @@ async function openAiTunePanel() {
   tuneMode = 0;
   tunePendingShape = null;
   tunePendingColor = null;
+  tuneColorSystem = 'morandi';
+  tuneCustomColors = [];
 
   _tuneResetUI();
   navigateTo('tune');
@@ -726,6 +730,7 @@ function _tuneResetUI() {
   const textField = document.getElementById('tuneTextField');
   if (textField) textField.value = '';
   _tuneUpdateConfirmBtn();
+  _tuneRenderPickedColors();
   _tuneBuildSwatches('tuneSwWhole', TUNE_MOR);
   document.querySelectorAll('#tuneCtWhole .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
   const tipBar = document.getElementById('tuneTipBar');
@@ -760,6 +765,73 @@ function _tuneUpdateConfirmBtn() {
   btn.disabled = tuneIsGenerating || !(tunePendingShape || tunePendingColor);
 }
 
+function _tuneToggleColor(col, swatchEl = null) {
+  const normalized = String(col || '').toLowerCase();
+  const isActive = String(tunePendingColor || '').toLowerCase() === normalized;
+  if (isActive) {
+    tunePendingColor = null;
+  } else {
+    tunePendingColor = col;
+  }
+  if (swatchEl) {
+    const container = swatchEl.parentElement;
+    if (container) {
+      container.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
+    }
+    if (!isActive) swatchEl.classList.add('on');
+  }
+  _tuneRenderPickedColors();
+  _tuneUpdateConfirmBtn();
+}
+
+function _tuneRenderPickedColors() {
+  const container = document.getElementById('tunePickedColors');
+  if (!container) return;
+  if (!tuneCustomColors.length) {
+    container.innerHTML = '<div class="tune-picked-empty">自定义取色后会在这里按顺序保留，方便你回看和复用。</div>';
+    return;
+  }
+  container.innerHTML = tuneCustomColors.map((col, idx) => {
+    const active = String(tunePendingColor || '').toLowerCase() === String(col).toLowerCase();
+    return `
+      <button type="button" class="tune-picked-chip${active ? ' active' : ''}" onclick="_tuneTogglePickedColor('${col}', ${idx})">
+        <span class="tune-picked-chip-swatch" style="background:${col}"></span>
+        <span>${col.toUpperCase()}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function _tuneTogglePickedColor(col) {
+  _tuneToggleColor(col);
+}
+
+function _tunePickCustomColor() {
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.style.cssText = 'position:absolute;opacity:0;width:0;height:0';
+  document.body.appendChild(input);
+  input.click();
+  input.oninput = () => {
+    const color = String(input.value || '').toLowerCase();
+    if (!color) return;
+    if (!tuneCustomColors.includes(color)) {
+      tuneCustomColors.push(color);
+    }
+    tunePendingColor = color;
+    const trigger = document.querySelector('#tuneSwWhole .tune-sw-c');
+    if (trigger) {
+      trigger.style.background = color;
+      trigger.classList.add('has-color');
+      trigger.textContent = '';
+    }
+    _tuneRenderPickedColors();
+    _tuneBuildSwatches('tuneSwWhole', tuneCustomColors);
+    _tuneUpdateConfirmBtn();
+  };
+  input.onchange = () => input.remove();
+}
+
 function _tuneBuildSwatches(containerId, colors) {
   const c = document.getElementById(containerId);
   if (!c) return;
@@ -768,33 +840,26 @@ function _tuneBuildSwatches(containerId, colors) {
     const s = document.createElement('div');
     s.className = 'tune-sw';
     s.style.background = col;
-    s.onclick = () => {
-      c.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
-      s.classList.add('on');
-      tunePendingColor = col;
-      _tuneUpdateConfirmBtn();
-    };
+    const active = String(tunePendingColor || '').toLowerCase() === String(col).toLowerCase();
+    if (active) s.classList.add('on');
+    s.onclick = () => _tuneToggleColor(col, s);
     c.appendChild(s);
   });
-  // 自定义按钮
-  const cu = document.createElement('div');
-  cu.className = 'tune-sw-c';
-  cu.innerHTML = '+';
-  cu.onclick = () => {
-    const input = document.createElement('input');
-    input.type = 'color';
-    input.style.cssText = 'position:absolute;opacity:0;width:0;height:0';
-    document.body.appendChild(input);
-    input.click();
-    input.oninput = () => {
-      tunePendingColor = input.value;
-      cu.style.background = input.value;
-      cu.innerHTML = '';
-      _tuneUpdateConfirmBtn();
-    };
-    input.onchange = () => input.remove();
-  };
-  c.appendChild(cu);
+  if (tuneColorSystem === 'custom') {
+    const cu = document.createElement('button');
+    cu.type = 'button';
+    cu.className = 'tune-sw-c';
+    if (tunePendingColor) {
+      cu.style.background = tunePendingColor;
+      cu.classList.add('has-color');
+      cu.textContent = '';
+    } else {
+      cu.textContent = '选色';
+      cu.style.cssText += 'width:auto;border-radius:12px;padding:0 10px;font-size:11px;';
+    }
+    cu.onclick = () => _tunePickCustomColor();
+    c.appendChild(cu);
+  }
 }
 
 function _tuneBuildShapeGrid(containerId, shapes) {
@@ -829,26 +894,14 @@ function tuneSetCTab(el, ctabId, swId, sys) {
   if (tuneIsGenerating) return;
   document.getElementById(ctabId).querySelectorAll('.tune-ctab').forEach(t => t.classList.remove('on'));
   el.classList.add('on');
+  tuneColorSystem = sys;
   tunePendingColor = null;
   if (sys === 'custom') {
-    document.getElementById(swId).innerHTML = '';
-    const cu = document.createElement('div');
-    cu.className = 'tune-sw-c';
-    cu.innerHTML = '选色';
-    cu.style.cssText = 'width:auto;border-radius:12px;padding:0 10px;font-size:11px;';
-    cu.onclick = () => {
-      const input = document.createElement('input');
-      input.type = 'color';
-      input.style.cssText = 'position:absolute;opacity:0;width:0;height:0';
-      document.body.appendChild(input);
-      input.click();
-      input.oninput = () => { tunePendingColor = input.value; _tuneUpdateConfirmBtn(); };
-      input.onchange = () => input.remove();
-    };
-    document.getElementById(swId).appendChild(cu);
+    _tuneBuildSwatches(swId, tuneCustomColors);
   } else {
     _tuneBuildSwatches(swId, sys === 'morandi' ? TUNE_MOR : TUNE_MAC);
   }
+  _tuneRenderPickedColors();
   _tuneUpdateConfirmBtn();
 }
 
@@ -922,10 +975,14 @@ async function tuneConfirmGenerate() {
   // 重置 pending，等待下一次选择
   tunePendingShape = null;
   tunePendingColor = null;
+  tuneColorSystem = 'morandi';
   // 清除选中高亮，回到初始态
   document.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
   document.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
   document.querySelectorAll('.tune-pill').forEach(x => x.classList.remove('on'));
+  _tuneBuildSwatches('tuneSwWhole', TUNE_MOR);
+  document.querySelectorAll('#tuneCtWhole .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+  _tuneRenderPickedColors();
   _tuneUpdateConfirmBtn();
 }
 
