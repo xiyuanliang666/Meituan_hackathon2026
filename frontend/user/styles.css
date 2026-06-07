@@ -154,6 +154,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 /* 重新上传badge */
 .reupload-badge{position:absolute;top:12px;right:12px;background:rgba(255,255,255,.9);border:.5px solid #d9cdea;border-radius:8px;padding:4px 10px;font-size:11px;color:#8d79b8;display:flex;align-items:center;gap:4px;cursor:pointer;backdrop-filter:blur(4px)}
 .reupload-badge i{font-size:11px}
+.upload-new-hand-badge{position:absolute;right:12px;bottom:12px;background:rgba(255,255,255,.92);border:.5px solid #d9cdea;border-radius:10px;padding:7px 11px;font-size:11px;font-weight:500;color:#8d79b8;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(70,45,110,.12);backdrop-filter:blur(4px)}
+.upload-new-hand-badge i{font-size:13px}
 
 .tryon-main{flex:1;display:flex;flex-direction:column;padding:12px 14px;gap:10px;overflow:hidden}
 .tryon-bigimg{width:100%;flex:1;border-radius:16px;background:linear-gradient(135deg,#fbf8f2,#f0e8ff);border:.5px solid #e0d0f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;min-height:0;overflow:hidden;position:relative}
@@ -192,7 +194,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .close-btn i{font-size:14px;color:#666}
 
 .upload-zone{flex:1;display:flex;flex-direction:column;align-items:center;padding:20px 16px;gap:16px;overflow:hidden}
-.upload-placeholder{width:100%;flex:1;border-radius:18px;border:2px dashed #c4b0e8;background:linear-gradient(135deg,#fbf8f2,#f2edf8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;min-height:160px;transition:border-color .2s,background .2s}
+.upload-placeholder{width:100%;flex:1;border-radius:18px;border:2px dashed #c4b0e8;background:linear-gradient(135deg,#fbf8f2,#f2edf8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;min-height:160px;transition:border-color .2s,background .2s;position:relative;overflow:hidden}
 .upload-placeholder:hover{border-color:#8d79b8;background:#f0ebf7}
 .upload-placeholder.uploaded{border:none;background:linear-gradient(135deg,#f5ede0,#faf0e4)}
 .upload-plus{width:52px;height:52px;border-radius:50%;border:2px dashed #9e8cc3;display:flex;align-items:center;justify-content:center;transition:border-color .2s}
@@ -271,7 +273,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .rec-btn i{font-size:11px;color:#888}
 
 /* ===== 手图引导弹窗 / AI微调弹窗 ===== */
-#upload-guide-modal,#ai-tune-modal{position:absolute;inset:0;z-index:999;display:flex;align-items:flex-end}
+#upload-guide-modal,#ai-tune-modal,#hand-review-modal{position:absolute;inset:0;z-index:999;display:flex;align-items:flex-end}
 .modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.36);backdrop-filter:blur(4px)}
 .modal-sheet{position:relative;z-index:1;width:100%;background:#fff;border-radius:24px 24px 0 0;padding:28px 20px 36px;display:flex;flex-direction:column;align-items:center;gap:10px;animation:slideUp .3s cubic-bezier(.16,1,.3,1)}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -281,6 +283,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .modal-btn-primary{width:100%;background:linear-gradient(135deg,#b8a5d8,#8d79b8);color:#fff;border:none;border-radius:14px;padding:14px 0;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:transform .15s}
 .modal-btn-primary:hover{transform:scale(1.02)}
 .modal-btn-secondary{width:100%;background:transparent;color:#888;border:none;padding:8px 0;font-size:13px;cursor:pointer;font-family:inherit}
+.hand-review-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:4px;font-size:28px}
+.hand-review-icon.reviewing{background:#f0ebf7;color:#8d79b8}
+.hand-review-icon.passed{background:#edf6e8;color:#6f8b50}
+.hand-review-icon.failed,.hand-review-icon.error{background:#fff0ed;color:#c45b4b}
+.hand-review-spinner{animation:handReviewSpin 1s linear infinite}
+@keyframes handReviewSpin{to{transform:rotate(360deg)}}
 
 /* 试戴进度条 */
 #tryon-progress-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;border-radius:16px;overflow:hidden}
@@ -290,6 +298,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 #tryon-pct{font-weight:600}
 .tryon-progress-bar{width:140px;height:6px;background:#ede9e2;border-radius:3px;overflow:hidden}
 .tryon-progress-fill{height:100%;background:linear-gradient(90deg,#b8a5d8,#8d79b8);border-radius:3px;width:0;transition:width .15s ease}
+.tryon-progress-tip{font-size:10px;color:#999}
 
 /* ===== 空态/我的 ===== */
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:14px}
@@ -309,15 +318,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .tune-preview-btn{font-size:12px;padding:5px 13px;background:#7a8e50;color:#f0f5e8;border-radius:14px;cursor:pointer;font-weight:500;white-space:nowrap}
 
 /* 款式图区 */
-.tune-nail-area{height:300px;flex-shrink:0;position:relative;overflow:hidden;background:#ffffff}
-.tune-nail-bg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding-bottom:0;position:relative}
-.tune-nails-row{display:flex;align-items:flex-end;gap:5px;position:relative;z-index:1;margin-bottom:20px}
-.tune-ns{border-radius:38% 38% 18% 18%;border:1.5px dashed #cccccc;cursor:pointer;transition:all 0.15s;position:relative;flex-shrink:0;background:#f0f0f0;backdrop-filter:blur(2px)}
-.tune-ns:hover{border-color:#999999;background:#e0e0e0}
-.tune-ns.sel{border:2px solid #ffd452;box-shadow:0 0 0 3px rgba(255,212,82,0.4);background:#fff8e1}
-.tune-ns-lbl{position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font-size:9px;color:#333333;white-space:nowrap;pointer-events:none}
-.tune-fhint{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.38);color:#fff;font-size:10px;text-align:center;padding:4px;display:none}
-.tune-fhint.show{display:block}
+.tune-nail-area{height:330px;flex-shrink:0;position:relative;overflow:hidden;background:#fff;padding:0 14px 10px}
+.tune-nail-bg{width:100%;height:238px;display:flex;align-items:center;justify-content:center;position:relative;background:#f5f1eb;border-radius:0 0 14px 14px;overflow:hidden}
+.tune-style-preview{width:100%;height:100%;object-fit:contain;display:block}
+.tune-preview-caption{position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.88);backdrop-filter:blur(5px);font-size:10px;color:#888}
+.tune-preview-caption span:first-child{font-size:11px;color:#444;font-weight:600;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tune-finger-disabled-zone{height:48px;display:flex;align-items:center;justify-content:center;gap:12px;color:#9c9390;font-size:11px}
+.tune-finger-icons{height:32px;display:flex;align-items:flex-end;gap:4px}
+.tune-finger-icons span{width:10px;height:24px;border:1px solid #cfc6c3;border-radius:7px 7px 4px 4px;background:#f8f5f4}
+.tune-finger-icons span:nth-child(1),.tune-finger-icons span:nth-child(5){height:19px}
+.tune-finger-icons span:nth-child(2),.tune-finger-icons span:nth-child(4){height:27px}
+.tune-finger-icons span:nth-child(3){height:30px}
 
 /* Loading 覆盖 */
 .tune-ldlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(168,184,112,0.88);display:none;flex-direction:column;gap:8px;align-items:center;justify-content:center;z-index:10}
@@ -340,31 +351,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .tune-tabs{display:flex;padding:4px 14px;border-bottom:.5px solid #e8e4dc;flex-shrink:0;background:#fff;gap:4px}
 .tune-tab{padding:8px 16px;font-size:13px;color:#666;cursor:pointer;border-radius:8px;transition:all .15s;font-weight:500;background:#f5f5f5}
 .tune-tab.on{color:#fff;background:#4a5e7a;box-shadow:0 2px 6px rgba(74,94,122,0.3)}
+.tune-tab.disabled{color:#aaa;background:#f4f4f4;cursor:not-allowed;box-shadow:none;pointer-events:none}
 
 /* 滚动内容区 */
-.tune-sc{flex:1;overflow-y:auto;padding:12px 14px 6px;background:#fff}
+.tune-sc{flex:1;min-height:155px;overflow-y:auto;padding:8px 14px 4px;background:#fff}
 .tune-pane{display:none}.tune-pane.on{display:block}
 .tune-disabled{opacity:0.38;pointer-events:none}
 
 /* 操作区元素 */
 .tune-slbl{font-size:10px;font-weight:500;color:#888;margin-bottom:7px;letter-spacing:.04em;text-transform:uppercase}
 .tune-divider{height:.5px;background:#ede8e0;margin:10px 0}
-.tune-sgrid{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;scrollbar-width:none;-ms-overflow-style:none}
+.tune-sgrid{display:flex;gap:8px;overflow-x:auto;padding:2px 1px 7px;margin-bottom:7px;scrollbar-width:none;-ms-overflow-style:none}
 .tune-sgrid::-webkit-scrollbar{display:none}
-.tune-si{flex:0 0 auto;width:68px;border:1.5px solid #e8e4dc;border-radius:10px;padding:8px 4px 6px;text-align:center;cursor:pointer;background:#fafafa;transition:all .15s}
+.tune-si{flex:0 0 auto;width:76px;border:1.5px solid #e8e4dc;border-radius:10px;padding:5px 4px 6px;text-align:center;cursor:pointer;background:#fafafa;transition:all .15s}
 .tune-si:hover{border-color:#7a8e50;transform:translateY(-2px)}
 .tune-si.on{border-color:#7a8e50;background:#eef3e4;box-shadow:0 2px 8px rgba(122,142,80,0.2)}
-.tune-si svg{width:32px;height:42px;display:block;margin:0 auto}
+.tune-si img{width:66px;height:54px;object-fit:cover;display:block;margin:0 auto;border-radius:7px;background:#eee}
 .tune-si span{font-size:10px;color:#666;display:block;margin-top:4px;font-weight:500}
+.tune-shape-empty{font-size:11px;color:#999;padding:12px;background:#f7f7f7;border-radius:9px;line-height:1.6}
 .tune-ctabs{display:flex;gap:6px;margin-bottom:12px}
 .tune-ctab{padding:6px 14px;border-radius:12px;font-size:12px;cursor:pointer;background:#f0f0f0;color:#666;transition:all .15s;font-weight:500}
 .tune-ctab.on{background:#4a5e7a;color:#fff;box-shadow:0 2px 6px rgba(74,94,122,0.3)}
-.tune-swatches{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-.tune-sw{width:38px;height:38px;border-radius:8px;cursor:pointer;border:3px solid transparent;transition:all .15s;flex-shrink:0;position:relative}
+.tune-swatches{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.tune-sw{width:32px;height:32px;border-radius:7px;cursor:pointer;border:3px solid transparent;transition:all .15s;flex-shrink:0;position:relative}
 .tune-sw:hover{transform:scale(1.1);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
 .tune-sw.on{border-color:#4a5e7a;box-shadow:0 0 0 2px #4a5e7a, 0 2px 10px rgba(74,94,122,0.3)}
 .tune-sw.on::after{content:'✓';position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:#4a5e7a;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:bold}
-.tune-sw-c{width:38px;height:38px;border-radius:8px;cursor:pointer;border:2px dashed #aaa;display:flex;align-items:center;justify-content:center;font-size:18px;color:#888;flex-shrink:0;transition:all .15s}
+.tune-sw-c{width:32px;height:32px;border-radius:7px;cursor:pointer;border:2px dashed #aaa;display:flex;align-items:center;justify-content:center;font-size:18px;color:#888;flex-shrink:0;transition:all .15s}
 .tune-sw-c:hover{border-color:#7a8e50;color:#7a8e50;background:#f5f8ee}
 .tune-fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 .tune-fi{border:1.5px solid #e8e4dc;border-radius:9px;padding:10px 4px 8px;text-align:center;cursor:pointer;background:#fafafa;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .12s}
@@ -380,20 +393,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color
 .tune-empty-hint i{font-size:28px}
 
 /* 确认生图按钮 */
-.tune-confirm-wrap{padding:10px 14px 4px;background:#fff;flex-shrink:0}
-.tune-confirm-btn{width:100%;padding:16px 0;border:none;border-radius:16px;font-size:16px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;background:#d0d8b8;color:#8a9e60}
+.tune-confirm-wrap{padding:6px 14px 3px;background:#fff;flex-shrink:0}
+.tune-confirm-btn{width:100%;padding:10px 0;border:none;border-radius:12px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px;background:#d0d8b8;color:#8a9e60}
 .tune-confirm-btn:not([disabled]){background:linear-gradient(135deg,#8d79b8,#6a5a9a);color:#fff;box-shadow:0 4px 16px rgba(141,121,184,0.35)}
 .tune-confirm-btn:not([disabled]):hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(141,121,184,0.45)}
 .tune-confirm-btn:not([disabled]):active{transform:translateY(0);box-shadow:0 2px 8px rgba(141,121,184,0.3)}
 
 /* 步骤指示器 */
-.tune-step-indicator{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;background:#fff;border-bottom:.5px solid #ede8e0;flex-shrink:0}
-.tune-step{font-size:12px;color:#999;font-weight:500;transition:color .2s}
+.tune-step-indicator{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 14px;background:#fff;border-bottom:.5px solid #ede8e0;flex-shrink:0}
+.tune-step{font-size:10px;color:#999;font-weight:500;transition:color .2s}
 .tune-step.active{color:#4a5e7a;font-weight:600}
 .tune-step-arrow{font-size:12px;color:#ccc}
 
 /* 底部文本输入 */
-.tune-ibar{border-top:.5px solid #ede8e0;padding:7px 12px;display:flex;gap:8px;align-items:center;flex-shrink:0;background:#fff}
+.tune-ibar{border-top:.5px solid #ede8e0;padding:5px 12px 7px;display:flex;gap:8px;align-items:center;flex-shrink:0;background:#fff}
 .tune-ifield{flex:1;padding:7px 11px;border:.5px solid #e0dbd4;border-radius:18px;font-size:11px;background:#f7f4ef;color:#666;outline:none;font-family:inherit}
 .tune-ifield:focus{border-color:#7a8e50;background:#fff}
 .tune-isend{width:28px;height:28px;border-radius:50%;background:#7a8e50;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s}

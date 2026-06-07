@@ -1,0 +1,24 @@
+{
+  "styles": [
+    {
+      "id": "cross_french",
+      "label": "交叉法式",
+      "image": "交叉法式.png"
+    },
+    {
+      "id": "standard_french",
+      "label": "标准法式",
+      "image": "标准法式.png"
+    },
+    {
+      "id": "diagonal_french",
+      "label": "斜法式",
+      "image": "斜法式.png"
+    },
+    {
+      "id": "outline_french",
+      "label": "轮廓法式",
+      "image": "轮廓法式.png"
+    }
+  ]
+}

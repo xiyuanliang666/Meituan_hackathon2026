@@ -12,18 +12,27 @@ let nailStyles = [
 ];
 
 // ===== 状态 =====
+const DEMO_USER_ID = 'demo_user';
 let currentPage = 'home';
 let detailFrom = 'home';
 let chatMessages = [];
 let handUploaded = false;
 let multiSelectMode = false;
 let selectedThumbs = new Set();
+let selectedTryonRecordIds = new Set();
+let tryonRecords = [];
+let activeTryonRecordId = null;
 let currentDetailId = null;
 let backendAvailable = false;
 let handProfileId = null;
 let handProfileData = null;
 let conversationId = null;
 let uploadedHandImageUrl = null;
+let handReviewInProgress = false;
+let preparedRecommendationData = null;
+let latestRecommendationSnapshot = null;
+let latestTuneByStyleId = {};
+let demoStateHydrated = false;
 // 每个款式的历史试戴结果图：Map<styleId, string[]>
 let tryonHistory = {};
 // 已尝试过试戴但 AI 模型未返回结果的款式 ID 集合（避免重复调用）
@@ -37,6 +46,13 @@ async function initBackend() {
   if (backendAvailable) {
     console.log('[前端] 后端连接成功，已启用 API 模式');
     await loadStylesFromBackend();
+    try {
+      await loadDemoState();
+    } catch (e) {
+      console.warn('[前端] demo-state 恢复失败，回退常规加载:', e.message);
+      await loadCurrentHand();
+      await loadTryonRecords();
+    }
   } else {
     console.log('[前端] 后端不可用，使用本地 mock 数据');
   }
@@ -100,11 +116,12 @@ function getStyleEmoji(tags) {
 
 // ===== 导航 =====
 function navigateTo(page) {
+  if (handReviewInProgress && page !== 'upload') return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   currentPage = page;
   if (page === 'chat' && chatMessages.length === 0) initChat();
-  if (page === 'recommend') renderRecommend();
+  if (page === 'upload') loadCurrentHand();
   if (page === 'tryon-history') loadTryonHistory();
   if (page === 'hands') loadUserHands();
   if (page === 'favorites') renderFavoritesPage();
@@ -116,6 +133,60 @@ function navigateTo(page) {
   }
 }
 function goBackFromDetail() { navigateTo(detailFrom); }
+
+function _hydrateRecommendationItems(items) {
+  return (items || []).map((r, idx) => {
+    const existing = nailStyles.find(s => String(s.style_id || s.id) === String(r.style_id || '') || s.name === r.style_name);
+    return existing || {
+      id: 100 + idx,
+      name: r.style_name || '美甲款式',
+      tags: r.matched_tags || [],
+      bg: getStyleBg(idx),
+      emoji: '💅',
+      price: 158,
+      reason: r.reason || '',
+      image_url: r.image_url || '',
+      style_id: r.style_id || String(100 + idx),
+    };
+  });
+}
+
+function _rememberLatestTune(tune) {
+  if (!tune || !tune.tuned_image_url) return;
+  const style = nailStyles.find(item => (
+    (tune.source_style_id && String(item.style_id || item.id) === String(tune.source_style_id))
+    || (tune.source_style_image_url && (
+      String(item.image_url || '') === String(tune.source_style_image_url)
+      || String(staticUrl(item.image_url || '')) === String(tune.source_style_image_url)
+    ))
+  ));
+  if (style) latestTuneByStyleId[String(style.id)] = tune;
+}
+
+async function loadDemoState() {
+  const data = await apiGet('/demo-state', { user_id: DEMO_USER_ID });
+  demoStateHydrated = true;
+  tryonRecords = data.tryon_records || [];
+  if (data.current_hand?.image_url) applyCurrentHand(data.current_hand.image_url, { resetAnalysis: false });
+  else resetUploadHand();
+  if (data.hand_profile) {
+    handProfileId = data.hand_profile.hand_profile_id;
+    handProfileData = data.hand_profile;
+  } else {
+    handProfileId = null;
+    handProfileData = null;
+  }
+  latestRecommendationSnapshot = data.recommendation_snapshot || null;
+  if (latestRecommendationSnapshot?.recommendations?.length) {
+    preparedRecommendationData = _hydrateRecommendationItems(latestRecommendationSnapshot.recommendations);
+  } else {
+    preparedRecommendationData = null;
+  }
+  latestTuneByStyleId = {};
+  if (data.current_tune) _rememberLatestTune(data.current_tune);
+  if (!activeTryonRecordId) activeTryonRecordId = tryonRecords[0]?.record_id || null;
+  return data;
+}
 
 // ===== 首页Feed =====
 function renderFeed() {
@@ -175,6 +246,137 @@ function closeUploadGuideModal() {
   if (m) m.remove();
 }
 
+function setHandReviewInProgress(inProgress) {
+  handReviewInProgress = inProgress;
+}
+
+function showHandReviewModal(status, message = '') {
+  const existing = document.getElementById('hand-review-modal');
+  if (existing) existing.remove();
+
+  const content = {
+    reviewing: {
+      icon: '<i class="ti ti-loader-2 hand-review-spinner"></i>',
+      title: '正在审核手图',
+      desc: 'AI 正在审核手图是否符合规范，请稍候等待。<br><strong>审核期间请勿退出页面。</strong>',
+      action: '',
+    },
+    passed: {
+      icon: '<i class="ti ti-circle-check"></i>',
+      title: '手图审核完成',
+      desc: '手图符合规范，现在可以点击“一键分析手型”。',
+      action: '<button class="modal-btn-primary" onclick="closeHandReviewModal()">我知道了</button>',
+    },
+    failed: {
+      icon: '<i class="ti ti-alert-circle"></i>',
+      title: '手图审核未通过',
+      desc: `${message || '图片不符合上传规范，请重新上传。'}`,
+      action: '<button class="modal-btn-primary" onclick="closeHandReviewModal();simulateUpload()">重新上传</button>',
+    },
+    error: {
+      icon: '<i class="ti ti-wifi-off"></i>',
+      title: '手图审核暂未完成',
+      desc: '网络或审核服务出现异常，请重新上传后再试。',
+      action: '<button class="modal-btn-primary" onclick="closeHandReviewModal();simulateUpload()">重新上传</button>',
+    },
+  }[status];
+
+  const modal = document.createElement('div');
+  modal.id = 'hand-review-modal';
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-sheet">
+      <div class="hand-review-icon ${status}">${content.icon}</div>
+      <div class="modal-title">${content.title}</div>
+      <div class="modal-desc">${content.desc}</div>
+      ${content.action}
+    </div>`;
+  document.getElementById('app').appendChild(modal);
+}
+
+function closeHandReviewModal() {
+  if (handReviewInProgress) return;
+  const modal = document.getElementById('hand-review-modal');
+  if (modal) modal.remove();
+}
+
+function applyCurrentHand(imageUrl, { resetAnalysis = true } = {}) {
+  uploadedHandImageUrl = imageUrl;
+  handUploaded = Boolean(imageUrl);
+  if (resetAnalysis) {
+    handProfileId = null;
+    handProfileData = null;
+    preparedRecommendationData = null;
+    latestRecommendationSnapshot = null;
+  }
+
+  const analyzeButton = document.getElementById('analyze-btn');
+  if (analyzeButton) analyzeButton.disabled = !handUploaded;
+
+  const area = document.getElementById('upload-area');
+  if (!area || !handUploaded) return;
+  area.className = 'upload-placeholder uploaded';
+  area.innerHTML = `
+    <img src="${staticUrl(imageUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:16px">
+    <div class="upload-new-hand-badge"><i class="ti ti-upload"></i> 上传新手图</div>`;
+}
+
+function resetUploadHand() {
+  uploadedHandImageUrl = null;
+  handUploaded = false;
+  handProfileId = null;
+  handProfileData = null;
+  preparedRecommendationData = null;
+  latestRecommendationSnapshot = null;
+  const analyzeButton = document.getElementById('analyze-btn');
+  if (analyzeButton) analyzeButton.disabled = true;
+
+  const area = document.getElementById('upload-area');
+  if (!area) return;
+  area.className = 'upload-placeholder';
+  area.innerHTML = '<div class="upload-plus"><i class="ti ti-plus"></i></div><span class="upload-hint">上传手图<br>用于试戴美甲</span>';
+}
+
+async function loadCurrentHand() {
+  if (!backendAvailable || handReviewInProgress) return;
+  try {
+    const status = await apiGet('/user-hand-status', { user_id: DEMO_USER_ID });
+    if (handReviewInProgress) return;
+    if (status.has_hand && status.standardized_image_url) {
+      applyCurrentHand(status.standardized_image_url, { resetAnalysis: false });
+    } else {
+      resetUploadHand();
+    }
+  } catch (e) {
+    console.warn('[手图] 加载当前手图失败:', e.message);
+  }
+}
+
+async function setCurrentHand(handId) {
+  const data = await apiGet('/user-hands', { user_id: DEMO_USER_ID });
+  const selected = (data.hands || []).find(h => h.hand_id === handId);
+  if (!selected) return null;
+
+  const updatedHands = data.hands.map(h => ({
+    hand_id: h.hand_id,
+    image_url: h.image_url,
+    selected: h.hand_id === handId,
+  }));
+  await apiRequest('/user-hands/sync', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: DEMO_USER_ID, hands: updatedHands }),
+  });
+  applyCurrentHand(selected.image_url);
+  return selected;
+}
+
+window.addEventListener('beforeunload', (event) => {
+  if (!handReviewInProgress) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 // AI栏文字轮播
 const barTexts = ['暖黄皮适合什么美甲颜色？','圣诞节有什么美甲推荐？','法式简约款有哪些？','附近哪家店可以做这个款？'];
 let barIdx = 0;
@@ -191,6 +393,9 @@ function openDetail(id, from) {
   currentDetailId = id;
   multiSelectMode = false;
   selectedThumbs = new Set([id]);
+  selectedTryonRecordIds = new Set();
+  const latestRecord = getTryonRecordsForStyle(id)[0];
+  activeTryonRecordId = latestRecord?.record_id || null;
   renderDetailPage();
   navigateTo('detail');
   reportEvent('try_on', id);
@@ -200,30 +405,32 @@ function renderDetailPage() {
   const item = nailStyles.find(s => s.id === currentDetailId);
   if (!item) return;
 
-  // 缩略图 = 当前款式的历史试戴结果图，首次进入为空
-  const historyImgs = tryonHistory[currentDetailId] || [];
+  const styleRecords = getTryonRecordsForStyle(currentDetailId);
+  const activeRecord = tryonRecords.find(record => record.record_id === activeTryonRecordId)
+    || styleRecords[0]
+    || null;
   const thumbRow = document.getElementById('thumb-row');
-  if (historyImgs.length === 0 && !multiSelectMode) {
+  if (tryonRecords.length === 0) {
     thumbRow.innerHTML = '<div style="font-size:11px;color:#bbb;padding:0 4px;white-space:nowrap">试戴后将在此显示历史效果</div>';
   } else {
-    thumbRow.innerHTML = historyImgs.map((imgUrl, idx) => `
-      <div class="thumb ${idx === (historyImgs.length-1) ? 'active' : ''}" style="overflow:hidden;background:#f7f4ef" onclick="onHistoryThumbClick('${imgUrl}')">
-        <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:9px">
-      </div>`).join('') + (multiSelectMode ? nailStyles.slice(0,6).map(s => {
-        const isSelected = selectedThumbs.has(s.id);
-        const thumbContent = s.image_url
-          ? `<img src="${s.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:9px" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span style="display:none;font-size:22px">${s.emoji}</span>`
-          : s.emoji;
-        return `<div class="thumb ${isSelected?'selected':''}" style="background:${s.bg};overflow:hidden" onclick="onThumbClick(${s.id})">
-          ${thumbContent}
-          ${isSelected ? '<div class="thumb-check"><i class="ti ti-check"></i></div>' : '<div class="thumb-uncheck"></div>'}
+    thumbRow.innerHTML = tryonRecords.map(record => {
+      const isSelected = selectedTryonRecordIds.has(record.record_id);
+      const isActive = record.record_id === activeRecord?.record_id;
+      return `
+        <div class="thumb ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}" style="overflow:hidden;background:#f7f4ef" onclick="onTryonRecordClick('${record.record_id}')">
+          <img src="${staticUrl(record.style_image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:9px">
+          ${multiSelectMode ? (isSelected
+            ? '<div class="thumb-check"><i class="ti ti-check"></i></div>'
+            : '<div class="thumb-uncheck"></div>') : ''}
         </div>`;
-      }).join('') : '');
+    }).join('');
   }
 
-  if (!multiSelectMode || selectedThumbs.size <= 1) {
+  if (!multiSelectMode || selectedTryonRecordIds.size <= 1) {
     const isFav = favoritesSet.has(item.id);
-    const lastResult = historyImgs.length > 0 ? historyImgs[historyImgs.length-1] : null;
+    const lastResult = activeRecord?.result_image_url
+      ? staticUrl(activeRecord.result_image_url)
+      : null;
 
     document.getElementById('tryon-main').innerHTML = `
       <div class="tryon-bigimg" id="tryon-bigimg-inner">
@@ -245,7 +452,7 @@ function renderDetailPage() {
     `;
 
     // 有手图时调用试戴 API，并展示进度条（不重复调用已失败的）
-    if (uploadedHandImageUrl && item.image_url && !lastResult && !tryonAttempted.has(item.id)) {
+    if (uploadedHandImageUrl && item.image_url && styleRecords.length === 0 && !tryonAttempted.has(item.id)) {
       startTryOnWithProgress(item);
     }
   } else {
@@ -259,7 +466,7 @@ function renderDetailPage() {
     btn.className = 'action-btn active-mode';
     circle.className = 'multisel-circle filled';
     circle.innerHTML = '<i class="ti ti-check" style="font-size:8px;color:#fff"></i>';
-    label.textContent = '多选对比 ' + selectedThumbs.size;
+    label.textContent = '多选对比 ' + selectedTryonRecordIds.size;
   } else {
     btn.className = 'action-btn';
     circle.className = 'multisel-circle';
@@ -268,12 +475,38 @@ function renderDetailPage() {
   }
 }
 
-// 点击历史缩略图，主区域切换到对应结果图
-function onHistoryThumbClick(imgUrl) {
-  const bigimg = document.getElementById('tryon-bigimg-inner');
-  if (!bigimg) return;
-  const existingImg = bigimg.querySelector('img:first-child');
-  if (existingImg) { existingImg.src = imgUrl; }
+function getTryonRecordsForStyle(styleId) {
+  const item = nailStyles.find(style => style.id === styleId);
+  if (!item) return [];
+  const ids = new Set([String(item.id), String(item.style_id || '')].filter(Boolean));
+  return tryonRecords.filter(record => ids.has(String(record.style_id || '')));
+}
+
+function findStyleForTryonRecord(record) {
+  return nailStyles.find(item => (
+    String(item.style_id || item.id) === String(record.style_id || '')
+    || String(item.id) === String(record.style_id || '')
+  ));
+}
+
+function onTryonRecordClick(recordId) {
+  const record = tryonRecords.find(item => item.record_id === recordId);
+  if (!record) return;
+  if (multiSelectMode) {
+    if (selectedTryonRecordIds.has(recordId)) {
+      selectedTryonRecordIds.delete(recordId);
+    } else if (selectedTryonRecordIds.size < 4) {
+      selectedTryonRecordIds.add(recordId);
+    } else {
+      alert('最多同时对比 4 款哦');
+      return;
+    }
+  } else {
+    activeTryonRecordId = recordId;
+    const style = findStyleForTryonRecord(record);
+    if (style) currentDetailId = style.id;
+  }
+  renderDetailPage();
 }
 
 // 收藏切换（持久化到 localStorage）
@@ -323,16 +556,22 @@ function startTryOnWithProgress(item) {
     <div class="tryon-progress-box">
       <div class="tryon-progress-label">试戴效果生成中…<span id="tryon-pct">0%</span></div>
       <div class="tryon-progress-bar"><div class="tryon-progress-fill" id="tryon-fill"></div></div>
+      <div class="tryon-progress-tip">请勿退出当前页面</div>
     </div>`;
   bigimg.appendChild(overlay);
 
-  let pct = 0;
+  const progressStartedAt = Date.now();
   let timer = setInterval(() => {
-    if (pct < 60) pct += 2;
-    else if (pct < 95) pct += 0.3;
-    pct = Math.min(pct, 95);
-    updateProgress(pct);
-  }, 120);
+    const elapsedSeconds = (Date.now() - progressStartedAt) / 1000;
+    updateProgress(estimatedTryOnProgress(elapsedSeconds));
+  }, 250);
+
+  function estimatedTryOnProgress(elapsedSeconds) {
+    if (elapsedSeconds <= 20) return elapsedSeconds * 3;
+    if (elapsedSeconds <= 60) return 60 + (elapsedSeconds - 20) * 0.625;
+    if (elapsedSeconds <= 120) return 85 + (elapsedSeconds - 60) * 0.15;
+    return Math.min(96, 94 + (elapsedSeconds - 120) * 0.02);
+  }
 
   function updateProgress(v) {
     const fill = document.getElementById('tryon-fill');
@@ -356,17 +595,22 @@ function startTryOnWithProgress(item) {
           img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:12px';
           bigimg.insertBefore(img, bigimg.querySelector('.tryon-actions'));
         }
-        // 追加到历史
+        // 立即更新当前页，随后从后端同步完整记录
         if (!tryonHistory[item.id]) tryonHistory[item.id] = [];
         tryonHistory[item.id].push(resultUrl);
-        // 更新缩略图
-        const historyImgs = tryonHistory[item.id];
-        const thumbRow = document.getElementById('thumb-row');
-        if (thumbRow) {
-          thumbRow.innerHTML = historyImgs.map((url, idx) => `
-            <div class="thumb ${idx===historyImgs.length-1?'active':''}" style="overflow:hidden;background:#f7f4ef" onclick="onHistoryThumbClick('${url}')">
-              <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:9px">
-            </div>`).join('');
+        if (backendAvailable) {
+          loadTryonRecords({ rerenderDetail: true });
+        } else {
+          const localRecord = {
+            record_id: `local-${Date.now()}`,
+            style_id: item.style_id || String(item.id),
+            style_image_url: item.image_url,
+            result_image_url: resultUrl,
+            created_at: new Date().toISOString(),
+          };
+          tryonRecords.unshift(localRecord);
+          activeTryonRecordId = localRecord.record_id;
+          renderDetailPage();
         }
       } else {
         // AI 模型未启用或调用失败，标记已尝试，显示友好提示
@@ -425,6 +669,7 @@ function renderFavoritesPage() {
 async function callTryOnAPI(item) {
   try {
     const result = await apiPost('/try-on', {
+      user_id: DEMO_USER_ID,
       hand_image_url: uploadedHandImageUrl,
       style_image_url: item.image_url,
       style_id: item.style_id || String(item.id),
@@ -446,74 +691,29 @@ async function callTryOnAPI(item) {
 // ===== AI 款式微调页 =====
 const TUNE_MOR = ['#b5a89a','#c4b5a5','#9aaa99','#b0b8a0','#a8a0b0','#b8a0a8','#c0b098','#a8b8c0','#b0a890','#c8b8a8'];
 const TUNE_MAC = ['#f7c5c5','#f7d9b0','#f5f0a0','#b8e8b8','#a8d8f0','#c8b8f0','#f0b8d8','#b8f0e0','#d0c8f0','#d0e8f8'];
-const TUNE_SHAPES = [
-  {l:'圆甲', p:'M6 34 Q6 2 16 2 Q26 2 26 34Z'},
-  {l:'方甲', p:'M5 2h22v30h-22z'},
-  {l:'尖甲', p:'M16 1L27 33 5 33Z'},
-  {l:'方圆甲', p:'M6 9 Q6 2 16 2 Q26 2 26 9L26 32 6 32Z'},
-  {l:'芭蕾甲', p:'M16 1L27 40 5 40Z'},
-  {l:'长梯甲', p:'M8 2L24 2 27 38 5 38Z'},
-  {l:'棺材甲', p:'M8 2L24 2 30 40 2 40Z'},
-  {l:'杏仁甲', p:'M16 2Q28 12 26 28Q24 38 16 38Q8 38 6 28Q4 12 16 2Z'},
-];
-const TUNE_FRENCH = [
-  {l:'经典', p:'M5 2h22v30h-22z', tp:'M5 2h22v8h-22z', tc:'#fff'},
-  {l:'彩色', p:'M5 2h22v30h-22z', tp:'M5 2Q16 0 27 2L27 10Q16 8 5 10Z', tc:'#f0b0c8'},
-  {l:'细线', p:'M5 2h22v30h-22z', ln:'M5 12 Q16 4 27 12', lc:'#fff'},
-  {l:'奶茶', p:'M5 2h22v30h-22z', ln:'M5 12 Q16 4 27 12', lc:'#d4a878'},
-];
-const TUNE_FNAMES = ['拇指','食指','中指','无名指','小指'];
 
 // 微调状态
 let tuneIsGenerating = false;
-let tuneSelFinger = null;
-let tuneCurFingerName = '';
-let tuneMode = 0; // 0=整体 1=单指
+let tuneMode = 0;
 let tuneStyleItem = null;
-// 当前选择的参数（用于组装 prompt）
-let tunePendingShape = null;   // 整体：甲型名
-let tunePendingColor = null;   // 整体/单指：颜色值或名称
-let tunePendingSingleFunc = null; // 单指：功能类型
-let tunePendingFrench = null;  // 单指法式款式名
-let tunePendingDeco = null;    // 单指装饰品名
+let tunePendingShape = null;
+let tunePendingColor = null;
+let tuneShapeOptions = [];
 
-function openAiTunePanel() {
+async function openAiTunePanel() {
   const item = nailStyles.find(s => s.id === currentDetailId);
   if (!item) return;
-  tuneStyleItem = { ...item }; // 浅拷贝，避免污染原数据
-  // 重置状态
+  const latestTune = latestTuneByStyleId[String(item.id)];
+  tuneStyleItem = latestTune ? { ...item, _tuned_image_url: latestTune.tuned_image_url } : { ...item };
   tuneIsGenerating = false;
-  tuneSelFinger = null;
-  tuneCurFingerName = '';
   tuneMode = 0;
   tunePendingShape = null;
   tunePendingColor = null;
-  tunePendingSingleFunc = null;
-  tunePendingFrench = null;
-  tunePendingDeco = null;
 
-  // 重置 UI
   _tuneResetUI();
-
-  // 在款式图区域显示当前款式图（背景层，热区叠加其上）
-  const bg = document.getElementById('tuneNailBg');
-  if (bg) {
-    // 清除旧背景图
-    const oldImg = bg.querySelector('.tune-bg-img');
-    if (oldImg) oldImg.remove();
-    // 不再添加美甲背景图，只显示五个手指头
-    // if (item.image_url) {
-    //   const img = document.createElement('img');
-    //   img.id = 'tuneStyleImg';
-    //   img.className = 'tune-bg-img';
-    //   img.src = staticUrl(item.image_url);
-    //   img.alt = item.name;
-    //   img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:12px;z-index:0;pointer-events:none';
-    //   bg.insertBefore(img, bg.firstChild);
-    // }
-  }
-
   navigateTo('tune');
+  _tuneUpdatePreview(tuneStyleItem._tuned_image_url || item.image_url, item.name);
+  await _tuneLoadOptions();
 }
 
 function closeTunePage() {
@@ -521,74 +721,43 @@ function closeTunePage() {
 }
 
 function _tuneResetUI() {
-  // 重置 tab
   document.getElementById('tuneTab0').classList.add('on');
-  document.getElementById('tuneTab1').classList.remove('on');
   document.getElementById('tunePaneWhole').classList.add('on');
-  document.getElementById('tunePaneSingleIdle').classList.remove('on');
-  document.getElementById('tunePaneSingleSel').classList.remove('on');
-  document.getElementById('tuneFhint').classList.remove('show');
-
-  // 重置指甲高亮
-  document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
-
-  // 清除任何可能的美甲背景图
-  const bg = document.getElementById('tuneNailBg');
-  if (bg) {
-    const oldImg = bg.querySelector('.tune-bg-img');
-    if (oldImg) oldImg.remove();
-  }
-
-  // 重置确认按钮
+  const textField = document.getElementById('tuneTextField');
+  if (textField) textField.value = '';
   _tuneUpdateConfirmBtn();
-
-  // 构建色块和甲型网格
   _tuneBuildSwatches('tuneSwWhole', TUNE_MOR);
-  _tuneBuildSwatches('tuneSwSingle', TUNE_MOR);
-  _tuneBuildShapeGrid('tuneSgWhole', TUNE_SHAPES);
-  _tuneBuildShapeGrid('tuneSgFrench', TUNE_FRENCH);
-
-  // 重置整体 ctab
   document.querySelectorAll('#tuneCtWhole .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
-  document.querySelectorAll('#tuneCtSingle .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
-
-  // 隐藏单指子面板
-  ['Color','French','Deco'].forEach(f => {
-    const el = document.getElementById('tuneSub'+f);
-    if (el) el.style.display = 'none';
-  });
-  ['tuneFfColor','tuneFfFrench','tuneFfDeco'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('on');
-  });
-
-  // 恢复 tip 条
   const tipBar = document.getElementById('tuneTipBar');
   if (tipBar) tipBar.style.display = '';
+  const shapeGrid = document.getElementById('tuneSgWhole');
+  if (shapeGrid) shapeGrid.innerHTML = '<div class="tune-shape-empty">正在加载甲型参考素材…</div>';
+}
 
-  // 显示款式图（背景色用款式 bg）
-  // 移除背景色，使用纯白色背景
-  // if (bg && tuneStyleItem) bg.style.background = tuneStyleItem.bg || '#a8b870';
-  if (bg) bg.style.background = 'transparent';
+async function _tuneLoadOptions() {
+  const shapeGrid = document.getElementById('tuneSgWhole');
+  try {
+    const options = backendAvailable ? await apiGet('/tune/options') : { shapes: [] };
+    tuneShapeOptions = options.shapes || [];
+    _tuneBuildShapeGrid('tuneSgWhole', tuneShapeOptions);
+  } catch (e) {
+    tuneShapeOptions = [];
+    if (shapeGrid) shapeGrid.innerHTML = '<div class="tune-shape-empty">甲型素材加载失败，请检查素材清单。</div>';
+    console.warn('[微调] 甲型选项加载失败:', e.message);
+  }
+}
+
+function _tuneUpdatePreview(imageUrl, name) {
+  const image = document.getElementById('tuneStyleImg');
+  if (image && imageUrl) image.src = staticUrl(imageUrl);
+  const label = document.getElementById('tunePreviewName');
+  if (label) label.textContent = name || '当前款式';
 }
 
 function _tuneUpdateConfirmBtn() {
   const btn = document.getElementById('tuneConfirmBtn');
   if (!btn) return;
-  let ready = false;
-  if (tuneMode === 0) {
-    ready = !!(tunePendingShape || tunePendingColor);
-  } else {
-    if (tunePendingSingleFunc === 'color') ready = !!tunePendingColor;
-    else if (tunePendingSingleFunc === 'french') ready = !!tunePendingFrench;
-    else if (tunePendingSingleFunc === 'deco') ready = !!tunePendingDeco;
-    else if (tuneMode === 1) {
-      // 文本模式：有文字即可
-      const tf = document.getElementById('tuneTextField');
-      ready = !!(tf && tf.value.trim());
-    }
-  }
-  btn.disabled = !ready;
+  btn.disabled = tuneIsGenerating || !(tunePendingShape || tunePendingColor);
 }
 
 function _tuneBuildSwatches(containerId, colors) {
@@ -632,19 +801,18 @@ function _tuneBuildShapeGrid(containerId, shapes) {
   const g = document.getElementById(containerId);
   if (!g) return;
   g.innerHTML = '';
-  const isFrench = containerId === 'tuneSgFrench';
+  if (!shapes.length) {
+    g.innerHTML = '<div class="tune-shape-empty">暂无可用甲型。请将参考图放入后端素材目录。</div>';
+    return;
+  }
   shapes.forEach(sh => {
     const d = document.createElement('div');
     d.className = 'tune-si';
-    let inner = `<path d="${sh.p}" fill="#8a9a5b" opacity="0.85"/>`;
-    if (sh.tp) inner += `<path d="${sh.tp}" fill="${sh.tc || '#fff'}" opacity="0.9"/>`;
-    if (sh.ln) inner += `<path d="${sh.ln}" stroke="${sh.lc || '#fff'}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
-    d.innerHTML = `<svg viewBox="0 0 32 42">${inner}</svg><span>${sh.l}</span>`;
+    d.innerHTML = `<img src="${staticUrl(sh.image_url)}" alt="${sh.label}"><span>${sh.label}</span>`;
     d.onclick = () => {
       g.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
       d.classList.add('on');
-      if (isFrench) { tunePendingFrench = sh.l; }
-      else { tunePendingShape = sh.l; }
+      tunePendingShape = sh.id;
       _tuneUpdateConfirmBtn();
     };
     g.appendChild(d);
@@ -652,77 +820,8 @@ function _tuneBuildShapeGrid(containerId, shapes) {
 }
 
 function tuneSetMode(m) {
-  if (tuneIsGenerating) return;
-  tuneMode = m;
-  // 重置单指相关 pending
-  tuneSelFinger = null;
-  tunePendingSingleFunc = null;
-  tunePendingFrench = null;
-  tunePendingDeco = null;
-  tunePendingColor = null;
-
-  document.getElementById('tuneTab0').classList.toggle('on', m === 0);
-  document.getElementById('tuneTab1').classList.toggle('on', m === 1);
-  document.getElementById('tunePaneWhole').classList.toggle('on', m === 0);
-  if (m === 1) {
-    document.getElementById('tuneFhint').classList.add('show');
-    document.getElementById('tunePaneSingleIdle').classList.add('on');
-    document.getElementById('tunePaneSingleSel').classList.remove('on');
-    document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
-  } else {
-    document.getElementById('tuneFhint').classList.remove('show');
-    document.getElementById('tunePaneSingleIdle').classList.remove('on');
-    document.getElementById('tunePaneSingleSel').classList.remove('on');
-    document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
-  }
-  _tuneUpdateConfirmBtn();
-}
-
-function tuneTapFinger(idx) {
-  if (tuneMode !== 1 || tuneIsGenerating) return;
-  tuneSelFinger = idx;
-  tuneCurFingerName = TUNE_FNAMES[idx];
-  tunePendingSingleFunc = null;
-  tunePendingColor = null;
-  tunePendingFrench = null;
-  tunePendingDeco = null;
-
-  document.querySelectorAll('.tune-ns').forEach(n => n.classList.remove('sel'));
-  document.getElementById('tn' + idx).classList.add('sel');
-  document.getElementById('tuneFhint').textContent = '已选：' + TUNE_FNAMES[idx] + '，请选择调整方式';
-  document.getElementById('tuneFlbl').textContent = '已选：' + TUNE_FNAMES[idx];
-  document.getElementById('tunePaneSingleIdle').classList.remove('on');
-  document.getElementById('tunePaneSingleSel').classList.add('on');
-
-  // 重置功能选项
-  ['Color','French','Deco'].forEach(f => {
-    const el = document.getElementById('tuneSub' + f);
-    if (el) el.style.display = 'none';
-    const btn = document.getElementById('tuneFf' + f);
-    if (btn) btn.classList.remove('on');
-  });
-  _tuneUpdateConfirmBtn();
-}
-
-function tuneSetFunc(el, type) {
-  if (tuneIsGenerating) return;
-  tunePendingSingleFunc = type;
-  tunePendingColor = null;
-  tunePendingFrench = null;
-  tunePendingDeco = null;
-
-  ['Color','French','Deco'].forEach(f => {
-    document.getElementById('tuneSub' + f).style.display = 'none';
-    document.getElementById('tuneFf' + f).classList.remove('on');
-  });
-  el.classList.add('on');
-  const cap = type.charAt(0).toUpperCase() + type.slice(1);
-  document.getElementById('tuneSub' + cap).style.display = 'block';
-
-  if (type === 'color') {
-    _tuneBuildSwatches('tuneSwSingle', TUNE_MOR);
-    document.querySelectorAll('#tuneCtSingle .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
-  }
+  if (m !== 0 || tuneIsGenerating) return;
+  tuneMode = 0;
   _tuneUpdateConfirmBtn();
 }
 
@@ -753,27 +852,12 @@ function tuneSetCTab(el, ctabId, swId, sys) {
   _tuneUpdateConfirmBtn();
 }
 
-function tuneSelDeco(el) {
-  if (tuneIsGenerating) return;
-  document.getElementById('tuneEpDeco').querySelectorAll('.tune-pill').forEach(p => p.classList.remove('on'));
-  el.classList.add('on');
-  tunePendingDeco = el.textContent;
-  _tuneUpdateConfirmBtn();
-}
-
 function _tuneBuildLoadingDesc() {
-  if (tuneMode === 0) {
-    const parts = [];
-    if (tunePendingShape) parts.push('甲型调整为' + tunePendingShape);
-    if (tunePendingColor) parts.push('颜色调整为' + tunePendingColor);
-    return '正在将整体' + parts.join('、') + '…';
-  } else {
-    const fn = tuneCurFingerName;
-    if (tunePendingSingleFunc === 'color') return `正在调整${fn}颜色为 ${tunePendingColor}…`;
-    if (tunePendingSingleFunc === 'french') return `正在为${fn}添加${tunePendingFrench}法式…`;
-    if (tunePendingSingleFunc === 'deco') return `正在为${fn}添加${tunePendingDeco}装饰…`;
-    return '正在生成…';
-  }
+  const parts = [];
+  const shape = tuneShapeOptions.find(item => item.id === tunePendingShape);
+  if (shape) parts.push('甲型调整为' + shape.label);
+  if (tunePendingColor) parts.push('匹配所选色卡');
+  return '正在' + parts.join('并') + '…';
 }
 
 async function tuneConfirmGenerate() {
@@ -791,32 +875,21 @@ async function tuneConfirmGenerate() {
 
   // 获取当前款式图 URL
   const styleImageUrl = tuneStyleItem
-    ? (tuneStyleItem.image_url || '')
+    ? (tuneStyleItem._tuned_image_url || tuneStyleItem.image_url || '')
     : '';
 
   let tunedImageUrl = null;
 
   if (backendAvailable && styleImageUrl) {
     try {
-      let result;
-      if (tuneMode === 0) {
-        // 整体调整
-        result = await apiPost('/tune/overall', {
-          style_image_url: staticUrl(styleImageUrl),
-          nail_shape: tunePendingShape || null,
-          color: tunePendingColor || null,
-        });
-      } else {
-        // 单指微调
-        const fingerIdx = (tuneSelFinger !== null) ? (tuneSelFinger + 1) : 1;
-        result = await apiPost('/tune/single', {
-          style_image_url: staticUrl(styleImageUrl),
-          finger_index: fingerIdx,
-          action: tunePendingSingleFunc || 'color',
-          color: tunePendingSingleFunc === 'color' ? (tunePendingColor || null) : null,
-          french_style: tunePendingSingleFunc === 'french' ? (tunePendingFrench || null) : null,
-          decoration: tunePendingSingleFunc === 'deco' ? (tunePendingDeco || null) : null,
-        });
+      const result = await apiPost('/tune/overall', {
+        style_image_url: staticUrl(styleImageUrl),
+        nail_shape_id: tunePendingShape || null,
+        color: tunePendingColor || null,
+        user_text: document.getElementById('tuneTextField')?.value.trim() || null,
+      });
+      if (result?.generation_mode === 'local_svg_fallback' || result?.tuned_image_url?.endsWith('.svg')) {
+        throw new Error(result.warnings?.[0] || 'AI 生图失败，请稍后重试');
       }
       if (result && result.tuned_image_url) {
         tunedImageUrl = result.tuned_image_url;
@@ -825,13 +898,20 @@ async function tuneConfirmGenerate() {
         // 同步更新 tuneStyleItem 的 image_url，确保"试戴预览"使用微调后图片
         if (tuneStyleItem) {
           tuneStyleItem = { ...tuneStyleItem, _tuned_image_url: tunedImageUrl };
+          latestTuneByStyleId[String(tuneStyleItem.id)] = {
+            tune_id: 'latest',
+            source_style_id: String(tuneStyleItem.style_id || tuneStyleItem.id),
+            source_style_image_url: styleImageUrl,
+            tuned_image_url: tunedImageUrl,
+          };
         }
         if (result.warnings && result.warnings.length > 0) {
           console.warn('[微调] 警告:', result.warnings.join('; '));
         }
       }
     } catch (e) {
-      console.warn('[微调] API 调用失败，使用本地模拟:', e.message);
+      alert('微调生成失败：' + e.message);
+      console.warn('[微调] API 调用失败:', e.message);
     }
   }
 
@@ -842,9 +922,6 @@ async function tuneConfirmGenerate() {
   // 重置 pending，等待下一次选择
   tunePendingShape = null;
   tunePendingColor = null;
-  tunePendingFrench = null;
-  tunePendingDeco = null;
-  tunePendingSingleFunc = null;
   // 清除选中高亮，回到初始态
   document.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
   document.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
@@ -853,54 +930,13 @@ async function tuneConfirmGenerate() {
 }
 
 function _tuneUpdateStyleImage(imageUrl) {
-  // 更新微调页的款式图展示（已移除背景图，只保留手指头）
-  // const imgEl = document.getElementById('tuneStyleImg');
-  // if (imgEl && imageUrl) {
-  //   imgEl.src = imageUrl;
-  // }
-  // 同步更新详情页的试戴主图（供"试戴预览"使用）
   if (tuneStyleItem && imageUrl) {
-    // 存入 tryonHistory 作为微调后的参考图
-    const styleId = tuneStyleItem.id;
-    if (!tryonHistory[styleId]) tryonHistory[styleId] = [];
-    tryonHistory[styleId].push(imageUrl);
+    tuneStyleItem = { ...tuneStyleItem, _tuned_image_url: imageUrl };
+    _tuneUpdatePreview(imageUrl, tuneStyleItem.name);
   }
 }
 
-async function tuneSubmitText() {
-  const tf = document.getElementById('tuneTextField');
-  const text = tf ? tf.value.trim() : '';
-  if (!text || tuneIsGenerating) return;
-  const desc = `正在根据描述生成：${text}…`;
-  tuneIsGenerating = true;
-  document.getElementById('tuneLdDesc').textContent = desc;
-  document.getElementById('tuneLdlay').classList.add('show');
-  document.getElementById('tuneSc').classList.add('tune-disabled');
-  document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = 'none');
-  if (tf) tf.value = '';
-
-  const styleImageUrl = tuneStyleItem ? (tuneStyleItem.image_url || '') : '';
-
-  if (backendAvailable && styleImageUrl) {
-    try {
-      const result = await apiPost('/tune/overall', {
-        style_image_url: staticUrl(styleImageUrl),
-        user_text: text,
-      });
-      if (result && result.tuned_image_url) {
-        _tuneUpdateStyleImage(result.tuned_image_url);
-      }
-    } catch (e) {
-      console.warn('[微调文字] API 调用失败:', e.message);
-    }
-  }
-
-  tuneIsGenerating = false;
-  document.getElementById('tuneLdlay').classList.remove('show');
-  document.getElementById('tuneSc').classList.remove('tune-disabled');
-  document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = '');
-  _tuneUpdateConfirmBtn();
-}
+function tuneSubmitText() { _tuneUpdateConfirmBtn(); }
 
 function submitTuneToTryon() {
   // 将微调后款式图送入试戴流程
@@ -915,6 +951,12 @@ function submitTuneToTryon() {
     if (tunedUrl) {
       tryonAttempted.delete(tuneStyleItem.id);
       tryonHistory[tuneStyleItem.id] = [];
+      latestTuneByStyleId[String(tuneStyleItem.id)] = {
+        tune_id: 'latest',
+        source_style_id: String(tuneStyleItem.style_id || tuneStyleItem.id),
+        source_style_image_url: tuneStyleItem.image_url,
+        tuned_image_url: tunedUrl,
+      };
       // 更新 nailStyles 中对应款式的图片
       const idx = nailStyles.findIndex(s => s.id === tuneStyleItem.id);
       if (idx >= 0) nailStyles[idx] = { ...nailStyles[idx], image_url: tunedUrl };
@@ -928,45 +970,38 @@ function submitTuneToTryon() {
 
 function toggleMultiSelect() {
   multiSelectMode = !multiSelectMode;
-  if (!multiSelectMode) { selectedThumbs = new Set([currentDetailId]); }
-  renderDetailPage();
-}
-
-function onThumbClick(id) {
   if (multiSelectMode) {
-    if (selectedThumbs.has(id)) {
-      selectedThumbs.delete(id);
-    } else if (selectedThumbs.size < 4) {
-      // 上限改为四图
-      selectedThumbs.add(id);
-    } else {
-      alert('最多同时对比 4 款哦');
-      return;
-    }
+    selectedTryonRecordIds = activeTryonRecordId
+      ? new Set([activeTryonRecordId])
+      : new Set();
   } else {
-    currentDetailId = id;
-    selectedThumbs = new Set([id]);
+    selectedTryonRecordIds = new Set();
   }
   renderDetailPage();
 }
 
+function onThumbClick(id) {
+  const record = getTryonRecordsForStyle(id)[0];
+  if (record) onTryonRecordClick(record.record_id);
+}
+
 function renderCompareGrid() {
-  const items = [...selectedThumbs].map(id => nailStyles.find(s=>s.id===id)).filter(Boolean);
-  const n = items.length;
+  const records = [...selectedTryonRecordIds]
+    .map(recordId => tryonRecords.find(record => record.record_id === recordId))
+    .filter(Boolean);
+  const n = records.length;
   // 上限四图：2图上下布局，3/4图四宫格
   let gridClass, maxCells;
   if (n <= 2) { gridClass = 'g2v'; maxCells = 2; }   // 上下排列
   else { gridClass = 'g4'; maxCells = 4; }
 
-  let cells = items.map(s => {
-    const resultImgs = tryonHistory[s.id] || [];
-    const displayUrl = resultImgs.length > 0 ? resultImgs[resultImgs.length-1] : null;
-    const imgContent = displayUrl
-      ? `<img src="${displayUrl}" style="width:100%;height:100%;object-fit:cover">`
-      : (s.image_url
-          ? `<img src="${staticUrl(s.image_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:28px">${s.emoji}</span>`
-          : `<span style="font-size:28px">${s.emoji}</span>`);
-    return `<div class="grid-cell" style="background:${s.bg}">${imgContent}<span class="cell-name">${s.name}</span><span class="cell-price">¥${s.price}</span></div>`;
+  let cells = records.map(record => {
+    const style = findStyleForTryonRecord(record);
+    const name = style?.name || '历史试戴';
+    return `<div class="grid-cell" style="background:${style?.bg || '#f7f4ef'}">
+      <img src="${staticUrl(record.result_image_url)}" style="width:100%;height:100%;object-fit:cover">
+      <span class="cell-name">${name}</span>
+    </div>`;
   });
   while (cells.length < maxCells) cells.push('<div class="grid-cell empty"><i class="ti ti-plus"></i></div>');
   document.getElementById('tryon-main').innerHTML = `
@@ -1024,7 +1059,7 @@ async function sendMsg() {
     try {
       const response = await apiPost('/chat', {
         query: text,
-        user_id: 'demo_user',
+        user_id: DEMO_USER_ID,
         hand_profile_id: handProfileId || null,
         conversation_id: conversationId || null,
       });
@@ -1107,10 +1142,17 @@ function simulateUpload() {
     if (!file) return;
 
     const area = document.getElementById('upload-area');
+    const analyzeButton = document.getElementById('analyze-btn');
+    handUploaded = false;
+    uploadedHandImageUrl = null;
+    analyzeButton.disabled = true;
+
     // 先用本地 ObjectURL 预览图片
     const localUrl = URL.createObjectURL(file);
     area.className = 'upload-placeholder uploaded';
-    area.innerHTML = `<img src="${localUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:16px"><div class="reupload-badge"><i class="ti ti-refresh"></i> 重新上传</div>`;
+    area.innerHTML = `<img src="${localUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:16px">`;
+    setHandReviewInProgress(true);
+    showHandReviewModal('reviewing');
 
     if (backendAvailable) {
       // 后端可用：执行真实上传 + 质检
@@ -1120,25 +1162,36 @@ function simulateUpload() {
 
         const stdResult = await standardizeHand(uploadedHandImageUrl);
         if (!stdResult.quality_pass) {
+          setHandReviewInProgress(false);
           area.className = 'upload-placeholder';
-          const issues = stdResult.issues ? stdResult.issues.join('、') : '图片质量不达标';
+          const qualityIssues = stdResult.quality_issues || stdResult.issues || [];
+          const issues = qualityIssues.length ? qualityIssues.join('、') : '图片质量不达标';
           area.innerHTML = `<div class="upload-plus"><i class="ti ti-alert-triangle"></i></div><span class="upload-hint">质检未通过：${issues}<br>请重新上传</span>`;
+          showHandReviewModal('failed', `未通过原因：${issues}`);
           URL.revokeObjectURL(localUrl);
           return;
         }
+        uploadedHandImageUrl = stdResult.standardized_image_url || uploadedHandImageUrl;
+        if (stdResult.standardized_hand_id) {
+          await setCurrentHand(stdResult.standardized_hand_id);
+        }
       } catch (err) {
-        console.warn('[上传] 后端上传失败，继续使用本地预览:', err.message);
-        uploadedHandImageUrl = localUrl;
+        console.warn('[上传] 手图上传或审核失败:', err.message);
+        setHandReviewInProgress(false);
+        area.className = 'upload-placeholder';
+        area.innerHTML = '<div class="upload-plus"><i class="ti ti-alert-triangle"></i></div><span class="upload-hint">审核暂未完成<br>请重新上传</span>';
+        showHandReviewModal('error');
+        URL.revokeObjectURL(localUrl);
+        return;
       }
     } else {
       // Mock 模式：使用本地 ObjectURL 作为手图地址
       uploadedHandImageUrl = localUrl;
     }
 
-    handUploaded = true;
-    document.getElementById('analyze-btn').disabled = false;
-    // 更新预览区，保留图片并追加重新上传徽标
-    area.innerHTML = `<img src="${uploadedHandImageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:16px"><div class="reupload-badge"><i class="ti ti-refresh"></i> 重新上传</div>`;
+    applyCurrentHand(uploadedHandImageUrl);
+    setHandReviewInProgress(false);
+    showHandReviewModal('passed');
   };
   fileInput.click();
 }
@@ -1146,6 +1199,7 @@ function simulateUpload() {
 async function startAnalysis() {
   if (!handUploaded) return;
   navigateTo('analyzing');
+  const minimumAnimation = new Promise(resolve => setTimeout(resolve, 2800));
   
   const steps = [
     () => { document.getElementById('a-step-1').className='step-icon active'; document.getElementById('a-step-1').innerHTML='<div class="pulse-dot"></div>'; document.getElementById('a-text-1').className='step-text'; },
@@ -1156,50 +1210,46 @@ async function startAnalysis() {
   // 显示动画步骤
   steps.forEach((fn, i) => setTimeout(fn, i * 800));
 
-  if (backendAvailable && uploadedHandImageUrl) {
+  if (handProfileId && handProfileData && preparedRecommendationData) {
+    console.log('[分析] 使用已持久化的手型分析与推荐快照');
+  } else if (backendAvailable && uploadedHandImageUrl) {
     try {
       const result = await apiPost('/analyze-hand', {
-        user_id: 'demo_user',
+        user_id: DEMO_USER_ID,
         hand_image_url: uploadedHandImageUrl,
       });
       handProfileId = result.hand_profile_id;
       handProfileData = result;
-      
-      // 动画完成后跳转
-      setTimeout(() => {
-        document.getElementById('a-step-3').className='step-icon done';
-        document.getElementById('a-step-3').innerHTML='<i class="ti ti-check"></i>';
-        setTimeout(() => navigateTo('recommend'), 400);
-      }, 2800);
     } catch (e) {
       console.warn('[分析] API 调用失败，使用 mock:', e.message);
+      handProfileId = null;
       handProfileData = { skin_tone: '暖黄皮', hand_shape: '标准手型', recommended_nail_shapes: ['方圆甲'], recommended_colors: ['裸粉','冷紫','奶白'] };
-      setTimeout(() => {
-        document.getElementById('a-step-3').className='step-icon done';
-        document.getElementById('a-step-3').innerHTML='<i class="ti ti-check"></i>';
-        setTimeout(() => navigateTo('recommend'), 400);
-      }, 2800);
     }
   } else {
-    // Mock 模式
     handProfileData = { skin_tone: '暖黄皮', hand_shape: '标准手型', recommended_nail_shapes: ['方圆甲'], recommended_colors: ['裸粉','冷紫','奶白'] };
-    setTimeout(() => {
-      document.getElementById('a-step-3').className='step-icon done';
-      document.getElementById('a-step-3').innerHTML='<i class="ti ti-check"></i>';
-      setTimeout(() => navigateTo('recommend'), 400);
-    }, 2800);
   }
+
+  await Promise.all([
+    prepareRecommendations(),
+    minimumAnimation,
+  ]);
+
+  document.getElementById('a-step-3').className='step-icon done';
+  document.getElementById('a-step-3').innerHTML='<i class="ti ti-check"></i>';
+  await renderRecommend();
+  await new Promise(resolve => setTimeout(resolve, 400));
+  navigateTo('recommend');
 }
 
 // ===== 推荐结果（联调后端 /api/recommendations） =====
-async function renderRecommend() {
+async function prepareRecommendations() {
+  if (preparedRecommendationData && preparedRecommendationData.length > 0) return preparedRecommendationData;
   let picks = nailStyles.slice(0,4);
-  let profileDesc = '暖黄皮 · 标准型 · 方圆甲';
 
   if (backendAvailable && handProfileId) {
     try {
       const result = await apiPost('/recommendations', {
-        user_id: 'demo_user',
+        user_id: DEMO_USER_ID,
         hand_profile_id: handProfileId,
         limit: 4,
       });
@@ -1222,6 +1272,14 @@ async function renderRecommend() {
       console.warn('[推荐] API 调用失败，使用本地数据:', e.message);
     }
   }
+
+  preparedRecommendationData = picks;
+  return picks;
+}
+
+async function renderRecommend() {
+  const picks = preparedRecommendationData || await prepareRecommendations();
+  let profileDesc = '暖黄皮 · 标准型 · 方圆甲';
 
   if (handProfileData) {
     const hp = handProfileData;
@@ -1268,9 +1326,12 @@ async function renderRecommend() {
 }
 
 function tryAllRecommend() {
-  const picks = nailStyles.slice(0,4);
-  selectedThumbs = new Set(picks.map(s=>s.id));
-  currentDetailId = picks[0].id;
+  const records = tryonRecords.slice(0,4);
+  if (records.length === 0) return;
+  selectedTryonRecordIds = new Set(records.map(record => record.record_id));
+  const firstStyle = findStyleForTryonRecord(records[0]);
+  if (firstStyle) currentDetailId = firstStyle.id;
+  activeTryonRecordId = records[0].record_id;
   multiSelectMode = true;
   renderDetailPage();
   navigateTo('detail');
@@ -1282,6 +1343,25 @@ navigateTo('home');
 initBackend();
 
 // ===== 试戴历史（联调 GET /api/tryon-history） =====
+async function loadTryonRecords({ rerenderDetail = false } = {}) {
+  if (!backendAvailable) return tryonRecords;
+  try {
+    const data = await apiGet('/tryon-history', { user_id: DEMO_USER_ID, limit: 100 });
+    tryonRecords = data.records || [];
+    if (activeTryonRecordId && !tryonRecords.some(record => record.record_id === activeTryonRecordId)) {
+      activeTryonRecordId = null;
+    }
+    if (!activeTryonRecordId) {
+      activeTryonRecordId = getTryonRecordsForStyle(currentDetailId)[0]?.record_id || null;
+    }
+    if (rerenderDetail && currentPage === 'detail') renderDetailPage();
+    return tryonRecords;
+  } catch (e) {
+    console.warn('[试戴记录] 同步失败:', e.message);
+    return tryonRecords;
+  }
+}
+
 async function loadTryonHistory() {
   const body = document.getElementById('tryon-history-body');
   if (!body) return;
@@ -1294,7 +1374,7 @@ async function loadTryonHistory() {
   body.innerHTML = '<div style="text-align:center;padding:40px;color:#8b5cf6"><div class="typing-indicator" style="justify-content:center"><span></span><span></span><span></span></div>加载中...</div>';
 
   try {
-    const data = await apiGet('/tryon-history', { user_id: 'demo_user', limit: 20 });
+    const data = await apiGet('/tryon-history', { user_id: DEMO_USER_ID, limit: 20 });
     if (!data.records || data.records.length === 0) {
       body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999"><div style="font-size:48px;margin-bottom:12px">⏱</div><div style="font-size:15px;font-weight:500;margin-bottom:6px">暂无试戴记录</div><div style="font-size:12px">试戴美甲后记录会显示在这里</div></div>';
       return;
@@ -1321,6 +1401,7 @@ async function deleteTryonRecord(recordId) {
   if (!confirm('确定删除这条试戴记录？')) return;
   try {
     await apiRequest(`/tryon-history/${recordId}`, { method: 'DELETE' });
+    await loadTryonRecords({ rerenderDetail: true });
     loadTryonHistory();
   } catch (e) {
     console.warn('[试戴历史] 删除失败:', e.message);
@@ -1338,7 +1419,7 @@ async function loadUserHands() {
   }
 
   try {
-    const data = await apiGet('/user-hands', { user_id: 'demo_user' });
+    const data = await apiGet('/user-hands', { user_id: DEMO_USER_ID });
     if (!data.hands || data.hands.length === 0) {
       body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999"><div style="font-size:48px;margin-bottom:12px">🤚</div><div style="font-size:15px;font-weight:500;margin-bottom:6px">暂无手图</div><div style="font-size:12px">上传手图后可在这里管理</div></div>';
       return;
@@ -1361,14 +1442,8 @@ async function loadUserHands() {
 async function selectHand(handId) {
   if (!backendAvailable) return;
   try {
-    const data = await apiGet('/user-hands', { user_id: 'demo_user' });
-    if (data.hands) {
-      const updatedHands = data.hands.map(h => ({ hand_id: h.hand_id, image_url: h.image_url, selected: h.hand_id === handId }));
-      await apiRequest('/user-hands/sync', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: 'demo_user', hands: updatedHands }) });
-      const selected = data.hands.find(h => h.hand_id === handId);
-      if (selected) uploadedHandImageUrl = selected.image_url;
-      loadUserHands();
-    }
+    await setCurrentHand(handId);
+    loadUserHands();
   } catch (e) {
     console.warn('[手图管理] 切换失败:', e.message);
   }
@@ -1379,7 +1454,7 @@ async function reportEvent(eventType, styleId, source = 'organic') {
   if (!backendAvailable) return;
   try {
     await apiPost('/events', {
-      user_id: 'demo_user',
+      user_id: DEMO_USER_ID,
       style_id: String(styleId),
       event_type: eventType,
       source: source,
@@ -1413,15 +1488,10 @@ async function submitEvaluation(targetType, targetId, score, isPositive) {
 // ===== 手部标准化（联调 POST /api/standardize-hand） =====
 async function standardizeHand(imageUrl) {
   if (!backendAvailable) return { quality_pass: true };
-  try {
-    const result = await apiPost('/standardize-hand', {
-      hand_image_url: imageUrl,
-      user_id: 'demo_user',
-    });
-    console.log('[标准化] 质检结果:', result.quality_pass ? '通过' : '不通过');
-    return result;
-  } catch (e) {
-    console.warn('[标准化] 调用失败，跳过质检:', e.message);
-    return { quality_pass: true };
-  }
+  const result = await apiPost('/standardize-hand', {
+    hand_image_url: imageUrl,
+    user_id: DEMO_USER_ID,
+  });
+  console.log('[标准化] 质检结果:', result.quality_pass ? '通过' : '不通过');
+  return result;
 }

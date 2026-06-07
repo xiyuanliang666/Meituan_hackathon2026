@@ -14,6 +14,14 @@ from app.schemas.hand_standardize import (
     UserHandItem,
     UserHandsResponse,
 )
+from app.services.business_db import (
+    get_user_hand_asset,
+    get_selected_user_hand_asset,
+    list_user_hand_assets,
+    save_user_hand_asset,
+    sync_user_hand_assets,
+    upsert_user_demo_state,
+)
 from app.services.multimodal_client import (
     MultimodalModelError,
     analyze_image_json_with_gemini,
@@ -22,20 +30,15 @@ from app.services.multimodal_client import (
     is_qwen_vl_enabled,
 )
 
-_standardized_store: dict[str, str] = {}
-_user_hands: dict[str, list[dict]] = {}
-
 
 def get_standardized_hand(standardized_hand_id: str) -> str | None:
-    return _standardized_store.get(standardized_hand_id)
+    item = get_user_hand_asset(standardized_hand_id)
+    return str(item.get("image_url")) if item else None
 
 
 def get_user_hand_status(user_id: str) -> dict:
     """Return the currently selected hand for backward-compatible quick lookup."""
-    hands = _user_hands.get(user_id, [])
-    selected = next((h for h in hands if h.get("selected")), None)
-    if not selected and hands:
-        selected = hands[0]
+    selected = get_selected_user_hand_asset(user_id)
     if selected:
         return {
             "has_hand": True,
@@ -46,26 +49,27 @@ def get_user_hand_status(user_id: str) -> dict:
 
 
 def get_user_hands(user_id: str) -> UserHandsResponse:
-    hands = _user_hands.get(user_id, [])
+    hands = list_user_hand_assets(user_id)
     return UserHandsResponse(
         user_id=user_id,
-        hands=[UserHandItem(**h) for h in hands],
+        hands=[UserHandItem(hand_id=h["hand_id"], image_url=h["image_url"], selected=h["selected"]) for h in hands],
     )
 
 
 def sync_user_hands(request: SyncHandsRequest) -> UserHandsResponse:
     selected_count = sum(1 for h in request.hands if h.selected)
     hands = [h.model_dump() for h in request.hands]
-
     if hands and selected_count != 1:
         hands[0]["selected"] = True
-        for h in hands[1:]:
-            h["selected"] = False
-
-    _user_hands[request.user_id] = hands
+        for item in hands[1:]:
+            item["selected"] = False
+    synced = sync_user_hand_assets(request.user_id, hands)
+    selected = next((item for item in synced if item["selected"]), None)
+    if selected:
+        upsert_user_demo_state(request.user_id, current_hand_id=selected["hand_id"])
     return UserHandsResponse(
         user_id=request.user_id,
-        hands=[UserHandItem(**h) for h in hands],
+        hands=[UserHandItem(hand_id=h["hand_id"], image_url=h["image_url"], selected=h["selected"]) for h in synced],
     )
 
 
@@ -91,18 +95,22 @@ def standardize_hand(request: StandardizeHandRequest) -> StandardizeHandResponse
         )
 
     hand_id = "hand-" + sha1(image_url.encode("utf-8")).hexdigest()[:10]
-    _standardized_store[hand_id] = image_url
-
-    if request.user_id:
-        existing = _user_hands.get(request.user_id, [])
-        already_exists = any(h["hand_id"] == hand_id for h in existing)
-        if not already_exists:
-            is_first = len(existing) == 0
-            existing.append({"hand_id": hand_id, "image_url": image_url, "selected": is_first})
-            _user_hands[request.user_id] = existing
-
     has_nail_art = quality.get("nail_art_detected", False)
     note = "检测到已有美甲，已直接入库。" if has_nail_art else "手部图片符合标准，已入库。"
+    if request.user_id:
+        selected = get_selected_user_hand_asset(request.user_id) is None
+        saved = save_user_hand_asset(
+            request.user_id,
+            hand_id,
+            image_url,
+            selected=selected,
+            quality_pass=True,
+            quality_issues=[],
+            nail_art_detected=has_nail_art,
+            processing_note=note,
+        )
+        if saved["selected"]:
+            upsert_user_demo_state(request.user_id, current_hand_id=hand_id)
 
     return StandardizeHandResponse(
         standardized_hand_id=hand_id,

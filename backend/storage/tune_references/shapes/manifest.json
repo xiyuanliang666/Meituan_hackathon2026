@@ -1,0 +1,52 @@
+{
+  "shapes": [
+    {
+      "id": "doudou",
+      "label": "豆豆甲",
+      "image": "豆豆甲.png",
+      "prompt": "将全部指甲调整为参考图中的豆豆甲，严格参考其短小圆润的轮廓和长度"
+    },
+    {
+      "id": "short_trapezoid",
+      "label": "短梯形",
+      "image": "短梯形.png",
+      "prompt": "将全部指甲调整为参考图中的短梯形，严格参考其长度和梯形轮廓"
+    },
+    {
+      "id": "medium_trapezoid",
+      "label": "中梯形",
+      "image": "中梯形.png",
+      "prompt": "将全部指甲调整为参考图中的中梯形，严格参考其长度和梯形轮廓"
+    },
+    {
+      "id": "long_trapezoid",
+      "label": "长梯形",
+      "image": "长梯形.png",
+      "prompt": "将全部指甲调整为参考图中的长梯形，严格参考其长度和梯形轮廓"
+    },
+    {
+      "id": "short_oval",
+      "label": "短椭圆",
+      "image": "短椭圆.png",
+      "prompt": "将全部指甲调整为参考图中的短椭圆，严格参考其长度和椭圆轮廓"
+    },
+    {
+      "id": "medium_oval",
+      "label": "中椭圆",
+      "image": "中椭圆.png",
+      "prompt": "将全部指甲调整为参考图中的中椭圆，严格参考其长度和椭圆轮廓"
+    },
+    {
+      "id": "long_oval",
+      "label": "长椭圆",
+      "image": "长椭圆.png",
+      "prompt": "将全部指甲调整为参考图中的长椭圆，严格参考其长度和椭圆轮廓"
+    },
+    {
+      "id": "medium_square",
+      "label": "中方形",
+      "image": "中方形.png",
+      "prompt": "将全部指甲调整为参考图中的中方形，严格参考其长度、直边和方形轮廓"
+    }
+  ]
+}

@@ -28,6 +28,7 @@ from app.services.image_generation import generate_composite_image, generate_try
 from app.services.image_storage import save_uploaded_image
 from app.services.tag_extractor import extract_style_tags, persist_style_tags
 from app.services.taxonomy_store import get_style_tags_payload
+from app.services.business_db import get_user_hand_asset_by_image
 from app.services.tryon_history import save_tryon_record
 
 router = APIRouter()
@@ -419,11 +420,13 @@ def try_on(request: TryOnRequest) -> TryOnResponse:
         raise HTTPException(status_code=400, detail="hand_image_url and style_image_url are required")
     response = generate_try_on_image(request)
     if request.user_id and response.result_image_url:
+        hand_asset = get_user_hand_asset_by_image(request.user_id, request.hand_image_url)
         save_tryon_record(
             user_id=request.user_id,
             hand_image_url=request.hand_image_url,
             style_image_url=request.style_image_url,
             result_image_url=response.result_image_url,
             style_id=request.style_id,
+            hand_id=hand_asset.get("hand_id") if hand_asset else None,
         )
     return response

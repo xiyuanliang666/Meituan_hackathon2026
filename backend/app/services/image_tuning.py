@@ -1,11 +1,7 @@
 """
 美甲款式微调图像生成服务
 
-整体调整 (mode=overall)：
-  - nail_shape  → 替换全部五根手指甲型
-  - color       → 替换全部五根手指颜色
-  - 两者可同时指定，合并为一次请求
-  - user_text   → 用户自由描述，直接拼入 prompt
+整体调整会将原款式图、可选甲型参考图和可选色卡图一起提交给生图模型。
 
 单指微调 (mode=single)：
   - color       → 只替换指定手指颜色
@@ -16,14 +12,17 @@
 """
 
 import logging
+import json
+import re
 from hashlib import sha1
+from pathlib import Path
 
 from app.config import get_settings
 from app.services.image_generation import (
     _call_image_edit,
     _write_fallback_svg,
 )
-from app.prompts import build_try_on_prompt_bundle
+from app.services.image_storage import public_url, storage_root, write_static_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -31,24 +30,119 @@ logger = logging.getLogger(__name__)
 _FINGER_NAMES = {1: "最左边第一根", 2: "从左往右第二根", 3: "从左往右第三根", 4: "从左往右第四根", 5: "最右边第五根"}
 
 
+def _shape_dir() -> Path:
+    return storage_root() / "tune_references" / "shapes"
+
+
+def _load_shape_manifest() -> list[dict[str, str]]:
+    manifest_path = _shape_dir() / "manifest.json"
+    if not manifest_path.exists():
+        return []
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("甲型素材清单 manifest.json 无法读取") from exc
+
+    shapes = payload.get("shapes")
+    if not isinstance(shapes, list):
+        raise ValueError("甲型素材清单必须包含 shapes 数组")
+
+    valid: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in shapes:
+        if not isinstance(item, dict):
+            continue
+        shape_id = str(item.get("id") or "").strip()
+        label = str(item.get("label") or "").strip()
+        image_name = str(item.get("image") or "").strip()
+        prompt = str(item.get("prompt") or "").strip()
+        if not shape_id or not label or not image_name or shape_id in seen:
+            continue
+        image_path = (_shape_dir() / image_name).resolve()
+        if image_path.parent != _shape_dir().resolve() or not image_path.is_file():
+            continue
+        seen.add(shape_id)
+        valid.append({
+            "id": shape_id,
+            "label": label,
+            "image": image_name,
+            "prompt": prompt or f"将全部指甲调整为参考图中的{label}",
+        })
+    return valid
+
+
+def get_tune_options() -> dict:
+    shapes = _load_shape_manifest()
+    return {
+        "shapes": [
+            {
+                "id": item["id"],
+                "label": item["label"],
+                "image_url": public_url(f"tune_references/shapes/{item['image']}"),
+            }
+            for item in shapes
+        ]
+    }
+
+
+def _find_shape(shape_id: str | None) -> dict[str, str] | None:
+    if not shape_id:
+        return None
+    shape = next((item for item in _load_shape_manifest() if item["id"] == shape_id), None)
+    if not shape:
+        raise ValueError(f"未找到甲型素材：{shape_id}")
+    return shape
+
+
+def _normalize_hex_color(color: str) -> str:
+    value = color.strip()
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+        raise ValueError("颜色必须为 #RRGGBB 格式")
+    return value.upper()
+
+
+def _create_color_card(color: str) -> str:
+    from PIL import Image, ImageDraw
+
+    normalized = _normalize_hex_color(color)
+    token = normalized[1:].lower()
+    rel_path = f"tune_references/color_cards/{token}.png"
+    target = storage_root() / rel_path
+    if not target.exists():
+        image = Image.new("RGB", (1024, 1024), normalized)
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((24, 24, 1000, 1000), outline="#FFFFFF", width=10)
+        from io import BytesIO
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        write_static_bytes(rel_path, buffer.getvalue())
+    return public_url(rel_path)
+
+
 def _build_overall_prompt(
-    nail_shape: str | None,
+    shape: dict[str, str] | None,
     color: str | None,
     user_text: str | None,
 ) -> str:
-    parts: list[str] = []
-    if nail_shape:
-        parts.append(f"将五根手指的甲型统一调整为{nail_shape}，保持原颜色与装饰不变")
+    image_index = 2
+    lines = ["图片1是待编辑的原始美甲款式图。"]
+    actions: list[str] = []
+    if shape:
+        lines.append(f"图片{image_index}是目标甲型参考图，只参考其中的甲型轮廓、长度和比例。")
+        actions.append(f"将图片1中的全部指甲调整为图片{image_index}所示甲型")
+        image_index += 1
     if color:
-        # 如果是十六进制颜色，转换为自然语言描述
-        color_desc = _hex_to_desc(color) if color.startswith("#") else color
-        parts.append(f"将五根手指的指甲颜色统一替换为{color_desc}，保持原款式的质感与装饰不变")
-    if user_text:
-        parts.append(user_text)
+        lines.append(f"图片{image_index}是目标颜色色卡，请严格匹配色卡中的颜色。")
+        actions.append(f"将图片1中的全部指甲颜色替换为图片{image_index}的色卡颜色")
 
-    base = "。".join(parts) + "。"
-    base += "请保持手的姿势、皮肤和背景完全不变，只修改指甲部分。输出图片与原图尺寸一致。"
-    return base
+    lines.append("，并".join(actions) + "。")
+    lines.append("保留图片1原有的图案、装饰、纹理、光泽、手部姿势、皮肤、背景和构图。")
+    if shape:
+        lines.append(f"甲型要求：{shape['prompt']}。")
+    if user_text and user_text.strip():
+        lines.append(f"用户补充要求：{user_text.strip()}。补充要求不得覆盖甲型和色卡参考。")
+    lines.append("不要复制参考图的背景、皮肤、文字、水印或其他无关内容。只修改指甲部分，输出尺寸与图片1一致。")
+    return "\n".join(lines)
 
 
 def _build_single_prompt(
@@ -145,7 +239,7 @@ class _MockPromptBundle:
 def tune_nail_image(
     style_image_url: str,
     mode: str,
-    nail_shape: str | None = None,
+    nail_shape_id: str | None = None,
     color: str | None = None,
     user_text: str | None = None,
     finger_index: int | None = None,
@@ -160,9 +254,16 @@ def tune_nail_image(
     warnings: list[str] = []
 
     # 构造 prompt
+    input_image_urls = [style_image_url]
     if mode == "overall":
-        prompt_text = _build_overall_prompt(nail_shape, color, user_text)
-        op_desc = f"整体微调({nail_shape or ''}{color or ''}{user_text or ''})"
+        shape = _find_shape(nail_shape_id)
+        normalized_color = _normalize_hex_color(color) if color else None
+        if shape:
+            input_image_urls.append(public_url(f"tune_references/shapes/{shape['image']}"))
+        if normalized_color:
+            input_image_urls.append(_create_color_card(normalized_color))
+        prompt_text = _build_overall_prompt(shape, normalized_color, user_text)
+        op_desc = f"整体微调({nail_shape_id or ''}{normalized_color or ''}{user_text or ''})"
     else:
         prompt_text = _build_single_prompt(
             finger_index=finger_index or 1,
@@ -184,7 +285,7 @@ def tune_nail_image(
             result_url = _call_image_edit(
                 token=token,
                 prompt_bundle=prompt_bundle,
-                input_image_urls=[style_image_url],
+                input_image_urls=input_image_urls,
                 output_folder="generated/tune",
                 model_name=settings.image_model_name or "gpt-image-1",
             )

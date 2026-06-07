@@ -5,20 +5,32 @@ from app.prompts.hand_analysis import (
     USER_PROMPT as HAND_ANALYSIS_USER_PROMPT,
 )
 from app.schemas.hand import AnalyzeHandRequest, HandProfileResponse
+from app.services.business_db import (
+    find_user_hand_profile,
+    get_user_hand_asset_by_image,
+    get_user_hand_profile,
+    save_user_hand_profile,
+    upsert_user_demo_state,
+)
 from app.services.multimodal_client import (
     MultimodalModelError,
     analyze_image_json_with_qwen_vl,
     is_qwen_vl_enabled,
 )
 
-_hand_profile_store: dict[str, HandProfileResponse] = {}
-
 
 def get_hand_profile(hand_profile_id: str) -> HandProfileResponse | None:
-    return _hand_profile_store.get(hand_profile_id)
+    payload = get_user_hand_profile(hand_profile_id)
+    return HandProfileResponse(**payload) if payload else None
 
 
 def analyze_hand(request: AnalyzeHandRequest) -> HandProfileResponse:
+    digest = sha1(request.hand_image_url.encode("utf-8")).hexdigest()
+    hand_profile_id = "hand-" + digest[:8]
+    cached = find_user_hand_profile(request.user_id, request.hand_image_url, hand_profile_id=hand_profile_id)
+    if cached:
+        return HandProfileResponse(**cached)
+
     if is_qwen_vl_enabled():
         try:
             result = _analyze_hand_with_model(request)
@@ -26,8 +38,23 @@ def analyze_hand(request: AnalyzeHandRequest) -> HandProfileResponse:
             result = _analyze_hand_mock(request)
     else:
         result = _analyze_hand_mock(request)
-    _hand_profile_store[result.hand_profile_id] = result
-    return result
+    hand_asset = get_user_hand_asset_by_image(request.user_id, request.hand_image_url) if request.user_id else None
+    saved = save_user_hand_profile(
+        hand_profile_id=result.hand_profile_id,
+        user_id=request.user_id,
+        hand_id=hand_asset.get("hand_id") if hand_asset else None,
+        hand_image_url=request.hand_image_url,
+        skin_tone=result.skin_tone,
+        hand_shape=result.hand_shape,
+        recommended_colors=result.recommended_colors,
+        recommended_styles=result.recommended_styles,
+        recommended_nail_shapes=result.recommended_nail_shapes,
+        analysis_reason=result.analysis_reason,
+        analysis_mode=result.analysis_mode,
+    )
+    if request.user_id:
+        upsert_user_demo_state(request.user_id, current_hand_profile_id=result.hand_profile_id)
+    return HandProfileResponse(**saved)
 
 
 def analyze_seed_hand_templates(limit: int | None = None) -> dict[str, object]:

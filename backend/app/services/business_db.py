@@ -56,6 +56,11 @@ def get_db_summary(conn: sqlite3.Connection | None = None) -> dict[str, int]:
         "push_audits",
         "report_snapshots",
         "user_tryon_history",
+        "user_hand_assets",
+        "user_hand_profiles",
+        "user_recommendation_snapshots",
+        "user_tune_history",
+        "user_demo_state",
         "ugc_posts",
         "trend_runs",
         "trends",
@@ -117,6 +122,21 @@ def list_styles(limit: int = 50, status: str | None = None, q: str | None = None
         item["tags"] = sorted_tags
         styles.append(item)
     return styles
+
+
+def find_style_id_by_image_url(image_url: str) -> str | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT style_id
+            FROM styles
+            WHERE enhanced_style_image_url = ? OR original_style_image_url = ?
+            LIMIT 1
+            """,
+            (image_url, image_url),
+        ).fetchone()
+    return str(row["style_id"]) if row else None
 
 
 def list_recommendation_candidates(limit: int = 200) -> list[dict[str, Any]]:
@@ -247,6 +267,534 @@ def list_event_stats(limit: int = 50) -> list[dict[str, Any]]:
         item["order_rate"] = _safe_rate(order_count, try_on_count)
         stats.append(item)
     return stats
+
+
+def list_user_hand_assets(user_id: str) -> list[dict[str, Any]]:
+    init_db(seed=True)
+    with connect_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                   nail_art_detected, processing_note, created_at, updated_at
+            FROM user_hand_assets
+            WHERE user_id = ?
+            ORDER BY selected DESC, updated_at DESC, created_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+    return [_user_hand_asset_payload(dict(row)) for row in rows]
+
+
+def get_user_hand_asset(hand_id: str, user_id: str | None = None) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        if user_id:
+            row = conn.execute(
+                """
+                SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                       nail_art_detected, processing_note, created_at, updated_at
+                FROM user_hand_assets
+                WHERE user_id = ? AND hand_id = ?
+                """,
+                (user_id, hand_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                       nail_art_detected, processing_note, created_at, updated_at
+                FROM user_hand_assets
+                WHERE hand_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (hand_id,),
+            ).fetchone()
+    return _user_hand_asset_payload(dict(row)) if row else None
+
+
+def get_user_hand_asset_by_image(user_id: str, image_url: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                   nail_art_detected, processing_note, created_at, updated_at
+            FROM user_hand_assets
+            WHERE user_id = ? AND image_url = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (user_id, image_url),
+        ).fetchone()
+    return _user_hand_asset_payload(dict(row)) if row else None
+
+
+def get_selected_user_hand_asset(user_id: str) -> dict[str, Any] | None:
+    hands = list_user_hand_assets(user_id)
+    return hands[0] if hands else None
+
+
+def save_user_hand_asset(
+    user_id: str,
+    hand_id: str,
+    image_url: str,
+    *,
+    selected: bool,
+    quality_pass: bool,
+    quality_issues: list[str] | None = None,
+    nail_art_detected: bool = False,
+    processing_note: str = "",
+) -> dict[str, Any]:
+    init_db(seed=True)
+    now = _now()
+    issues_json = json.dumps(quality_issues or [], ensure_ascii=False)
+    with connect_db() as conn:
+        if selected:
+            conn.execute("UPDATE user_hand_assets SET selected = 0, updated_at = ? WHERE user_id = ?", (now, user_id))
+        conn.execute(
+            """
+            INSERT INTO user_hand_assets
+            (user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+             nail_art_detected, processing_note, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, hand_id) DO UPDATE SET
+                image_url = excluded.image_url,
+                selected = excluded.selected,
+                quality_pass = excluded.quality_pass,
+                quality_issues_json = excluded.quality_issues_json,
+                nail_art_detected = excluded.nail_art_detected,
+                processing_note = excluded.processing_note,
+                updated_at = excluded.updated_at
+            """,
+            (
+                user_id,
+                hand_id,
+                image_url,
+                1 if selected else 0,
+                1 if quality_pass else 0,
+                issues_json,
+                1 if nail_art_detected else 0,
+                processing_note,
+                now,
+                now,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                   nail_art_detected, processing_note, created_at, updated_at
+            FROM user_hand_assets
+            WHERE user_id = ? AND hand_id = ?
+            """,
+            (user_id, hand_id),
+        ).fetchone()
+    return _user_hand_asset_payload(dict(row))
+
+
+def sync_user_hand_assets(user_id: str, hands: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    init_db(seed=True)
+    if not hands:
+        with connect_db() as conn:
+            conn.execute("DELETE FROM user_hand_assets WHERE user_id = ?", (user_id,))
+        return []
+
+    existing = {item["hand_id"]: item for item in list_user_hand_assets(user_id)}
+    selected_hand_id = next((item["hand_id"] for item in hands if item.get("selected")), hands[0]["hand_id"])
+    synced: list[dict[str, Any]] = []
+    for item in hands:
+        prev = existing.get(item["hand_id"], {})
+        synced.append(
+            save_user_hand_asset(
+                user_id=user_id,
+                hand_id=item["hand_id"],
+                image_url=item["image_url"],
+                selected=item["hand_id"] == selected_hand_id,
+                quality_pass=bool(prev.get("quality_pass", True)),
+                quality_issues=prev.get("quality_issues", []),
+                nail_art_detected=bool(prev.get("nail_art_detected", False)),
+                processing_note=str(prev.get("processing_note") or ""),
+            )
+        )
+    return synced
+
+
+def get_user_hand_profile(hand_profile_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT hand_profile_id, user_id, hand_id, hand_image_url, skin_tone, hand_shape,
+                   recommended_colors_json, recommended_styles_json, recommended_nail_shapes_json,
+                   analysis_reason, analysis_mode, created_at
+            FROM user_hand_profiles
+            WHERE hand_profile_id = ?
+            """,
+            (hand_profile_id,),
+        ).fetchone()
+    return _user_hand_profile_payload(dict(row)) if row else None
+
+
+def find_user_hand_profile(user_id: str | None, hand_image_url: str, hand_profile_id: str | None = None) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = None
+        if user_id:
+            row = conn.execute(
+                """
+                SELECT hand_profile_id, user_id, hand_id, hand_image_url, skin_tone, hand_shape,
+                       recommended_colors_json, recommended_styles_json, recommended_nail_shapes_json,
+                       analysis_reason, analysis_mode, created_at
+                FROM user_hand_profiles
+                WHERE user_id = ? AND hand_image_url = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, hand_image_url),
+            ).fetchone()
+        if row is None and hand_profile_id:
+            row = conn.execute(
+                """
+                SELECT hand_profile_id, user_id, hand_id, hand_image_url, skin_tone, hand_shape,
+                       recommended_colors_json, recommended_styles_json, recommended_nail_shapes_json,
+                       analysis_reason, analysis_mode, created_at
+                FROM user_hand_profiles
+                WHERE hand_profile_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (hand_profile_id,),
+            ).fetchone()
+    return _user_hand_profile_payload(dict(row)) if row else None
+
+
+def save_user_hand_profile(
+    *,
+    hand_profile_id: str,
+    user_id: str | None,
+    hand_id: str | None,
+    hand_image_url: str,
+    skin_tone: str,
+    hand_shape: str,
+    recommended_colors: list[str],
+    recommended_styles: list[str],
+    recommended_nail_shapes: list[str],
+    analysis_reason: str,
+    analysis_mode: str,
+) -> dict[str, Any]:
+    init_db(seed=True)
+    now = _now()
+    with connect_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_hand_profiles
+            (hand_profile_id, user_id, hand_id, hand_image_url, skin_tone, hand_shape,
+             recommended_colors_json, recommended_styles_json, recommended_nail_shapes_json,
+             analysis_reason, analysis_mode, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(hand_profile_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                hand_id = COALESCE(excluded.hand_id, user_hand_profiles.hand_id),
+                hand_image_url = excluded.hand_image_url,
+                skin_tone = excluded.skin_tone,
+                hand_shape = excluded.hand_shape,
+                recommended_colors_json = excluded.recommended_colors_json,
+                recommended_styles_json = excluded.recommended_styles_json,
+                recommended_nail_shapes_json = excluded.recommended_nail_shapes_json,
+                analysis_reason = excluded.analysis_reason,
+                analysis_mode = excluded.analysis_mode
+            """,
+            (
+                hand_profile_id,
+                user_id,
+                hand_id,
+                hand_image_url,
+                skin_tone,
+                hand_shape,
+                json.dumps(recommended_colors, ensure_ascii=False),
+                json.dumps(recommended_styles, ensure_ascii=False),
+                json.dumps(recommended_nail_shapes, ensure_ascii=False),
+                analysis_reason,
+                analysis_mode,
+                now,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT hand_profile_id, user_id, hand_id, hand_image_url, skin_tone, hand_shape,
+                   recommended_colors_json, recommended_styles_json, recommended_nail_shapes_json,
+                   analysis_reason, analysis_mode, created_at
+            FROM user_hand_profiles
+            WHERE hand_profile_id = ?
+            """,
+            (hand_profile_id,),
+        ).fetchone()
+    return _user_hand_profile_payload(dict(row))
+
+
+def save_recommendation_snapshot(
+    *,
+    user_id: str,
+    hand_profile_id: str,
+    query: str | None,
+    recommendations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    init_db(seed=True)
+    snapshot_id = "rec-" + uuid4().hex[:12]
+    created_at = _now()
+    with connect_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_recommendation_snapshots
+            (snapshot_id, user_id, hand_profile_id, query, recommendations_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                snapshot_id,
+                user_id,
+                hand_profile_id,
+                query or "",
+                json.dumps(recommendations, ensure_ascii=False),
+                created_at,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT snapshot_id, user_id, hand_profile_id, query, recommendations_json, created_at
+            FROM user_recommendation_snapshots
+            WHERE snapshot_id = ?
+            """,
+            (snapshot_id,),
+        ).fetchone()
+    return _recommendation_snapshot_payload(dict(row))
+
+
+def get_recommendation_snapshot(snapshot_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT snapshot_id, user_id, hand_profile_id, query, recommendations_json, created_at
+            FROM user_recommendation_snapshots
+            WHERE snapshot_id = ?
+            """,
+            (snapshot_id,),
+        ).fetchone()
+    return _recommendation_snapshot_payload(dict(row)) if row else None
+
+
+def get_latest_recommendation_snapshot(user_id: str, hand_profile_id: str | None = None) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        if hand_profile_id:
+            row = conn.execute(
+                """
+                SELECT snapshot_id, user_id, hand_profile_id, query, recommendations_json, created_at
+                FROM user_recommendation_snapshots
+                WHERE user_id = ? AND hand_profile_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, hand_profile_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT snapshot_id, user_id, hand_profile_id, query, recommendations_json, created_at
+                FROM user_recommendation_snapshots
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+    return _recommendation_snapshot_payload(dict(row)) if row else None
+
+
+def save_user_tune_history(
+    *,
+    user_id: str,
+    source_style_id: str | None,
+    source_style_image_url: str,
+    tuned_image_url: str,
+    nail_shape_id: str | None,
+    color: str | None,
+    user_text: str | None,
+    generation_mode: str,
+) -> dict[str, Any]:
+    init_db(seed=True)
+    tune_id = "tune-" + uuid4().hex[:12]
+    created_at = _now()
+    with connect_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_tune_history
+            (tune_id, user_id, source_style_id, source_style_image_url, tuned_image_url,
+             nail_shape_id, color, user_text, generation_mode, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tune_id,
+                user_id,
+                source_style_id,
+                source_style_image_url,
+                tuned_image_url,
+                nail_shape_id,
+                color,
+                user_text,
+                generation_mode,
+                created_at,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT tune_id, user_id, source_style_id, source_style_image_url, tuned_image_url,
+                   nail_shape_id, color, user_text, generation_mode, created_at
+            FROM user_tune_history
+            WHERE tune_id = ?
+            """,
+            (tune_id,),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def get_user_tune_history_item(tune_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT tune_id, user_id, source_style_id, source_style_image_url, tuned_image_url,
+                   nail_shape_id, color, user_text, generation_mode, created_at
+            FROM user_tune_history
+            WHERE tune_id = ?
+            """,
+            (tune_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_latest_user_tune(user_id: str, source_style_id: str | None = None) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        if source_style_id:
+            row = conn.execute(
+                """
+                SELECT tune_id, user_id, source_style_id, source_style_image_url, tuned_image_url,
+                       nail_shape_id, color, user_text, generation_mode, created_at
+                FROM user_tune_history
+                WHERE user_id = ? AND source_style_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, source_style_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT tune_id, user_id, source_style_id, source_style_image_url, tuned_image_url,
+                       nail_shape_id, color, user_text, generation_mode, created_at
+                FROM user_tune_history
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_demo_state(user_id: str) -> dict[str, Any] | None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        row = conn.execute(
+            """
+            SELECT user_id, current_hand_id, current_hand_profile_id,
+                   current_recommendation_snapshot_id, current_tune_id, updated_at
+            FROM user_demo_state
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def upsert_user_demo_state(
+    user_id: str,
+    *,
+    current_hand_id: str | None = None,
+    current_hand_profile_id: str | None = None,
+    current_recommendation_snapshot_id: str | None = None,
+    current_tune_id: str | None = None,
+) -> dict[str, Any]:
+    init_db(seed=True)
+    now = _now()
+    existing = get_user_demo_state(user_id) or {
+        "user_id": user_id,
+        "current_hand_id": None,
+        "current_hand_profile_id": None,
+        "current_recommendation_snapshot_id": None,
+        "current_tune_id": None,
+        "updated_at": now,
+    }
+    payload = {
+        "current_hand_id": existing.get("current_hand_id"),
+        "current_hand_profile_id": existing.get("current_hand_profile_id"),
+        "current_recommendation_snapshot_id": existing.get("current_recommendation_snapshot_id"),
+        "current_tune_id": existing.get("current_tune_id"),
+    }
+    updates = {
+        "current_hand_id": current_hand_id,
+        "current_hand_profile_id": current_hand_profile_id,
+        "current_recommendation_snapshot_id": current_recommendation_snapshot_id,
+        "current_tune_id": current_tune_id,
+    }
+    for key, value in updates.items():
+        if value is not None:
+            payload[key] = value
+    with connect_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_demo_state
+            (user_id, current_hand_id, current_hand_profile_id,
+             current_recommendation_snapshot_id, current_tune_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                current_hand_id = excluded.current_hand_id,
+                current_hand_profile_id = excluded.current_hand_profile_id,
+                current_recommendation_snapshot_id = excluded.current_recommendation_snapshot_id,
+                current_tune_id = excluded.current_tune_id,
+                updated_at = excluded.updated_at
+            """,
+            (
+                user_id,
+                payload["current_hand_id"],
+                payload["current_hand_profile_id"],
+                payload["current_recommendation_snapshot_id"],
+                payload["current_tune_id"],
+                now,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT user_id, current_hand_id, current_hand_profile_id,
+                   current_recommendation_snapshot_id, current_tune_id, updated_at
+            FROM user_demo_state
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else payload
+
+
+def clear_user_demo_data(user_id: str) -> None:
+    init_db(seed=True)
+    with connect_db() as conn:
+        conn.execute("DELETE FROM user_tryon_history WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_tune_history WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_recommendation_snapshots WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_hand_profiles WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_hand_assets WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_demo_state WHERE user_id = ?", (user_id,))
 
 
 def list_hot_push_candidates(limit: int = 10) -> list[dict[str, Any]]:
@@ -2404,6 +2952,66 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS user_hand_assets (
+            user_id TEXT NOT NULL,
+            hand_id TEXT NOT NULL,
+            image_url TEXT NOT NULL,
+            selected INTEGER NOT NULL DEFAULT 0,
+            quality_pass INTEGER NOT NULL DEFAULT 1,
+            quality_issues_json TEXT NOT NULL DEFAULT '[]',
+            nail_art_detected INTEGER NOT NULL DEFAULT 0,
+            processing_note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(user_id, hand_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_hand_profiles (
+            hand_profile_id TEXT PRIMARY KEY,
+            user_id TEXT,
+            hand_id TEXT,
+            hand_image_url TEXT NOT NULL,
+            skin_tone TEXT NOT NULL DEFAULT '',
+            hand_shape TEXT NOT NULL DEFAULT '',
+            recommended_colors_json TEXT NOT NULL DEFAULT '[]',
+            recommended_styles_json TEXT NOT NULL DEFAULT '[]',
+            recommended_nail_shapes_json TEXT NOT NULL DEFAULT '[]',
+            analysis_reason TEXT NOT NULL DEFAULT '',
+            analysis_mode TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_recommendation_snapshots (
+            snapshot_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            hand_profile_id TEXT NOT NULL,
+            query TEXT NOT NULL DEFAULT '',
+            recommendations_json TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_tune_history (
+            tune_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            source_style_id TEXT,
+            source_style_image_url TEXT NOT NULL,
+            tuned_image_url TEXT NOT NULL,
+            nail_shape_id TEXT,
+            color TEXT,
+            user_text TEXT,
+            generation_mode TEXT NOT NULL DEFAULT 'mock',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_demo_state (
+            user_id TEXT PRIMARY KEY,
+            current_hand_id TEXT,
+            current_hand_profile_id TEXT,
+            current_recommendation_snapshot_id TEXT,
+            current_tune_id TEXT,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS ugc_posts (
             post_id TEXT PRIMARY KEY,
             source TEXT NOT NULL DEFAULT 'xiaohongshu',
@@ -2574,6 +3182,12 @@ def _ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "push_audits", "snapshot_signals_json", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "push_audits", "snapshot_source_posts_json", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "push_audits", "snapshot_image_urls_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "user_hand_assets", "quality_pass", "INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "user_hand_assets", "quality_issues_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "user_hand_assets", "nail_art_detected", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "user_hand_assets", "processing_note", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "user_hand_assets", "created_at", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "user_hand_assets", "updated_at", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -2587,6 +3201,49 @@ def _bool_to_int(value: Any) -> int | None:
     if value is None:
         return None
     return 1 if bool(value) else 0
+
+
+def _user_hand_asset_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "user_id": row["user_id"],
+        "hand_id": row["hand_id"],
+        "image_url": row["image_url"],
+        "selected": bool(row.get("selected")),
+        "quality_pass": bool(row.get("quality_pass")),
+        "quality_issues": _json_loads(row.get("quality_issues_json"), []),
+        "nail_art_detected": bool(row.get("nail_art_detected")),
+        "processing_note": row.get("processing_note") or "",
+        "created_at": row.get("created_at") or "",
+        "updated_at": row.get("updated_at") or "",
+    }
+
+
+def _user_hand_profile_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "hand_profile_id": row["hand_profile_id"],
+        "user_id": row.get("user_id"),
+        "hand_id": row.get("hand_id"),
+        "hand_image_url": row["hand_image_url"],
+        "skin_tone": row["skin_tone"],
+        "hand_shape": row["hand_shape"],
+        "recommended_colors": _json_loads(row.get("recommended_colors_json"), []),
+        "recommended_styles": _json_loads(row.get("recommended_styles_json"), []),
+        "recommended_nail_shapes": _json_loads(row.get("recommended_nail_shapes_json"), []),
+        "analysis_reason": row.get("analysis_reason") or "",
+        "analysis_mode": row.get("analysis_mode") or "",
+        "created_at": row.get("created_at") or "",
+    }
+
+
+def _recommendation_snapshot_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "snapshot_id": row["snapshot_id"],
+        "user_id": row["user_id"],
+        "hand_profile_id": row["hand_profile_id"],
+        "query": row.get("query") or "",
+        "recommendations": _json_loads(row.get("recommendations_json"), []),
+        "created_at": row.get("created_at") or "",
+    }
 
 
 def _json_loads(value: Any, default: Any) -> Any:

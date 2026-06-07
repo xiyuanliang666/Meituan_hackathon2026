@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>美甲AI试戴</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=20260603e">
+<link rel="stylesheet" href="styles.css?v=20260607h">
 
 </head>
 <body>
@@ -88,15 +88,17 @@
         <span class="tune-tip-close" onclick="document.getElementById('tuneTipBar').style.display='none'">×</span>
       </div>
       <div class="tune-nail-bg" id="tuneNailBg">
-        <!-- 五指热区（单指模式下显示） -->
-        <div class="tune-nails-row" id="tuneNailsRow">
-          <div class="tune-ns" id="tn0" data-idx="0" onclick="tuneTapFinger(0)" style="width:30px;height:44px;transform:rotate(-11deg) translateY(7px)"><span class="tune-ns-lbl">拇指</span></div>
-          <div class="tune-ns" id="tn1" data-idx="1" onclick="tuneTapFinger(1)" style="width:32px;height:54px;transform:rotate(-3deg) translateY(2px)"><span class="tune-ns-lbl">食指</span></div>
-          <div class="tune-ns" id="tn2" data-idx="2" onclick="tuneTapFinger(2)" style="width:32px;height:58px;"><span class="tune-ns-lbl">中指</span></div>
-          <div class="tune-ns" id="tn3" data-idx="3" onclick="tuneTapFinger(3)" style="width:30px;height:52px;transform:rotate(4deg) translateY(2px)"><span class="tune-ns-lbl">无名</span></div>
-          <div class="tune-ns" id="tn4" data-idx="4" onclick="tuneTapFinger(4)" style="width:24px;height:40px;transform:rotate(10deg) translateY(7px)"><span class="tune-ns-lbl">小指</span></div>
+        <img id="tuneStyleImg" class="tune-style-preview" alt="当前微调款式">
+        <div class="tune-preview-caption">
+          <span id="tunePreviewName">当前款式</span>
+          <span>生成结果会在此更新</span>
         </div>
-        <div class="tune-fhint" id="tuneFhint">点击选择要调整的指头</div>
+      </div>
+      <div class="tune-finger-disabled-zone" aria-disabled="true">
+        <div class="tune-finger-icons" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <span>单指框选开发中</span>
       </div>
       <!-- 生图 Loading 覆盖层 -->
       <div class="tune-ldlay" id="tuneLdlay">
@@ -111,7 +113,7 @@
     <!-- Tab 切换 -->
     <div class="tune-tabs">
       <div class="tune-tab on" id="tuneTab0" onclick="tuneSetMode(0)">整体调整</div>
-      <div class="tune-tab" id="tuneTab1" onclick="tuneSetMode(1)">单指微调</div>
+      <div class="tune-tab disabled" id="tuneTab1" aria-disabled="true">单指微调 · 框选开发中</div>
     </div>
 
     <!-- 步骤指示器 -->
@@ -140,60 +142,6 @@
         <div class="tune-swatches" id="tuneSwWhole"></div>
       </div>
 
-      <!-- 单指：未选手指 -->
-      <div class="tune-pane" id="tunePaneSingleIdle">
-        <div class="tune-empty-hint">
-          <i class="ti ti-hand-finger"></i>
-          <span>请在上方图中点击<br>要调整的手指</span>
-        </div>
-      </div>
-
-      <!-- 单指：已选手指 -->
-      <div class="tune-pane" id="tunePaneSingleSel">
-        <div class="tune-flbl" id="tuneFlbl">已选：中指</div>
-        <div class="tune-fgrid">
-          <div class="tune-fi" id="tuneFfColor" onclick="tuneSetFunc(this,'color')">
-            <i class="ti ti-palette"></i><span>换颜色</span>
-          </div>
-          <div class="tune-fi" id="tuneFfFrench" onclick="tuneSetFunc(this,'french')">
-            <i class="ti ti-layout-bottombar"></i><span>法式</span>
-          </div>
-          <div class="tune-fi" id="tuneFfDeco" onclick="tuneSetFunc(this,'deco')">
-            <i class="ti ti-diamond"></i><span>装饰品</span>
-          </div>
-        </div>
-
-        <!-- 子面板：换色 -->
-        <div id="tuneSubColor" style="display:none">
-          <div class="tune-ctabs" id="tuneCtSingle">
-            <div class="tune-ctab on" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','morandi')">莫兰迪</div>
-            <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','macaron')">马卡龙</div>
-            <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','custom')">自定义</div>
-          </div>
-          <div class="tune-swatches" id="tuneSwSingle"></div>
-        </div>
-
-        <!-- 子面板：法式 -->
-        <div id="tuneSubFrench" style="display:none">
-          <div class="tune-slbl">法式款式</div>
-          <div class="tune-sgrid" id="tuneSgFrench"></div>
-        </div>
-
-        <!-- 子面板：装饰品 -->
-        <div id="tuneSubDeco" style="display:none">
-          <div class="tune-slbl">装饰类型</div>
-          <div class="tune-pills" id="tuneEpDeco">
-            <div class="tune-pill" onclick="tuneSelDeco(this)">珍珠</div>
-            <div class="tune-pill" onclick="tuneSelDeco(this)">平底钻</div>
-            <div class="tune-pill" onclick="tuneSelDeco(this)">异形钻</div>
-            <div class="tune-pill" onclick="tuneSelDeco(this)">金箔</div>
-            <div class="tune-pill" onclick="tuneSelDeco(this)">干花</div>
-            <div class="tune-pill" onclick="tuneSelDeco(this)">贝壳</div>
-            <div class="tune-pill" onclick="tuneSelDeco(this)">转印纸</div>
-          </div>
-        </div>
-      </div>
-
     </div><!-- /tune-sc -->
 
     <!-- 确认生图按钮 -->
@@ -205,10 +153,7 @@
 
     <!-- 底部自由文本输入 -->
     <div class="tune-ibar">
-      <input class="tune-ifield" id="tuneTextField" placeholder="描述其他想法（选填）…"/>
-      <div class="tune-isend" onclick="tuneSubmitText()">
-        <i class="ti ti-arrow-up"></i>
-      </div>
+      <input class="tune-ifield" id="tuneTextField" placeholder="补充要求（选填，不会覆盖甲型和颜色）…" oninput="_tuneUpdateConfirmBtn()"/>
     </div>
   </div>
 
@@ -282,7 +227,7 @@
   </div>
 
 </div>
-<script src="../api-config.js?v=20260603e"></script>
-<script src="app.js?v=20260603e"></script>
+<script src="../api-config.js?v=20260607h"></script>
+<script src="app.js?v=20260607h"></script>
 </body>
 </html>
