@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     )
     qwen_vl_model_name: str = Field(default="qwen-vl-plus", alias="QWEN_VL_MODEL_NAME")
 
+    nail_region_vlm_api_key: str | None = Field(default=None, alias="NAIL_REGION_VLM_API_KEY")
+    nail_region_vlm_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        alias="NAIL_REGION_VLM_BASE_URL",
+    )
+    nail_region_vlm_model_name: str = Field(default="gpt-5.5", alias="NAIL_REGION_VLM_MODEL_NAME")
+
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_base_url: str = Field(default="https://api.openai.com/v1", alias="OPENAI_BASE_URL")
     image_model_name: str = Field(default="gpt-image-1", alias="IMAGE_MODEL_NAME")
@@ -42,6 +49,10 @@ class Settings(BaseSettings):
     @property
     def has_qwen_credentials(self) -> bool:
         return bool(self.model_real_enabled and self.qwen_api_key)
+
+    @property
+    def has_nail_region_vlm_credentials(self) -> bool:
+        return bool(self.model_real_enabled and self.nail_region_vlm_api_key)
 
     @property
     def has_image_generation_credentials(self) -> bool:

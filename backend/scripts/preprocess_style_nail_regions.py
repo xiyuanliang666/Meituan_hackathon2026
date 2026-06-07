@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Offline preprocess style nail regions with Qwen 2.5 VL.
+"""Offline preprocess user hand-template nail regions with a dedicated nail-region VLM.
 
 Usage:
     cd backend
     python scripts/preprocess_style_nail_regions.py
     python scripts/preprocess_style_nail_regions.py --limit 10
-    python scripts/preprocess_style_nail_regions.py --style-id style-seed-001 --force
+    python scripts/preprocess_style_nail_regions.py --hand-template-id hand-seed-001 --force
 """
 
 from __future__ import annotations
@@ -20,19 +20,19 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import get_settings
-from app.services.business_db import list_styles
+from app.services.business_db import list_seed_hand_templates
 from app.services.image_storage import storage_root
 from app.services.multimodal_client import (
     MultimodalModelError,
-    analyze_image_json_with_qwen_vl,
-    is_qwen_vl_enabled,
+    analyze_image_json_with_nail_region_vlm,
+    is_nail_region_vlm_enabled,
 )
 
 
 SYSTEM_PROMPT = """你是一个只输出严格 JSON 的视觉定位器。
 
 任务目标：
-识别一张美甲款式图里从左到右 5 根手指的指甲区域。
+识别一张裸手手模图里从左到右 5 根手指的指甲区域。
 
 输出要求：
 1. 只能输出一个 JSON 对象，不能输出任何解释、Markdown、代码块或额外文字。
@@ -46,7 +46,7 @@ SYSTEM_PROMPT = """你是一个只输出严格 JSON 的视觉定位器。
 """
 
 
-USER_PROMPT_TEMPLATE = """这是一张美甲款式图，图中有五根手指的指甲。
+USER_PROMPT_TEMPLATE = """这是一张裸手手模图，图中有五根手指的指甲。
 
 请从左到右将手指编号为 1-5，并为每根手指输出能贴合指甲倾斜角度的四个角点坐标。
 
@@ -64,37 +64,32 @@ USER_PROMPT_TEMPLATE = """这是一张美甲款式图，图中有五根手指的
 - 坐标必须是 0 到 1 的归一化数值。
 - 只输出 JSON。
 
-当前款式信息：
-- style_id: {style_id}
-- style_name: {style_name}
+当前手模信息：
+- hand_template_id: {hand_template_id}
+- hand_label: {hand_label}
 """
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Preprocess nail corner regions for style images with Qwen VL")
-    parser.add_argument("--limit", type=int, default=None, help="Only process first N styles")
-    parser.add_argument("--style-id", action="append", default=[], help="Only process specific style_id, can repeat")
+    parser = argparse.ArgumentParser(description="Preprocess nail corner regions for user hand templates with a dedicated VLM")
+    parser.add_argument("--limit", type=int, default=None, help="Only process first N hand templates")
+    parser.add_argument("--hand-template-id", action="append", default=[], help="Only process specific hand_template_id, can repeat")
     parser.add_argument("--force", action="store_true", help="Re-run even if output file already exists")
-    parser.add_argument(
-        "--status",
-        default=None,
-        help="Optional style status filter passed to list_styles, e.g. active / draft",
-    )
     args = parser.parse_args()
 
-    if not is_qwen_vl_enabled():
-        raise SystemExit("QWEN_API_KEY is not configured or MODEL_REAL_ENABLED is false")
+    if not is_nail_region_vlm_enabled():
+        raise SystemExit("NAIL_REGION_VLM_API_KEY is not configured or MODEL_REAL_ENABLED is false")
 
-    styles = list_styles(limit=5000, status=args.status)
-    if args.style_id:
-        wanted = set(args.style_id)
-        styles = [item for item in styles if str(item.get("style_id") or "") in wanted]
+    templates = list_seed_hand_templates(limit=args.limit or 5000)
+    if args.hand_template_id:
+        wanted = set(args.hand_template_id)
+        templates = [item for item in templates if str(item.get("hand_template_id") or "") in wanted]
 
     if args.limit is not None:
-        styles = styles[: args.limit]
+        templates = templates[: args.limit]
 
-    if not styles:
-        print("No styles to process.")
+    if not templates:
+        print("No hand templates to process.")
         return
 
     output_dir = _output_dir()
@@ -107,49 +102,49 @@ def main() -> None:
     failed = 0
     manifest_items: list[dict[str, Any]] = []
 
-    for style in styles:
-        style_id = str(style.get("style_id") or "").strip()
-        style_name = str(style.get("style_name") or "").strip() or style_id
-        image_url = _style_image_url(style)
-        if not style_id or not image_url:
+    for template in templates:
+        hand_template_id = str(template.get("hand_template_id") or "").strip()
+        hand_label = str(template.get("label") or "").strip() or hand_template_id
+        image_url = str(template.get("hand_image_url") or "").strip()
+        if not hand_template_id or not image_url:
             failed += 1
-            print(f"[failed] missing style_id or image_url: {style_name}")
+            print(f"[failed] missing hand_template_id or image_url: {hand_label}")
             continue
 
-        output_path = output_dir / f"{style_id}.json"
+        output_path = output_dir / f"{hand_template_id}.json"
         if output_path.exists() and not args.force:
             skipped += 1
             manifest_items.append(_load_manifest_item(output_path))
-            print(f"[skip] {style_id}")
+            print(f"[skip] {hand_template_id}")
             continue
 
         raw = None
         try:
-            raw = analyze_image_json_with_qwen_vl(
+            raw = analyze_image_json_with_nail_region_vlm(
                 image_url=image_url,
                 system_prompt=SYSTEM_PROMPT,
-                user_prompt=USER_PROMPT_TEMPLATE.format(style_id=style_id, style_name=style_name),
+                user_prompt=USER_PROMPT_TEMPLATE.format(hand_template_id=hand_template_id, hand_label=hand_label),
             )
             nail_regions = _normalize_nail_regions(raw)
         except (MultimodalModelError, ValueError) as exc:
             failed += 1
             _write_failure_payload(
-                failure_dir / f"{style_id}.json",
-                style_id=style_id,
-                style_name=style_name,
+                failure_dir / f"{hand_template_id}.json",
+                item_id=hand_template_id,
+                item_name=hand_label,
                 image_url=image_url,
                 raw=raw,
                 error=str(exc),
             )
-            print(f"[failed] {style_id}: {exc}")
+            print(f"[failed] {hand_template_id}: {exc}")
             continue
 
         payload = {
-            "style_id": style_id,
-            "style_name": style_name,
+            "hand_template_id": hand_template_id,
+            "hand_label": hand_label,
             "image_url": image_url,
-            "analysis_mode": get_settings().qwen_vl_model_name,
-            "prompt_version": "nail-region-v1",
+            "analysis_mode": get_settings().nail_region_vlm_model_name,
+            "prompt_version": "hand-nail-region-v1",
             "processed_at": _now_iso(),
             "nail_regions": nail_regions,
             "model_output": raw,
@@ -157,26 +152,17 @@ def main() -> None:
         output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         manifest_items.append(_manifest_item_from_payload(payload, output_path))
         processed += 1
-        print(f"[done] {style_id}")
+        print(f"[done] {hand_template_id}")
 
     _write_manifest(output_dir / "manifest.json", manifest_items)
     print(
         f"written: {output_dir}\n"
-        f"processed={processed} skipped={skipped} failed={failed} model={get_settings().qwen_vl_model_name}"
+        f"processed={processed} skipped={skipped} failed={failed} model={get_settings().nail_region_vlm_model_name}"
     )
 
 
-def _style_image_url(style: dict[str, Any]) -> str:
-    return str(
-        style.get("enhanced_style_image_url")
-        or style.get("original_style_image_url")
-        or style.get("image_url")
-        or ""
-    ).strip()
-
-
 def _output_dir() -> Path:
-    return storage_root() / "tune_references" / "style_nail_regions"
+    return storage_root() / "tune_references" / "hand_nail_regions"
 
 
 def _normalize_nail_regions(data: dict[str, Any]) -> dict[str, list[list[float]]]:
@@ -288,7 +274,7 @@ def _load_manifest_item(output_path: Path) -> dict[str, Any]:
         payload = json.loads(output_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {
-            "style_id": output_path.stem,
+            "hand_template_id": output_path.stem,
             "file": output_path.name,
             "status": "existing_invalid",
         }
@@ -298,15 +284,15 @@ def _load_manifest_item(output_path: Path) -> dict[str, Any]:
 def _write_failure_payload(
     path: Path,
     *,
-    style_id: str,
-    style_name: str,
+    item_id: str,
+    item_name: str,
     image_url: str,
     raw: Any,
     error: str,
 ) -> None:
     payload = {
-        "style_id": style_id,
-        "style_name": style_name,
+        "hand_template_id": item_id,
+        "hand_label": item_name,
         "image_url": image_url,
         "failed_at": _now_iso(),
         "error": error,
@@ -317,8 +303,8 @@ def _write_failure_payload(
 
 def _manifest_item_from_payload(payload: dict[str, Any], output_path: Path) -> dict[str, Any]:
     return {
-        "style_id": payload.get("style_id"),
-        "style_name": payload.get("style_name"),
+        "hand_template_id": payload.get("hand_template_id"),
+        "hand_label": payload.get("hand_label"),
         "image_url": payload.get("image_url"),
         "analysis_mode": payload.get("analysis_mode"),
         "prompt_version": payload.get("prompt_version"),

@@ -275,7 +275,8 @@ def list_user_hand_assets(user_id: str) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                   nail_art_detected, processing_note, created_at, updated_at
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
             FROM user_hand_assets
             WHERE user_id = ?
             ORDER BY selected DESC, updated_at DESC, created_at DESC
@@ -292,7 +293,8 @@ def get_user_hand_asset(hand_id: str, user_id: str | None = None) -> dict[str, A
             row = conn.execute(
                 """
                 SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                       nail_art_detected, processing_note, created_at, updated_at
+                       nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                       nail_region_error, created_at, updated_at
                 FROM user_hand_assets
                 WHERE user_id = ? AND hand_id = ?
                 """,
@@ -302,7 +304,8 @@ def get_user_hand_asset(hand_id: str, user_id: str | None = None) -> dict[str, A
             row = conn.execute(
                 """
                 SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                       nail_art_detected, processing_note, created_at, updated_at
+                       nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                       nail_region_error, created_at, updated_at
                 FROM user_hand_assets
                 WHERE hand_id = ?
                 ORDER BY updated_at DESC
@@ -319,7 +322,8 @@ def get_user_hand_asset_by_image(user_id: str, image_url: str) -> dict[str, Any]
         row = conn.execute(
             """
             SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                   nail_art_detected, processing_note, created_at, updated_at
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
             FROM user_hand_assets
             WHERE user_id = ? AND image_url = ?
             ORDER BY updated_at DESC
@@ -383,13 +387,49 @@ def save_user_hand_asset(
         row = conn.execute(
             """
             SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
-                   nail_art_detected, processing_note, created_at, updated_at
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
             FROM user_hand_assets
             WHERE user_id = ? AND hand_id = ?
             """,
             (user_id, hand_id),
         ).fetchone()
     return _user_hand_asset_payload(dict(row))
+
+
+def update_user_hand_nail_region_status(
+    user_id: str,
+    hand_id: str,
+    *,
+    status: str,
+    json_path: str = "",
+    error: str = "",
+) -> dict[str, Any] | None:
+    init_db(seed=True)
+    now = _now()
+    with connect_db() as conn:
+        conn.execute(
+            """
+            UPDATE user_hand_assets
+            SET nail_region_status = ?,
+                nail_region_json_path = ?,
+                nail_region_error = ?,
+                updated_at = ?
+            WHERE user_id = ? AND hand_id = ?
+            """,
+            (status, json_path, error, now, user_id, hand_id),
+        )
+        row = conn.execute(
+            """
+            SELECT user_id, hand_id, image_url, selected, quality_pass, quality_issues_json,
+                   nail_art_detected, processing_note, nail_region_status, nail_region_json_path,
+                   nail_region_error, created_at, updated_at
+            FROM user_hand_assets
+            WHERE user_id = ? AND hand_id = ?
+            """,
+            (user_id, hand_id),
+        ).fetchone()
+    return _user_hand_asset_payload(dict(row)) if row else None
 
 
 def sync_user_hand_assets(user_id: str, hands: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2961,6 +3001,9 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             quality_issues_json TEXT NOT NULL DEFAULT '[]',
             nail_art_detected INTEGER NOT NULL DEFAULT 0,
             processing_note TEXT NOT NULL DEFAULT '',
+            nail_region_status TEXT NOT NULL DEFAULT 'pending',
+            nail_region_json_path TEXT NOT NULL DEFAULT '',
+            nail_region_error TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             PRIMARY KEY(user_id, hand_id)
@@ -3186,6 +3229,9 @@ def _ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "user_hand_assets", "quality_issues_json", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "user_hand_assets", "nail_art_detected", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "user_hand_assets", "processing_note", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "user_hand_assets", "nail_region_status", "TEXT NOT NULL DEFAULT 'pending'")
+    _ensure_column(conn, "user_hand_assets", "nail_region_json_path", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "user_hand_assets", "nail_region_error", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "user_hand_assets", "created_at", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "user_hand_assets", "updated_at", "TEXT NOT NULL DEFAULT ''")
 
@@ -3213,6 +3259,9 @@ def _user_hand_asset_payload(row: dict[str, Any]) -> dict[str, Any]:
         "quality_issues": _json_loads(row.get("quality_issues_json"), []),
         "nail_art_detected": bool(row.get("nail_art_detected")),
         "processing_note": row.get("processing_note") or "",
+        "nail_region_status": row.get("nail_region_status") or "pending",
+        "nail_region_json_path": row.get("nail_region_json_path") or "",
+        "nail_region_error": row.get("nail_region_error") or "",
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
     }

@@ -20,8 +20,10 @@ from app.services.business_db import (
     list_user_hand_assets,
     save_user_hand_asset,
     sync_user_hand_assets,
+    update_user_hand_nail_region_status,
     upsert_user_demo_state,
 )
+from app.services.hand_nail_regions import extract_and_store_hand_nail_regions
 from app.services.multimodal_client import (
     MultimodalModelError,
     analyze_image_json_with_gemini,
@@ -97,6 +99,8 @@ def standardize_hand(request: StandardizeHandRequest) -> StandardizeHandResponse
     hand_id = "hand-" + sha1(image_url.encode("utf-8")).hexdigest()[:10]
     has_nail_art = quality.get("nail_art_detected", False)
     note = "检测到已有美甲，已直接入库。" if has_nail_art else "手部图片符合标准，已入库。"
+    nail_region_status = "pending"
+    nail_region_error = ""
     if request.user_id:
         selected = get_selected_user_hand_asset(request.user_id) is None
         saved = save_user_hand_asset(
@@ -111,6 +115,22 @@ def standardize_hand(request: StandardizeHandRequest) -> StandardizeHandResponse
         )
         if saved["selected"]:
             upsert_user_demo_state(request.user_id, current_hand_id=hand_id)
+        extraction = extract_and_store_hand_nail_regions(
+            hand_id=hand_id,
+            image_url=image_url,
+            hand_label=hand_id,
+        )
+        nail_region_status = str(extraction.get("status") or "pending")
+        nail_region_error = str(extraction.get("error") or "")
+        update_user_hand_nail_region_status(
+            request.user_id,
+            hand_id,
+            status=nail_region_status,
+            json_path=str(extraction.get("json_path") or ""),
+            error=nail_region_error,
+        )
+        if nail_region_status != "done":
+            note = "手图已入库，但甲面解析失败，AI 微调暂不可用，请重新上传更清晰的手图。"
 
     return StandardizeHandResponse(
         standardized_hand_id=hand_id,
@@ -126,6 +146,8 @@ def standardize_hand(request: StandardizeHandRequest) -> StandardizeHandResponse
         quality_issues=quality.get("issues", []),
         nail_art_detected=has_nail_art,
         processing_note=note,
+        nail_region_status=nail_region_status,
+        nail_region_error=nail_region_error,
     )
 
 

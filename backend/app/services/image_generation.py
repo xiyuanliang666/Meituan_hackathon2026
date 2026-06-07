@@ -4,6 +4,7 @@ import logging
 import struct
 from hashlib import sha1
 from html import escape
+from urllib.parse import unquote_to_bytes
 
 import httpx
 
@@ -330,6 +331,13 @@ def _webp_dimensions(content: bytes) -> tuple[int, int]:
 
 
 def _download_image(url: str) -> bytes:
+    if url.startswith("data:"):
+        header, _, payload = url.partition(",")
+        if not payload:
+            raise ValueError("invalid data URI image")
+        if ";base64" in header:
+            return base64.b64decode(payload)
+        return unquote_to_bytes(payload)
     if url.startswith("http://127.0.0.1") or url.startswith("http://localhost"):
         path_part = url.split("/static/", 1)[-1]
         from app.services.image_storage import storage_root
@@ -368,6 +376,8 @@ def _write_fallback_svg(
 
 
 def _content_type(content: bytes) -> str:
+    if content.lstrip().startswith(b"<svg"):
+        return "image/svg+xml"
     if content.startswith(b"\xff\xd8"):
         return "image/jpeg"
     if content.startswith(b"RIFF") and b"WEBP" in content[:16]:
@@ -376,6 +386,8 @@ def _content_type(content: bytes) -> str:
 
 
 def _file_extension(content: bytes) -> str:
+    if content.lstrip().startswith(b"<svg"):
+        return ".svg"
     if content.startswith(b"\xff\xd8"):
         return ".jpg"
     if content.startswith(b"RIFF") and b"WEBP" in content[:16]:

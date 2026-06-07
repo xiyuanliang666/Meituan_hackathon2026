@@ -37,6 +37,7 @@ let demoStateHydrated = false;
 let tryonHistory = {};
 // 已尝试过试戴但 AI 模型未返回结果的款式 ID 集合（避免重复调用）
 let tryonAttempted = new Set();
+let tryonGeneratingStyleIds = new Set();
 // 收藏集合（持久化到 localStorage）
 let favoritesSet = new Set(JSON.parse(localStorage.getItem('prism_favorites') || '[]'));
 
@@ -300,6 +301,28 @@ function closeHandReviewModal() {
   if (modal) modal.remove();
 }
 
+function showTuneWaitModal() {
+  const existing = document.getElementById('tune-wait-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'tune-wait-modal';
+  modal.innerHTML = `
+    <div class="modal-backdrop" onclick="closeTuneWaitModal()"></div>
+    <div class="modal-sheet">
+      <div class="hand-review-icon reviewing"><i class="ti ti-hourglass-high"></i></div>
+      <div class="modal-title">请先等待款式图生成完成</div>
+      <div class="modal-desc">当前合成图还在生成中，完成后再点击「AI 微调」，就可以直接进入功能区了。</div>
+      <button class="modal-btn-primary" onclick="closeTuneWaitModal()">我知道了</button>
+    </div>`;
+  document.getElementById('app').appendChild(modal);
+}
+
+function closeTuneWaitModal() {
+  const modal = document.getElementById('tune-wait-modal');
+  if (modal) modal.remove();
+}
+
 function applyCurrentHand(imageUrl, { resetAnalysis = true } = {}) {
   uploadedHandImageUrl = imageUrl;
   handUploaded = Boolean(imageUrl);
@@ -547,6 +570,7 @@ function downloadTryonResult(styleId) {
 function startTryOnWithProgress(item) {
   const bigimg = document.getElementById('tryon-bigimg-inner');
   if (!bigimg) return;
+  tryonGeneratingStyleIds.add(item.id);
 
   // 注入进度条 UI（覆盖在图片上方）
   const overlay = document.createElement('div');
@@ -582,6 +606,7 @@ function startTryOnWithProgress(item) {
 
   function finishProgress(resultUrl) {
     clearInterval(timer);
+    tryonGeneratingStyleIds.delete(item.id);
     updateProgress(100);
     setTimeout(() => {
       const ol = document.getElementById('tryon-progress-overlay');
@@ -701,23 +726,58 @@ let tunePendingColor = null;
 let tuneShapeOptions = [];
 let tuneColorSystem = 'morandi';
 let tuneCustomColors = [];
+let tuneFingerRegions = null;
+let tuneSelectedFingerIndex = null;
+let tuneSingleAction = 'color';
+let tunePendingFrenchStyle = null;
+let tunePendingDecoration = null;
+const TUNE_FRENCH_OPTIONS = ['细白法式', '奶油法式', '金边法式', '斜切法式'];
+const TUNE_DECORATION_OPTIONS = ['珍珠', '蝴蝶结', '小钻', '金属线'];
 
 async function openAiTunePanel() {
   const item = nailStyles.find(s => s.id === currentDetailId);
   if (!item) return;
+  if (tryonGeneratingStyleIds.has(currentDetailId)) {
+    showTuneWaitModal();
+    return;
+  }
+  const styleRecords = getTryonRecordsForStyle(currentDetailId);
+  const activeRecord = tryonRecords.find(record => record.record_id === activeTryonRecordId)
+    || styleRecords[0]
+    || null;
   const latestTune = latestTuneByStyleId[String(item.id)];
-  tuneStyleItem = latestTune ? { ...item, _tuned_image_url: latestTune.tuned_image_url } : { ...item };
+  const tryonPreviewUrl = activeRecord?.result_image_url || null;
+  tuneStyleItem = latestTune
+    ? {
+        ...item,
+        _tuned_image_url: latestTune.tuned_image_url,
+        _preview_image_url: tryonPreviewUrl,
+        _source_hand_id: activeRecord?.hand_id || null,
+        _source_tryon_record_id: activeRecord?.record_id || null,
+      }
+    : {
+        ...item,
+        _preview_image_url: tryonPreviewUrl,
+        _source_hand_id: activeRecord?.hand_id || null,
+        _source_tryon_record_id: activeRecord?.record_id || null,
+      };
   tuneIsGenerating = false;
   tuneMode = 0;
   tunePendingShape = null;
   tunePendingColor = null;
   tuneColorSystem = 'morandi';
   tuneCustomColors = [];
+  tuneFingerRegions = null;
+  tuneSelectedFingerIndex = null;
+  tuneSingleAction = 'color';
+  tunePendingFrenchStyle = null;
+  tunePendingDecoration = null;
 
   _tuneResetUI();
   navigateTo('tune');
-  _tuneUpdatePreview(tuneStyleItem._tuned_image_url || item.image_url, item.name);
+  _tuneUpdatePreview(tuneStyleItem._tuned_image_url || tuneStyleItem._preview_image_url || item.image_url, item.name);
   await _tuneLoadOptions();
+  await _tuneLoadFingerRegions();
 }
 
 function closeTunePage() {
@@ -725,18 +785,25 @@ function closeTunePage() {
 }
 
 function _tuneResetUI() {
-  document.getElementById('tuneTab0').classList.add('on');
+  document.querySelectorAll('.tune-tab').forEach((tab, idx) => tab.classList.toggle('on', idx === 0));
   document.getElementById('tunePaneWhole').classList.add('on');
+  document.getElementById('tunePaneSingle').classList.remove('on');
   const textField = document.getElementById('tuneTextField');
   if (textField) textField.value = '';
   _tuneUpdateConfirmBtn();
   _tuneRenderPickedColors();
   _tuneBuildSwatches('tuneSwWhole', TUNE_MOR);
+  _tuneBuildSwatches('tuneSwSingle', TUNE_MOR);
   document.querySelectorAll('#tuneCtWhole .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+  document.querySelectorAll('#tuneCtSingle .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
   const tipBar = document.getElementById('tuneTipBar');
   if (tipBar) tipBar.style.display = '';
   const shapeGrid = document.getElementById('tuneSgWhole');
   if (shapeGrid) shapeGrid.innerHTML = '<div class="tune-shape-empty">正在加载甲型参考素材…</div>';
+  const target = document.getElementById('tuneSingleTarget');
+  if (target) target.textContent = '请先点击预览图中的某一根指甲';
+  _tuneRenderSinglePanels();
+  _tuneRenderFingerOverlay();
 }
 
 async function _tuneLoadOptions() {
@@ -754,7 +821,10 @@ async function _tuneLoadOptions() {
 
 function _tuneUpdatePreview(imageUrl, name) {
   const image = document.getElementById('tuneStyleImg');
-  if (image && imageUrl) image.src = staticUrl(imageUrl);
+  if (image && imageUrl) {
+    image.onload = () => _tuneRenderFingerOverlay();
+    image.src = staticUrl(imageUrl);
+  }
   const label = document.getElementById('tunePreviewName');
   if (label) label.textContent = name || '当前款式';
 }
@@ -762,7 +832,15 @@ function _tuneUpdatePreview(imageUrl, name) {
 function _tuneUpdateConfirmBtn() {
   const btn = document.getElementById('tuneConfirmBtn');
   if (!btn) return;
-  btn.disabled = tuneIsGenerating || !(tunePendingShape || tunePendingColor);
+  if (tuneMode === 0) {
+    btn.disabled = tuneIsGenerating || !(tunePendingShape || tunePendingColor);
+    return;
+  }
+  let singleReady = Boolean(tuneSelectedFingerIndex);
+  if (tuneSingleAction === 'color') singleReady = singleReady && Boolean(tunePendingColor);
+  if (tuneSingleAction === 'french') singleReady = singleReady && Boolean(tunePendingFrenchStyle);
+  if (tuneSingleAction === 'decoration') singleReady = singleReady && Boolean(tunePendingDecoration);
+  btn.disabled = tuneIsGenerating || !singleReady;
 }
 
 function _tuneToggleColor(col, swatchEl = null) {
@@ -862,6 +940,154 @@ function _tuneBuildSwatches(containerId, colors) {
   }
 }
 
+async function _tuneLoadFingerRegions() {
+  tuneFingerRegions = null;
+  if (!backendAvailable || !tuneStyleItem?._source_hand_id) {
+    _tuneRenderFingerOverlay();
+    return;
+  }
+  try {
+    const payload = await apiGet(`/user-hands/${encodeURIComponent(tuneStyleItem._source_hand_id)}/nail-regions`);
+    if (payload?.status === 'done' && payload?.nail_regions) {
+      tuneFingerRegions = payload.nail_regions;
+    }
+  } catch (e) {
+    console.warn('[微调] 指甲坐标加载失败:', e.message);
+  }
+  _tuneRenderFingerOverlay();
+}
+
+function _tuneRenderSinglePanels() {
+  const colorSection = document.getElementById('tuneSingleColorSection');
+  const frenchSection = document.getElementById('tuneSingleFrenchSection');
+  const decorationSection = document.getElementById('tuneSingleDecorationSection');
+  if (colorSection) colorSection.style.display = tuneSingleAction === 'color' ? '' : 'none';
+  if (frenchSection) frenchSection.style.display = tuneSingleAction === 'french' ? '' : 'none';
+  if (decorationSection) decorationSection.style.display = tuneSingleAction === 'decoration' ? '' : 'none';
+
+  const pills = document.querySelectorAll('#tuneSingleActionPills .tune-pill');
+  pills.forEach((pill, idx) => pill.classList.toggle('on', ['color', 'french', 'decoration'][idx] === tuneSingleAction));
+
+  const frenchPills = document.getElementById('tuneSingleFrenchPills');
+  if (frenchPills) {
+    frenchPills.innerHTML = TUNE_FRENCH_OPTIONS.map(option => `
+      <button type="button" class="tune-pill${tunePendingFrenchStyle === option ? ' on' : ''}" onclick="tuneSelectFrenchStyle('${option}')">${option}</button>
+    `).join('');
+  }
+  const decorationPills = document.getElementById('tuneSingleDecorationPills');
+  if (decorationPills) {
+    decorationPills.innerHTML = TUNE_DECORATION_OPTIONS.map(option => `
+      <button type="button" class="tune-pill${tunePendingDecoration === option ? ' on' : ''}" onclick="tuneSelectDecoration('${option}')">${option}</button>
+    `).join('');
+  }
+}
+
+function tuneSetSingleAction(action) {
+  if (tuneIsGenerating) return;
+  tuneSingleAction = action;
+  _tuneRenderSinglePanels();
+  _tuneUpdateConfirmBtn();
+}
+
+function tuneSelectFrenchStyle(option) {
+  tunePendingFrenchStyle = tunePendingFrenchStyle === option ? null : option;
+  _tuneRenderSinglePanels();
+  _tuneUpdateConfirmBtn();
+}
+
+function tuneSelectDecoration(option) {
+  tunePendingDecoration = tunePendingDecoration === option ? null : option;
+  _tuneRenderSinglePanels();
+  _tuneUpdateConfirmBtn();
+}
+
+function _tuneRenderFingerOverlay() {
+  const overlay = document.getElementById('tuneFingerOverlay');
+  const image = document.getElementById('tuneStyleImg');
+  const bg = document.getElementById('tuneNailBg');
+  const hintText = document.getElementById('tuneFingerHintText');
+  if (!overlay || !image || !bg) return;
+
+  if (tuneMode !== 1) {
+    overlay.innerHTML = '';
+    overlay.style.pointerEvents = 'none';
+    if (hintText) hintText.textContent = '切换到单指微调后，可点选某一根指甲进行局部调整';
+    return;
+  }
+
+  if (!tuneFingerRegions || !image.naturalWidth || !image.naturalHeight) {
+    overlay.innerHTML = '';
+    overlay.style.pointerEvents = 'none';
+    if (hintText) {
+      hintText.textContent = '当前手图暂无可用甲面坐标，请重新上传更清晰的手图';
+    }
+    return;
+  }
+
+  const rect = _tuneComputeImageRect(image, bg);
+  overlay.style.pointerEvents = tuneMode === 1 ? 'auto' : 'none';
+  overlay.innerHTML = `
+    <svg viewBox="0 0 ${bg.clientWidth} ${bg.clientHeight}" preserveAspectRatio="none">
+      ${Object.entries(tuneFingerRegions).map(([finger, points]) => _tuneBuildFingerPolygonSvg(Number(finger), points, rect)).join('')}
+    </svg>
+  `;
+  if (tuneMode === 1) {
+    overlay.querySelectorAll('.tune-finger-zone').forEach(node => {
+      node.addEventListener('click', () => tuneSelectFinger(Number(node.dataset.finger)));
+    });
+  }
+  if (hintText) {
+    hintText.textContent = tuneSelectedFingerIndex ? `已选中第 ${tuneSelectedFingerIndex} 根指甲，可继续进行单指微调` : '点击虚线框中的某一根指甲，即可进行单指微调';
+  }
+}
+
+function _tuneBuildFingerPolygonSvg(finger, points, rect) {
+  if (!Array.isArray(points) || points.length !== 4) return '';
+  const mapped = points.map(([x, y]) => `${(rect.left + rect.width * x).toFixed(2)},${(rect.top + rect.height * y).toFixed(2)}`).join(' ');
+  const cx = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+  const cy = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+  const labelX = rect.left + rect.width * cx;
+  const labelY = rect.top + rect.height * cy;
+  const active = tuneSelectedFingerIndex === finger;
+  const dimmed = tuneSelectedFingerIndex !== null && !active;
+  return `
+    <polygon class="tune-finger-zone${active ? ' active' : ''}${dimmed ? ' dimmed' : ''}" data-finger="${finger}" points="${mapped}"></polygon>
+    <text class="tune-finger-index" x="${labelX.toFixed(2)}" y="${(labelY + 4).toFixed(2)}" text-anchor="middle">${finger}</text>
+  `;
+}
+
+function _tuneComputeImageRect(image, container) {
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
+  const imageRatio = image.naturalWidth / image.naturalHeight;
+  const containerRatio = containerWidth / containerHeight;
+  let width = containerWidth;
+  let height = containerHeight;
+  if (imageRatio > containerRatio) {
+    height = width / imageRatio;
+  } else {
+    width = height * imageRatio;
+  }
+  return {
+    left: (containerWidth - width) / 2,
+    top: (containerHeight - height) / 2,
+    width,
+    height,
+  };
+}
+
+function tuneSelectFinger(fingerIndex) {
+  tuneSelectedFingerIndex = tuneSelectedFingerIndex === fingerIndex ? null : fingerIndex;
+  const target = document.getElementById('tuneSingleTarget');
+  if (target) {
+    target.textContent = tuneSelectedFingerIndex
+      ? `已选中第 ${tuneSelectedFingerIndex} 根指甲，当前操作：${tuneSingleAction === 'color' ? '颜色' : tuneSingleAction === 'french' ? '法式' : '装饰品'}`
+      : '请先点击预览图中的某一根指甲';
+  }
+  _tuneRenderFingerOverlay();
+  _tuneUpdateConfirmBtn();
+}
+
 function _tuneBuildShapeGrid(containerId, shapes) {
   const g = document.getElementById(containerId);
   if (!g) return;
@@ -885,8 +1111,12 @@ function _tuneBuildShapeGrid(containerId, shapes) {
 }
 
 function tuneSetMode(m) {
-  if (m !== 0 || tuneIsGenerating) return;
-  tuneMode = 0;
+  if (![0, 1].includes(m) || tuneIsGenerating) return;
+  tuneMode = m;
+  document.querySelectorAll('.tune-tab').forEach((tab, idx) => tab.classList.toggle('on', idx === m));
+  document.getElementById('tunePaneWhole').classList.toggle('on', m === 0);
+  document.getElementById('tunePaneSingle').classList.toggle('on', m === 1);
+  _tuneRenderFingerOverlay();
   _tuneUpdateConfirmBtn();
 }
 
@@ -906,6 +1136,10 @@ function tuneSetCTab(el, ctabId, swId, sys) {
 }
 
 function _tuneBuildLoadingDesc() {
+  if (tuneMode === 1) {
+    const actionLabel = tuneSingleAction === 'color' ? '颜色微调' : tuneSingleAction === 'french' ? '法式微调' : '装饰品微调';
+    return `正在为第 ${tuneSelectedFingerIndex || '?'} 根指甲进行${actionLabel}…`;
+  }
   const parts = [];
   const shape = tuneShapeOptions.find(item => item.id === tunePendingShape);
   if (shape) parts.push('甲型调整为' + shape.label);
@@ -918,29 +1152,52 @@ async function tuneConfirmGenerate() {
   const btn = document.getElementById('tuneConfirmBtn');
   if (btn && btn.disabled) return;
 
-  const desc = _tuneBuildLoadingDesc();
+  const loadingStartedAt = Date.now();
+  const desc = tuneMode === 1 ? '正在准备单指微调区域…' : _tuneBuildLoadingDesc();
   tuneIsGenerating = true;
   document.getElementById('tuneLdDesc').textContent = desc;
   document.getElementById('tuneLdlay').classList.add('show');
   document.getElementById('tuneSc').classList.add('tune-disabled');
   document.querySelectorAll('.tune-tab').forEach(t => t.style.pointerEvents = 'none');
   if (btn) btn.disabled = true;
+  await _tuneWaitForOverlayPaint();
 
   // 获取当前款式图 URL
   const styleImageUrl = tuneStyleItem
-    ? (tuneStyleItem._tuned_image_url || tuneStyleItem.image_url || '')
+    ? (tuneStyleItem._tuned_image_url || tuneStyleItem._preview_image_url || tuneStyleItem.image_url || '')
     : '';
 
   let tunedImageUrl = null;
 
-  if (backendAvailable && styleImageUrl) {
-    try {
-      const result = await apiPost('/tune/overall', {
-        style_image_url: staticUrl(styleImageUrl),
-        nail_shape_id: tunePendingShape || null,
-        color: tunePendingColor || null,
-        user_text: document.getElementById('tuneTextField')?.value.trim() || null,
-      });
+  try {
+    if (backendAvailable && styleImageUrl) {
+      let result;
+      if (tuneMode === 0) {
+        result = await apiPost('/tune/overall', {
+          style_image_url: staticUrl(styleImageUrl),
+          nail_shape_id: tunePendingShape || null,
+          color: tunePendingColor || null,
+          user_text: document.getElementById('tuneTextField')?.value.trim() || null,
+          hand_id: tuneStyleItem?._source_hand_id || null,
+          tryon_record_id: tuneStyleItem?._source_tryon_record_id || null,
+        });
+      } else {
+        document.getElementById('tuneLdDesc').textContent = '正在生成单指选区标注图…';
+        const guideImageUrl = await _tuneUploadGuideImage();
+        document.getElementById('tuneLdDesc').textContent = '正在提交单指微调请求…';
+        result = await apiPost('/tune/single', {
+          style_image_url: staticUrl(styleImageUrl),
+          finger_index: tuneSelectedFingerIndex,
+          action: tuneSingleAction,
+          color: tuneSingleAction === 'color' ? tunePendingColor : null,
+          french_style: tuneSingleAction === 'french' ? tunePendingFrenchStyle : null,
+          decoration: tuneSingleAction === 'decoration' ? tunePendingDecoration : null,
+          hand_id: tuneStyleItem?._source_hand_id || null,
+          tryon_record_id: tuneStyleItem?._source_tryon_record_id || null,
+          guide_image_url: guideImageUrl,
+        });
+      }
+      document.getElementById('tuneLdDesc').textContent = _tuneBuildLoadingDesc();
       if (result?.generation_mode === 'local_svg_fallback' || result?.tuned_image_url?.endsWith('.svg')) {
         throw new Error(result.warnings?.[0] || 'AI 生图失败，请稍后重试');
       }
@@ -962,10 +1219,12 @@ async function tuneConfirmGenerate() {
           console.warn('[微调] 警告:', result.warnings.join('; '));
         }
       }
-    } catch (e) {
+    }
+  } catch (e) {
       alert('微调生成失败：' + e.message);
       console.warn('[微调] API 调用失败:', e.message);
-    }
+  } finally {
+    await _tuneEnsureMinLoadingDuration(loadingStartedAt, 1200);
   }
 
   tuneIsGenerating = false;
@@ -975,13 +1234,21 @@ async function tuneConfirmGenerate() {
   // 重置 pending，等待下一次选择
   tunePendingShape = null;
   tunePendingColor = null;
+  tunePendingFrenchStyle = null;
+  tunePendingDecoration = null;
   tuneColorSystem = 'morandi';
+  tuneSingleAction = 'color';
   // 清除选中高亮，回到初始态
   document.querySelectorAll('.tune-si').forEach(x => x.classList.remove('on'));
   document.querySelectorAll('.tune-sw').forEach(x => x.classList.remove('on'));
   document.querySelectorAll('.tune-pill').forEach(x => x.classList.remove('on'));
   _tuneBuildSwatches('tuneSwWhole', TUNE_MOR);
+  _tuneBuildSwatches('tuneSwSingle', TUNE_MOR);
   document.querySelectorAll('#tuneCtWhole .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+  document.querySelectorAll('#tuneCtSingle .tune-ctab').forEach((t,i) => t.classList.toggle('on', i===0));
+  tuneSelectedFingerIndex = null;
+  _tuneRenderSinglePanels();
+  _tuneRenderFingerOverlay();
   _tuneRenderPickedColors();
   _tuneUpdateConfirmBtn();
 }
@@ -994,6 +1261,87 @@ function _tuneUpdateStyleImage(imageUrl) {
 }
 
 function tuneSubmitText() { _tuneUpdateConfirmBtn(); }
+
+function _tuneWaitForOverlayPaint() {
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function _tuneSleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function _tuneEnsureMinLoadingDuration(startedAt, minMs = 1000) {
+  const elapsed = Date.now() - startedAt;
+  if (elapsed >= minMs) return;
+  await _tuneSleep(minMs - elapsed);
+}
+
+async function _tuneUploadGuideImage() {
+  const guideBlob = await _tuneBuildGuideImageBlob();
+  const guideFile = new File([guideBlob], `tune-guide-${Date.now()}.png`, { type: 'image/png' });
+  const uploaded = await apiUpload('/upload-image', guideFile);
+  return uploaded?.image_url || uploaded?.url || '';
+}
+
+async function _tuneBuildGuideImageBlob() {
+  if (!tuneSelectedFingerIndex || !tuneFingerRegions || !tuneStyleItem) {
+    throw new Error('请先选择需要微调的指甲');
+  }
+  const imageUrl = staticUrl(tuneStyleItem._tuned_image_url || tuneStyleItem._preview_image_url || tuneStyleItem.image_url || '');
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error('无法读取当前款式图');
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('标注图生成失败'));
+      img.src = objectUrl;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    Object.entries(tuneFingerRegions).forEach(([finger, points]) => {
+      if (!Array.isArray(points) || points.length !== 4) return;
+      ctx.save();
+      ctx.beginPath();
+      points.forEach(([x, y], idx) => {
+        const px = x * canvas.width;
+        const py = y * canvas.height;
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      const active = Number(finger) === tuneSelectedFingerIndex;
+      ctx.setLineDash([18, 12]);
+      ctx.lineWidth = active ? 8 : 5;
+      ctx.strokeStyle = active ? 'rgba(122,142,80,0.95)' : 'rgba(141,121,184,0.72)';
+      ctx.fillStyle = active ? 'rgba(122,142,80,0.18)' : 'rgba(141,121,184,0.06)';
+      ctx.fill();
+      ctx.stroke();
+      const center = points.reduce((acc, [x, y]) => ({ x: acc.x + x, y: acc.y + y }), { x: 0, y: 0 });
+      ctx.setLineDash([]);
+      ctx.fillStyle = active ? '#41551f' : '#6a5a9a';
+      ctx.font = `${Math.max(22, Math.round(canvas.width * 0.025))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(finger), center.x / points.length * canvas.width, center.y / points.length * canvas.height);
+      ctx.restore();
+    });
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (!blob) reject(new Error('标注图导出失败'));
+        else resolve(blob);
+      }, 'image/png');
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 function submitTuneToTryon() {
   // 将微调后款式图送入试戴流程
@@ -1231,6 +1579,10 @@ function simulateUpload() {
         uploadedHandImageUrl = stdResult.standardized_image_url || uploadedHandImageUrl;
         if (stdResult.standardized_hand_id) {
           await setCurrentHand(stdResult.standardized_hand_id);
+        }
+        if (stdResult.nail_region_status && stdResult.nail_region_status !== 'done') {
+          const parseError = stdResult.nail_region_error || '当前手图甲面解析失败';
+          alert(parseError + '，AI微调暂不可用，请重新上传更清晰的手图。');
         }
       } catch (err) {
         console.warn('[上传] 手图上传或审核失败:', err.message);

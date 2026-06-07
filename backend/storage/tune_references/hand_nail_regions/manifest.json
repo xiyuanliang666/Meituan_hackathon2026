@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-06-07T09:47:45.188788+00:00",
+  "count": 1,
+  "items": [
+    {
+      "hand_template_id": "hand-seed-001",
+      "hand_label": "hand-seed-001",
+      "image_url": "http://p0.meituan.net/pilotimages/b9632e3a699fdb63a1a6139bbfd6bf0d2159483.png",
+      "analysis_mode": "gpt-5.5",
+      "prompt_version": "hand-nail-region-v1",
+      "processed_at": "2026-06-07T09:47:45.188455+00:00",
+      "file": "hand-seed-001.json",
+      "status": "done"
+    }
+  ]
+}

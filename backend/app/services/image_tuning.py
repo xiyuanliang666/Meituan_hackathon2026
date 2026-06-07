@@ -148,6 +148,8 @@ def _build_overall_prompt(
 def _build_single_prompt(
     finger_index: int,
     action: str,
+    has_guide_image: bool = False,
+    finger_region: list[list[float]] | None = None,
     color: str | None = None,
     french_style: str | None = None,
     decoration: str | None = None,
@@ -165,6 +167,10 @@ def _build_single_prompt(
     else:
         prompt = f"对{base}进行微调。"
 
+    if has_guide_image:
+        prompt += " 图片2是单指选区标注图，只有高亮虚线框中的那一根指甲允许修改，其余任何指甲都不能变化。"
+    elif finger_region:
+        prompt += f" 该指甲区域的四边形归一化坐标为：{json.dumps(finger_region, ensure_ascii=False)}。请严格将修改限制在这个区域内。"
     prompt += "请保持手的姿势、皮肤和背景完全不变，只修改指定手指的指甲。输出图片与原图尺寸一致。"
     return prompt
 
@@ -246,6 +252,8 @@ def tune_nail_image(
     action: str | None = None,
     french_style: str | None = None,
     decoration: str | None = None,
+    guide_image_url: str | None = None,
+    finger_region: list[list[float]] | None = None,
 ) -> dict:
     """
     执行美甲微调，返回 dict(tuned_image_url, generation_mode, warnings)
@@ -265,9 +273,13 @@ def tune_nail_image(
         prompt_text = _build_overall_prompt(shape, normalized_color, user_text)
         op_desc = f"整体微调({nail_shape_id or ''}{normalized_color or ''}{user_text or ''})"
     else:
+        if guide_image_url:
+            input_image_urls.append(guide_image_url)
         prompt_text = _build_single_prompt(
             finger_index=finger_index or 1,
             action=action or "color",
+            has_guide_image=bool(guide_image_url),
+            finger_region=finger_region,
             color=color,
             french_style=french_style,
             decoration=decoration,

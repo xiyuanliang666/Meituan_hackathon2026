@@ -89,16 +89,17 @@
       </div>
       <div class="tune-nail-bg" id="tuneNailBg">
         <img id="tuneStyleImg" class="tune-style-preview" alt="当前微调款式">
+        <div class="tune-finger-overlay" id="tuneFingerOverlay" aria-hidden="true"></div>
         <div class="tune-preview-caption">
           <span id="tunePreviewName">当前款式</span>
           <span>生成结果会在此更新</span>
         </div>
       </div>
-      <div class="tune-finger-disabled-zone" aria-disabled="true">
+      <div class="tune-finger-disabled-zone" id="tuneFingerHint">
         <div class="tune-finger-icons" aria-hidden="true">
           <span></span><span></span><span></span><span></span><span></span>
         </div>
-        <span>单指框选开发中</span>
+        <span id="tuneFingerHintText">切换到单指微调后，可点选某一根指甲进行局部调整</span>
       </div>
       <!-- 生图 Loading 覆盖层 -->
       <div class="tune-ldlay" id="tuneLdlay">
@@ -113,7 +114,7 @@
     <!-- Tab 切换 -->
     <div class="tune-tabs">
       <div class="tune-tab on" id="tuneTab0" onclick="tuneSetMode(0)">整体调整</div>
-      <div class="tune-tab disabled" id="tuneTab1" aria-disabled="true">单指微调 · 框选开发中</div>
+      <div class="tune-tab" id="tuneTab1" onclick="tuneSetMode(1)">单指微调</div>
     </div>
 
     <!-- 步骤指示器 -->
@@ -141,6 +142,39 @@
         </div>
         <div class="tune-swatches" id="tuneSwWhole"></div>
         <div class="tune-picked-colors" id="tunePickedColors"></div>
+      </div>
+
+      <div class="tune-pane" id="tunePaneSingle">
+        <div class="tune-slbl">当前选中</div>
+        <div class="tune-single-target" id="tuneSingleTarget">请先点击预览图中的某一根指甲</div>
+
+        <div class="tune-divider"></div>
+        <div class="tune-slbl">操作类型</div>
+        <div class="tune-pills" id="tuneSingleActionPills">
+          <button type="button" class="tune-pill" onclick="tuneSetSingleAction('color')">颜色</button>
+          <button type="button" class="tune-pill" onclick="tuneSetSingleAction('french')">法式</button>
+          <button type="button" class="tune-pill" onclick="tuneSetSingleAction('decoration')">装饰品</button>
+        </div>
+
+        <div id="tuneSingleColorSection">
+          <div class="tune-slbl">颜色</div>
+          <div class="tune-ctabs" id="tuneCtSingle">
+            <div class="tune-ctab on" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','morandi')">莫兰迪</div>
+            <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','macaron')">马卡龙</div>
+            <div class="tune-ctab" onclick="tuneSetCTab(this,'tuneCtSingle','tuneSwSingle','custom')">自定义</div>
+          </div>
+          <div class="tune-swatches" id="tuneSwSingle"></div>
+        </div>
+
+        <div id="tuneSingleFrenchSection" style="display:none">
+          <div class="tune-slbl">法式风格</div>
+          <div class="tune-pills" id="tuneSingleFrenchPills"></div>
+        </div>
+
+        <div id="tuneSingleDecorationSection" style="display:none">
+          <div class="tune-slbl">装饰品</div>
+          <div class="tune-pills" id="tuneSingleDecorationPills"></div>
+        </div>
       </div>
 
     </div><!-- /tune-sc -->
