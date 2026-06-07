@@ -102,17 +102,6 @@ body { background: #F7F5F0; }
         </div>
       </div>
 
-      <!-- 数据健康 -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-heartbeat"></i> 数据健康</div>
-          <button class="btn-ghost-sm" onclick="loadDataHealth()"><i class="ti ti-refresh"></i> 刷新</button>
-        </div>
-        <div class="trend-health-grid" id="trend-health-grid">
-          <div class="trend-run-empty">点击刷新查看数据健康状态</div>
-        </div>
-      </div>
-
       <!-- 运行状态 -->
       <div class="card">
         <div class="card-header">
@@ -221,40 +210,34 @@ body { background: #F7F5F0; }
 <script src="api-config.js"></script>
 <script src="admin/admin-app.js?v=trend-agent-standalone-1"></script>
 <script>
-// ── 独立页面初始化：直接加载趋势数据，无需页面切换 ──
-document.addEventListener('DOMContentLoaded', () => {
-  // 检测后端
-  checkBackendAvailable();
+// ── 独立页面初始化：先检测后端，再自动加载趋势数据 ──
+document.addEventListener('DOMContentLoaded', async () => {
+  // 等待 init() 中的 initAdminBackend 完成（admin-app.js 已调用 init()，但它是 async 的）
+  // 如果 adminBackendAvailable 尚未设置，手动再检测一次
+  if (!adminBackendAvailable) {
+    await initAdminBackend();
+  }
 
-  // 直接加载趋势发现数据
-  setTimeout(() => {
-    loadTrendRunsAndList();
-    loadDataHealth();
-    loadCandidateTaxonomyTerms();
-  }, 300);
-
-  // 后端状态显示
+  // 后端已检测完毕，自动加载数据
+  loadTrendRunsAndList();
+  loadCandidateTaxonomyTerms();
   updateBackendStatusBar();
 });
 
 function updateBackendStatusBar() {
   const bar = document.getElementById('backend-status-bar');
   if (!bar) return;
-  setTimeout(() => {
-    if (adminBackendAvailable) {
-      bar.innerHTML = '<span style="color:#5a9a70"><i class="ti ti-circle-check"></i> 后端已连接</span>';
-    } else {
-      bar.innerHTML = '<span style="color:#b07830"><i class="ti ti-wifi-off"></i> 后端未连接，展示本地数据</span>';
-    }
-  }, 800);
+  if (adminBackendAvailable) {
+    bar.innerHTML = '<span style="color:#5a9a70"><i class="ti ti-circle-check"></i> 后端已连接</span>';
+  } else {
+    bar.innerHTML = '<span style="color:#b07830"><i class="ti ti-wifi-off"></i> 后端未连接，展示本地数据</span>';
+  }
 }
 
-// 覆盖 switchPage，在独立页面中不做任何跳转
+// 覆盖 switchPage，在独立页面中不做任何跳转，刷新按钮会直接调用对应函数
 function switchPage(page) {
-  // 独立页面：只保留 trend-agent 功能，其他跳转忽略
   if (page === 'trend-agent') {
     loadTrendRunsAndList();
-    loadDataHealth();
     loadCandidateTaxonomyTerms();
   }
 }

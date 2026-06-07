@@ -3471,7 +3471,7 @@ function openLightbox(imageUrl) {
 }
 
 // ===== 初始化 =====
-function init() {
+async function init() {
   applyPlatformChrome();
   renderStyleList();
   updateStyleDeleteUI();
@@ -3480,25 +3480,26 @@ function init() {
   renderBoostBudgetState();
   renderNotifyList();
   const currentPage = pageFromHash();
+
+  // 先检测后端可用性，再加载页面数据，避免闪现"后端未连接"
+  await initAdminBackend();
+
+  // 后端已就绪，加载当前页面数据
   switchPage(currentPage, { updateHash: false });
-  initAdminBackend().then(() => {
-    if (adminBackendAvailable) {
-      loadStylesData();
-      loadPushData();
-      renderTemplates();
-      if (currentPage === 'trend-agent') {
-        loadTrendRunsAndList();
-      }
-      if (currentPage === 'report') {
-        loadReportData('week');
-      }
-      if (currentPage === 'dashboard') {
-        loadDashboardData();
-      }
-      if (pageFromHash() === 'upload' && currentUploadStyleId) {
-        restoreUploadDraft(currentUploadStyleId);
-      }
+
+  if (adminBackendAvailable) {
+    loadStylesData();
+    loadPushData();
+    renderTemplates();
+    if (currentPage === 'report') {
+      loadReportData('week');
     }
-  });
+    if (currentPage === 'dashboard') {
+      loadDashboardData();
+    }
+    if (pageFromHash() === 'upload' && currentUploadStyleId) {
+      restoreUploadDraft(currentUploadStyleId);
+    }
+  }
 }
 init();
